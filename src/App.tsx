@@ -23,6 +23,8 @@ import AdminPage from './pages/AdminPage';
 import MessagesPage from './pages/MessagesPage';
 import EmailConfirmationPage from './pages/EmailConfirmationPage';
 import SpectaclesPage from './pages/SpectaclesPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
 import { supabase } from './lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -98,6 +100,8 @@ function App() {
               <Route path="/admin" element={<AdminPage />} />
               {/* Placeholder routes */}
               <Route path="/spectacles" element={<SpectaclesPage />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
               <Route
                 path="/machines"
                 element={
