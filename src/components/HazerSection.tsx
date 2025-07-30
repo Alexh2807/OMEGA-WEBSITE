@@ -22,7 +22,7 @@ const ProductContent = ({ isVisible, scrollY }) => (
     style={{ transform: `translateY(${scrollY * -0.015}px)` }}
   >
     {/* Badge Professional Series */}
-    <div className="inline-block mt-12 md:mt-20">
+    <div className="inline-block mt-8 md:mt-16">
       {' '}
       {/* Plus de marge supérieure pour aérer */}
       <span className="bg-white text-black px-5 py-2 text-sm font-semibold tracking-wider uppercase shadow-lg">
@@ -56,7 +56,7 @@ const ProductContent = ({ isVisible, scrollY }) => (
     </div>
 
     {/* Caractéristiques clés / Statistiques */}
-    <div className="grid grid-cols-3 gap-8 py-8 border-t border-b border-gray-700">
+    <div className="grid grid-cols-3 gap-6 py-6 border-t border-b border-gray-700">
       {' '}
       {/* Bordures pour l'emphase */}
       <div className="text-center md:text-left">
@@ -186,7 +186,7 @@ const HazerSection = () => {
     <section
       ref={sectionRef} // Assigner la référence à l'élément de la section
       id="hazer-section" // Garder l'ID pour un lien externe ou un CSS spécifique potentiel
-      className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Fond principal sombre
+      className="min-h-[80vh] bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Fond principal sombre réduit de 20%
     >
       {/* Motif de fond subtil pour la texture */}
       <div className="absolute inset-0 opacity-[0.03]">
@@ -201,10 +201,10 @@ const HazerSection = () => {
         />
       </div>
 
-      <div className="container mx-auto px-6 relative z-10 py-16">
+      <div className="container mx-auto px-6 relative z-10 py-10">
         {' '}
         {/* Ajouter un rembourrage vertical pour le contenu */}
-        <div className="grid lg:grid-cols-2 gap-20 items-center">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Côté gauche : Détails du produit */}
           <ProductContent isVisible={isVisible} scrollY={scrollY} />
 
