@@ -113,9 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Déterminer l'URL de base selon l'environnement
     const getBaseUrl = () => {
-      // TOUJOURS utiliser l'URL de production pour les emails
-      // Même en développement local, on veut que l'email redirige vers le site en ligne
-      return 'https://fluffy-jelly-a744a8.netlify.app';
+      // Utiliser l'URL définie dans l'environnement
+      return import.meta.env.VITE_SITE_URL;
     };
 
     // Configuration avec email de confirmation Supabase et données utilisateur
