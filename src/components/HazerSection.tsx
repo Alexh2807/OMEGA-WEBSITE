@@ -186,7 +186,7 @@ const HazerSection = () => {
     <section
       ref={sectionRef} // Assigner la référence à l'élément de la section
       id="hazer-section" // Garder l'ID pour un lien externe ou un CSS spécifique potentiel
-      className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Fond principal sombre
+      className="min-h-[80vh] bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Fond principal sombre réduit de 20%
     >
       {/* Motif de fond subtil pour la texture */}
       <div className="absolute inset-0 opacity-[0.03]">
@@ -201,7 +201,7 @@ const HazerSection = () => {
         />
       </div>
 
-      <div className="container mx-auto px-6 relative z-10 py-16">
+      <div className="container mx-auto px-6 relative z-10 py-12">
         {' '}
         {/* Ajouter un rembourrage vertical pour le contenu */}
         <div className="grid lg:grid-cols-2 gap-20 items-center">
