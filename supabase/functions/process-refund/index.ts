@@ -72,6 +72,18 @@ Deno.serve(async req => {
       );
     }
 
+    // Récupérer eventuellement l'order_id associé à la facture pour un fallback
+    const { data: invoiceData, error: invoiceError } = await supabaseAdmin
+      .from('invoices')
+      .select('order_id')
+      .eq('id', invoiceId)
+      .single();
+
+    if (invoiceError) {
+      console.error('Erreur récupération invoice pour fallback:', invoiceError);
+    }
+    const orderId = invoiceData?.order_id || null;
+
     // --- 3. Recherche de la Charge Stripe (Logique Fiabilisée) ---
     console.log(`🔍 Recherche de la charge pour la facture: ${invoiceId}`);
     let charge: Stripe.Charge | null = null;
@@ -87,8 +99,25 @@ Deno.serve(async req => {
 
     if (recordsError) throw recordsError;
 
-    if (paymentRecords && paymentRecords.length > 0) {
-      const record = paymentRecords[0]; // On prend le plus récent
+    let record = paymentRecords && paymentRecords[0];
+
+    // ⚠️ Fallback : si aucun enregistrement lié à la facture, tenter via l'order_id
+    if (!record && orderId) {
+      const { data: orderRecords, error: orderRecordsError } =
+        await supabaseAdmin
+          .from('payment_records')
+          .select('reference, stripe_charge_id')
+          .eq('order_id', orderId)
+          .eq('status', 'succeeded')
+          .order('created_at', { ascending: false });
+
+      if (orderRecordsError) throw orderRecordsError;
+      if (orderRecords && orderRecords.length > 0) {
+        record = orderRecords[0];
+      }
+    }
+
+    if (record) {
       console.log('✅ Enregistrement de paiement trouvé:', record);
 
       // On privilégie le charge_id s'il existe (plus direct)
@@ -160,7 +189,7 @@ Deno.serve(async req => {
     // Note: Il est recommandé de créer la table 'refunds' via une migration SQL plutôt qu'à la volée.
     const { error: dbError } = await supabaseAdmin.from('refunds').insert({
       invoice_id: invoiceId,
-      // order_id peut être récupéré de la facture si nécessaire
+      order_id: orderId,
       stripe_refund_id: refund.id,
       stripe_payment_intent_id: paymentIntentId,
       amount: amount,
