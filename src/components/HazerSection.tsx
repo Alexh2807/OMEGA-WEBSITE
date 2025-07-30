@@ -57,6 +57,7 @@ const ProductContent = ({ isVisible, scrollY }) => (
 
     {/* Caractéristiques clés / Statistiques */}
     <div className="grid grid-cols-3 gap-4 py-4 border-t border-b border-gray-700">
+
       {' '}
       {/* Bordures pour l'emphase */}
       <div className="text-center md:text-left">
@@ -187,6 +188,7 @@ const HazerSection = () => {
       ref={sectionRef} // Assigner la référence à l'élément de la section
       id="hazer-section" // Garder l'ID pour un lien externe ou un CSS spécifique potentiel
       className="min-h-[60vh] bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Hauteur réduite d'environ 30% supplémentaire
+
     >
       {/* Motif de fond subtil pour la texture */}
       <div className="absolute inset-0 opacity-[0.03]">
@@ -205,6 +207,7 @@ const HazerSection = () => {
         {' '}
         {/* Ajouter un rembourrage vertical pour le contenu */}
         <div className="grid lg:grid-cols-2 gap-12 items-center">
+
           {/* Côté gauche : Détails du produit */}
           <ProductContent isVisible={isVisible} scrollY={scrollY} />
 

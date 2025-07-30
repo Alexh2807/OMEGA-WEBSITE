@@ -95,6 +95,7 @@ const ElFuegoSection = () => {
             {/* CTA */}
             <div className="space-y-2">
               <div className="mb-4">
+
                 <div className="text-4xl font-bold text-white mb-2">
                   5 200€ TTC
                 </div>
