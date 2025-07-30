@@ -3,6 +3,7 @@ import { CartItem, Product } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
+import { calculateTotalItems, calculateTotalPrice } from '../utils/cartHelpers';
 
 interface CartContextType {
   items: CartItem[];
@@ -162,11 +163,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     setItems([]);
   };
 
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = items.reduce(
-    (sum, item) => sum + (item.product?.price || 0) * item.quantity,
-    0
-  );
+  const totalItems = calculateTotalItems(items);
+  const totalPrice = calculateTotalPrice(items);
 
   const value = {
     items,
