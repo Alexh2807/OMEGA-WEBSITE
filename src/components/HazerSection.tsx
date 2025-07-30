@@ -15,14 +15,14 @@ const debounce = (func, delay) => {
 // Composant pour le bloc de contenu principal (côté gauche)
 const ProductContent = ({ isVisible, scrollY }) => (
   <div
-    className={`space-y-10 transition-all duration-1000 ${
+    className={`space-y-8 transition-all duration-1000 ${
       isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'
     }`}
     // Effet de parallaxe subtil sur le contenu
     style={{ transform: `translateY(${scrollY * -0.015}px)` }}
   >
     {/* Badge Professional Series */}
-    <div className="inline-block mt-12 md:mt-20">
+    <div className="inline-block mt-6 md:mt-12">
       {' '}
       {/* Plus de marge supérieure pour aérer */}
       <span className="bg-white text-black px-5 py-2 text-sm font-semibold tracking-wider uppercase shadow-lg">
@@ -56,7 +56,7 @@ const ProductContent = ({ isVisible, scrollY }) => (
     </div>
 
     {/* Caractéristiques clés / Statistiques */}
-    <div className="grid grid-cols-3 gap-8 py-8 border-t border-b border-gray-700">
+    <div className="grid grid-cols-3 gap-4 py-4 border-t border-b border-gray-700">
       {' '}
       {/* Bordures pour l'emphase */}
       <div className="text-center md:text-left">
@@ -186,7 +186,7 @@ const HazerSection = () => {
     <section
       ref={sectionRef} // Assigner la référence à l'élément de la section
       id="hazer-section" // Garder l'ID pour un lien externe ou un CSS spécifique potentiel
-      className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Fond principal sombre
+      className="min-h-[60vh] bg-gradient-to-b from-black to-gray-900 flex items-center relative overflow-hidden text-white" // Hauteur réduite d'environ 30% supplémentaire
     >
       {/* Motif de fond subtil pour la texture */}
       <div className="absolute inset-0 opacity-[0.03]">
@@ -201,10 +201,10 @@ const HazerSection = () => {
         />
       </div>
 
-      <div className="container mx-auto px-6 relative z-10 py-16">
+      <div className="container mx-auto px-6 relative z-10 py-6">
         {' '}
         {/* Ajouter un rembourrage vertical pour le contenu */}
-        <div className="grid lg:grid-cols-2 gap-20 items-center">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Côté gauche : Détails du produit */}
           <ProductContent isVisible={isVisible} scrollY={scrollY} />
 
