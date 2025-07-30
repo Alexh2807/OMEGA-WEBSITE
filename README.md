@@ -1,3 +1,4 @@
+
 # OMEGA Website
 
 This repository contains the source code for the **OMEGA** showcase and ecommerce site. The project is built with [Vite](https://vitejs.dev/), [React](https://react.dev/), [TypeScript](https://www.typescriptlang.org/) and [Tailwind CSS](https://tailwindcss.com/). It provides a public storefront for OMEGA products as well as an admin interface for managing orders, users and billing.
