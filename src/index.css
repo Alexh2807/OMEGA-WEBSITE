@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix pour les listes déroulantes (select) sur fond sombre */
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: rgb(31, 41, 55) !important;
+  color: white !important;
+}
+
+/* Styles spécifiques pour les select avec classes personnalisées */
+.dark-select {
+  background-color: rgb(31, 41, 55) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.dark-select option {
+  background-color: rgb(31, 41, 55) !important;
+  color: white !important;
+}
+
+.dark-select:focus option {
+  background-color: rgb(17, 24, 39) !important;
+  color: white !important;
+}
+
+/* Pour les navigateurs WebKit (Chrome, Safari) */
+.dark-select option:checked {
+  background-color: rgb(59, 130, 246) !important;
+  color: white !important;
+}
+
+.dark-select option:hover {
+  background-color: rgb(55, 65, 81) !important;
+  color: white !important;
+}
