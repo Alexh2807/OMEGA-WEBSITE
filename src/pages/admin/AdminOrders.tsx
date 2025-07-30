@@ -545,7 +545,7 @@ const AdminOrders = () => {
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.session.access_token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
