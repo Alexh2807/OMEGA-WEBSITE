@@ -41,7 +41,7 @@ const ElFuegoSection = () => {
   ];
 
   return (
-    <section className="py-20 bg-black">
+    <section className="py-16 bg-black">
       <div className="container mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-20 items-center">
           {/* Contenu à gauche */}
