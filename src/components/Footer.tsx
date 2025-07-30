@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   Heart,
   ArrowUp,
@@ -171,14 +172,20 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="#" className="hover:text-blue-400 transition-colors">
+                <Link
+                  to="/privacy-policy"
+                  className="hover:text-blue-400 transition-colors"
+                >
                   Politique de Confidentialité
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-blue-400 transition-colors">
+                <Link
+                  to="/terms"
+                  className="hover:text-blue-400 transition-colors"
+                >
                   Conditions d'Utilisation
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
