@@ -41,9 +41,9 @@ const ElFuegoSection = () => {
   ];
 
   return (
-    <section className="py-16 bg-black">
+    <section className="py-12 bg-black">
       <div className="container mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-20 items-center">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Contenu à gauche */}
           <div className="space-y-8">
             <div className="space-y-4">
@@ -93,8 +93,8 @@ const ElFuegoSection = () => {
             </div>
 
             {/* CTA */}
-            <div className="space-y-4">
-              <div className="mb-6">
+            <div className="space-y-3">
+              <div className="mb-5">
                 <div className="text-4xl font-bold text-white mb-2">
                   5 200€ TTC
                 </div>
