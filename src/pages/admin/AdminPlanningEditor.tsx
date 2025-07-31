@@ -32,6 +32,9 @@ const AdminPlanningEditor: React.FC = () => {
   const [form, setForm] = useState<{ location_id: string; provider_ids: string[] }>(
     { location_id: '', provider_ids: [] }
   );
+  const [activeTab, setActiveTab] = useState<'calendar' | 'settings'>('calendar');
+  const [newLocation, setNewLocation] = useState({ name: '', color: '#ffffff' });
+  const [newProvider, setNewProvider] = useState({ name: '' });
 
   useEffect(() => {
     loadProviders();
@@ -60,6 +63,32 @@ const AdminPlanningEditor: React.FC = () => {
       .from('planning_events')
       .select('id, event_date, provider_ids, location:planning_locations(*)');
     setEvents(data || []);
+  };
+
+  const addLocation = async () => {
+    if (!newLocation.name) return;
+    const { data, error } = await supabase
+      .from('planning_locations')
+      .insert(newLocation)
+      .select('id, name, color')
+      .single();
+    if (!error && data) {
+      setLocations(prev => [...prev, data]);
+    }
+    setNewLocation({ name: '', color: '#ffffff' });
+  };
+
+  const addProvider = async () => {
+    if (!newProvider.name) return;
+    const { data, error } = await supabase
+      .from('planning_providers')
+      .insert({ name: newProvider.name })
+      .select('id, name')
+      .single();
+    if (!error && data) {
+      setProviders(prev => [...prev, data]);
+    }
+    setNewProvider({ name: '' });
   };
 
   const openModal = (date: Date) => {
@@ -114,85 +143,178 @@ const AdminPlanningEditor: React.FC = () => {
   return (
     <div className="text-white space-y-6">
       <h2 className="text-2xl font-bold flex items-center gap-2">
-        <CalendarIcon /> Planning Événementiel
+        <CalendarIcon /> Planning Evenementiel
       </h2>
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm">
-          Prestataire:
-          <select
-            value={selectedProvider}
-            onChange={e => setSelectedProvider(e.target.value)}
-            className="dark-select ml-2 rounded px-2 py-1"
-          >
-            <option value="all">Tous</option>
-            {providers.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+
+      <div className="flex gap-4 mb-4">
         <button
-          onClick={() => exportElementAsPDF('planning-calendar', 'planning')}
-          className="flex items-center gap-2 text-sm bg-yellow-500 text-black px-3 py-1 rounded"
+          onClick={() => setActiveTab('calendar')}
+          className={`font-semibold ${
+            activeTab === 'calendar'
+              ? 'text-yellow-400 border-b-2 border-yellow-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
         >
-          <Download size={16} /> Export PDF
+          Planning
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`font-semibold ${
+            activeTab === 'settings'
+              ? 'text-yellow-400 border-b-2 border-yellow-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Parametrage
         </button>
       </div>
-      <div id="planning-calendar" className="bg-white/5 p-4 rounded-lg">
-        <Calendar onClickDay={openModal} tileContent={tileContent} />
-      </div>
-      {modalDate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 p-6 rounded space-y-4 w-80">
-            <h3 className="text-lg font-semibold">Ajouter un événement</h3>
-            <div className="space-y-2">
-              <p>Date: {modalDate.toLocaleDateString()}</p>
+
+      {activeTab === 'calendar' && (
+        <>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              Prestataire:
               <select
-                value={form.location_id}
-                onChange={e => setForm({ ...form, location_id: e.target.value })}
-                className="dark-select w-full p-2 rounded"
+                value={selectedProvider}
+                onChange={e => setSelectedProvider(e.target.value)}
+                className="dark-select ml-2 rounded px-2 py-1"
               >
-                {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
+                <option value="all">Tous</option>
+                {providers.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>
-              <div className="space-y-1">
-                {providers.map(prov => (
-                  <label key={prov.id} className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      checked={form.provider_ids.includes(prov.id)}
-                      onChange={() =>
-                        setForm(prev => {
-                          const exists = prev.provider_ids.includes(prov.id);
-                          return {
-                            ...prev,
-                            provider_ids: exists
-                              ? prev.provider_ids.filter(id => id !== prov.id)
-                              : [...prev.provider_ids, prov.id],
-                          };
-                        })
-                      }
-                    />
-                    <span className="text-sm">{prov.name}</span>
-                  </label>
-                ))}
+            </label>
+            <button
+              onClick={() => exportElementAsPDF('planning-calendar', 'planning')}
+              className="flex items-center gap-2 text-sm bg-yellow-500 text-black px-3 py-1 rounded"
+            >
+              <Download size={16} /> Export PDF
+            </button>
+          </div>
+          <div id="planning-calendar" className="bg-white/5 p-4 rounded-lg w-[60%] mx-auto">
+            <Calendar onClickDay={openModal} tileContent={tileContent} />
+          </div>
+          {modalDate && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-gray-900 p-6 rounded space-y-4 w-80">
+                <h3 className="text-lg font-semibold">Ajouter un evenement</h3>
+                <div className="space-y-2">
+                  <p>Date: {modalDate.toLocaleDateString()}</p>
+                  <select
+                    value={form.location_id}
+                    onChange={e => setForm({ ...form, location_id: e.target.value })}
+                    className="dark-select w-full p-2 rounded"
+                  >
+                    {locations.map(loc => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="space-y-1">
+                    {providers.map(prov => (
+                      <label key={prov.id} className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={form.provider_ids.includes(prov.id)}
+                          onChange={() =>
+                            setForm(prev => {
+                              const exists = prev.provider_ids.includes(prov.id);
+                              return {
+                                ...prev,
+                                provider_ids: exists
+                                  ? prev.provider_ids.filter(id => id !== prov.id)
+                                  : [...prev.provider_ids, prov.id],
+                              };
+                            })
+                          }
+                        />
+                        <span className="text-sm">{prov.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setModalDate(null)} className="px-3 py-1 border rounded">
+                    Annuler
+                  </button>
+                  <button
+                    onClick={saveEvent}
+                    className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-2"
+                  >
+                    <Plus size={16} /> Enregistrer
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setModalDate(null)} className="px-3 py-1 border rounded">
-                Annuler
+          )}
+        </>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="space-y-8">
+          <div>
+            <h3 className="font-semibold mb-2">Lieux de prestation</h3>
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                addLocation();
+              }}
+              className="flex items-center gap-2 mb-4"
+            >
+              <input
+                value={newLocation.name}
+                onChange={e => setNewLocation({ ...newLocation, name: e.target.value })}
+                placeholder="Nom du lieu"
+                className="flex-1 p-2 rounded bg-gray-800 border border-gray-700"
+              />
+              <input
+                type="color"
+                value={newLocation.color}
+                onChange={e => setNewLocation({ ...newLocation, color: e.target.value })}
+                className="w-10 h-10 p-0 border-none"
+              />
+              <button type="submit" className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-1">
+                <Plus size={16} /> Ajouter
               </button>
-              <button
-                onClick={saveEvent}
-                className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-2"
-              >
-                <Plus size={16} /> Enregistrer
+            </form>
+            <ul className="space-y-1">
+              {locations.map(loc => (
+                <li key={loc.id} className="flex items-center gap-2 text-sm">
+                  <span className="w-4 h-4 rounded" style={{ backgroundColor: loc.color }} />
+                  <span>{loc.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Prestataires</h3>
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                addProvider();
+              }}
+              className="flex items-center gap-2 mb-4"
+            >
+              <input
+                value={newProvider.name}
+                onChange={e => setNewProvider({ name: e.target.value })}
+                placeholder="Nom du prestataire"
+                className="flex-1 p-2 rounded bg-gray-800 border border-gray-700"
+              />
+              <button type="submit" className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-1">
+                <Plus size={16} /> Ajouter
               </button>
-            </div>
+            </form>
+            <ul className="space-y-1 text-sm">
+              {providers.map(p => (
+                <li key={p.id}>{p.name}</li>
+              ))}
+            </ul>
           </div>
         </div>
       )}
