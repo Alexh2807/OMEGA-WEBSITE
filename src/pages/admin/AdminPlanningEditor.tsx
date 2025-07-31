@@ -135,7 +135,7 @@ const AdminPlanningEditor: React.FC = () => {
         location:planning_locations(*)
       `)
       .order('event_date', { ascending: false });
-    
+
     if (error) {
       console.error('Erreur chargement événements:', error);
       toast.error('Erreur lors du chargement des événements');
@@ -143,6 +143,50 @@ const AdminPlanningEditor: React.FC = () => {
       setEvents(data || []);
     }
   };
+
+  // Mise à jour en temps réel des données
+  useEffect(() => {
+    const eventsChannel = supabase
+      .channel('planning_events_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'planning_events' },
+        () => {
+          loadEvents();
+        }
+      )
+      .subscribe();
+
+    const locationsChannel = supabase
+      .channel('planning_locations_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'planning_locations' },
+        () => {
+          loadLocations();
+          loadEvents();
+        }
+      )
+      .subscribe();
+
+    const providersChannel = supabase
+      .channel('planning_providers_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'planning_providers' },
+        () => {
+          loadProviders();
+          loadEvents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      eventsChannel.unsubscribe();
+      locationsChannel.unsubscribe();
+      providersChannel.unsubscribe();
+    };
+  }, []);
 
   // Gestion des prestataires
   const handleProviderSubmit = async (e: React.FormEvent) => {
