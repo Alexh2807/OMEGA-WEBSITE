@@ -39,3 +39,20 @@ select option {
   background-color: rgb(55, 65, 81) !important;
   color: white !important;
 }
+
+/* Calendar custom styles */
+.react-calendar {
+  background-color: transparent;
+  border: none;
+  color: white;
+}
+.react-calendar__tile--active {
+  background-color: #facc15 !important;
+  color: black !important;
+}
+.react-calendar__tile--now {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+.react-calendar button {
+  padding: 0.5rem;
+}
