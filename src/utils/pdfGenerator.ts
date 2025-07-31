@@ -119,3 +119,23 @@ export const printInvoice = () => {
   document.body.innerHTML = originalContents;
   window.location.reload();
 };
+
+/**
+ * Export any HTML element as a PDF file.
+ * @param elementId - DOM element id.
+ * @param fileName - Name of the resulting PDF file.
+ */
+export const exportElementAsPDF = async (elementId: string, fileName: string) => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    throw new Error(`Élément non trouvé (id="${elementId}")`);
+  }
+  const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+  const imgData = canvas.toDataURL('image/png');
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const pdfWidth = pdf.internal.pageSize.getWidth();
+  const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+  pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+  pdf.save(`${fileName}.pdf`);
+  return true;
+};
