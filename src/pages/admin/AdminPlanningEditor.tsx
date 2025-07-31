@@ -1,320 +1,1105 @@
 import React, { useEffect, useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { Calendar as CalendarIcon, Plus, Download } from 'lucide-react';
+import {
+  Calendar as CalendarIcon,
+  Plus,
+  Download,
+  Edit3,
+  Trash2,
+  Users,
+  MapPin,
+  Filter,
+  Search,
+  Eye,
+  X,
+  Save,
+  Settings,
+  FileText,
+  Clock,
+  User,
+  Building,
+  Palette,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { exportElementAsPDF } from '../../utils/pdfGenerator';
+import toast from 'react-hot-toast';
 
 interface Provider {
   id: string;
   name: string;
+  created_at: string;
 }
 
 interface Location {
   id: string;
   name: string;
   color: string;
+  created_at: string;
 }
 
 interface EventItem {
   id: string;
   event_date: string;
   provider_ids: string[];
+  location_id: string;
   location: Location | null;
+  created_at: string;
 }
 
+type ViewMode = 'month' | 'week' | 'day';
+
 const AdminPlanningEditor: React.FC = () => {
+  // États principaux
   const [events, setEvents] = useState<EventItem[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Navigation et filtres
+  const [activeTab, setActiveTab] = useState<'calendar' | 'providers' | 'locations'>('calendar');
   const [selectedProvider, setSelectedProvider] = useState('all');
-  const [modalDate, setModalDate] = useState<Date | null>(null);
-  const [form, setForm] = useState<{ location_id: string; provider_ids: string[] }>(
-    { location_id: '', provider_ids: [] }
-  );
-  const [activeTab, setActiveTab] = useState<'calendar' | 'settings'>('calendar');
-  const [newLocation, setNewLocation] = useState({ name: '', color: '#ffffff' });
-  const [newProvider, setNewProvider] = useState({ name: '' });
+  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modals et formulaires
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+  
+  // Formulaires
+  const [eventForm, setEventForm] = useState({
+    event_date: '',
+    location_id: '',
+    provider_ids: [] as string[],
+  });
+  const [providerForm, setProviderForm] = useState({ name: '' });
+  const [locationForm, setLocationForm] = useState({ name: '', color: '#3B82F6' });
 
   useEffect(() => {
-    loadProviders();
-    loadLocations();
-    loadEvents();
+    loadAllData();
   }, []);
 
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([loadProviders(), loadLocations(), loadEvents()]);
+    } catch (error) {
+      console.error('Erreur chargement données:', error);
+      toast.error('Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadProviders = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('planning_providers')
-      .select('id, name')
+      .select('*')
       .order('name');
-    setProviders(data || []);
+    
+    if (error) {
+      console.error('Erreur chargement prestataires:', error);
+      toast.error('Erreur lors du chargement des prestataires');
+    } else {
+      setProviders(data || []);
+    }
   };
 
   const loadLocations = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('planning_locations')
-      .select('id, name, color')
+      .select('*')
       .order('name');
-    setLocations(data || []);
+    
+    if (error) {
+      console.error('Erreur chargement lieux:', error);
+      toast.error('Erreur lors du chargement des lieux');
+    } else {
+      setLocations(data || []);
+    }
   };
 
   const loadEvents = async () => {
-    const { data } = await supabase
-      .from('planning_events')
-      .select('id, event_date, provider_ids, location:planning_locations(*)');
-    setEvents(data || []);
-  };
-
-  const addLocation = async () => {
-    if (!newLocation.name) return;
-    const { data, error } = await supabase
-      .from('planning_locations')
-      .insert(newLocation)
-      .select('id, name, color')
-      .single();
-    if (!error && data) {
-      setLocations(prev => [...prev, data]);
-    }
-    setNewLocation({ name: '', color: '#ffffff' });
-  };
-
-  const addProvider = async () => {
-    if (!newProvider.name) return;
-    const { data, error } = await supabase
-      .from('planning_providers')
-      .insert({ name: newProvider.name })
-      .select('id, name')
-      .single();
-    if (!error && data) {
-      setProviders(prev => [...prev, data]);
-    }
-    setNewProvider({ name: '' });
-  };
-
-  const openModal = (date: Date) => {
-    setModalDate(date);
-    if (locations[0]) {
-      setForm({ location_id: locations[0].id, provider_ids: [] });
-    }
-  };
-
-  const saveEvent = async () => {
-    if (!modalDate) return;
     const { data, error } = await supabase
       .from('planning_events')
-      .insert({
-        event_date: modalDate.toISOString().slice(0, 10),
-        location_id: form.location_id,
-        provider_ids: form.provider_ids,
-      })
-      .select('id, event_date, provider_ids, location:planning_locations(*)')
-      .single();
-    if (!error && data) {
-      setEvents(prev => [...prev, data]);
+      .select(`
+        *,
+        location:planning_locations(*)
+      `)
+      .order('event_date', { ascending: false });
+    
+    if (error) {
+      console.error('Erreur chargement événements:', error);
+      toast.error('Erreur lors du chargement des événements');
+    } else {
+      setEvents(data || []);
     }
-    setModalDate(null);
   };
 
-  const eventsForDay = (date: Date) =>
-    events.filter(
-      ev =>
-        ev.event_date === date.toISOString().slice(0, 10) &&
-        (selectedProvider === 'all' || ev.provider_ids.includes(selectedProvider))
-    );
+  // Gestion des prestataires
+  const handleProviderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!providerForm.name.trim()) return;
 
+    try {
+      if (editingProvider) {
+        const { error } = await supabase
+          .from('planning_providers')
+          .update({ name: providerForm.name })
+          .eq('id', editingProvider.id);
+        
+        if (error) throw error;
+        toast.success('Prestataire mis à jour');
+      } else {
+        const { error } = await supabase
+          .from('planning_providers')
+          .insert({ name: providerForm.name });
+        
+        if (error) throw error;
+        toast.success('Prestataire ajouté');
+      }
+      
+      resetProviderForm();
+      loadProviders();
+    } catch (error) {
+      console.error('Erreur prestataire:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const deleteProvider = async (id: string) => {
+    if (!confirm('Supprimer ce prestataire ? Tous ses événements seront également supprimés.')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('planning_providers')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast.success('Prestataire supprimé');
+      loadProviders();
+      loadEvents();
+    } catch (error) {
+      console.error('Erreur suppression prestataire:', error);
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Gestion des lieux
+  const handleLocationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!locationForm.name.trim()) return;
+
+    try {
+      if (editingLocation) {
+        const { error } = await supabase
+          .from('planning_locations')
+          .update({ 
+            name: locationForm.name,
+            color: locationForm.color 
+          })
+          .eq('id', editingLocation.id);
+        
+        if (error) throw error;
+        toast.success('Lieu mis à jour');
+      } else {
+        const { error } = await supabase
+          .from('planning_locations')
+          .insert({ 
+            name: locationForm.name,
+            color: locationForm.color 
+          });
+        
+        if (error) throw error;
+        toast.success('Lieu ajouté');
+      }
+      
+      resetLocationForm();
+      loadLocations();
+    } catch (error) {
+      console.error('Erreur lieu:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const deleteLocation = async (id: string) => {
+    if (!confirm('Supprimer ce lieu ? Tous ses événements seront également supprimés.')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('planning_locations')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast.success('Lieu supprimé');
+      loadLocations();
+      loadEvents();
+    } catch (error) {
+      console.error('Erreur suppression lieu:', error);
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Gestion des événements
+  const handleEventSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventForm.event_date || !eventForm.location_id || eventForm.provider_ids.length === 0) {
+      toast.error('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    try {
+      if (editingEvent) {
+        const { error } = await supabase
+          .from('planning_events')
+          .update({
+            event_date: eventForm.event_date,
+            location_id: eventForm.location_id,
+            provider_ids: eventForm.provider_ids,
+          })
+          .eq('id', editingEvent.id);
+        
+        if (error) throw error;
+        toast.success('Événement mis à jour');
+      } else {
+        const { error } = await supabase
+          .from('planning_events')
+          .insert({
+            event_date: eventForm.event_date,
+            location_id: eventForm.location_id,
+            provider_ids: eventForm.provider_ids,
+          });
+        
+        if (error) throw error;
+        toast.success('Événement ajouté');
+      }
+      
+      resetEventForm();
+      loadEvents();
+    } catch (error) {
+      console.error('Erreur événement:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const deleteEvent = async (id: string) => {
+    if (!confirm('Supprimer cet événement ?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('planning_events')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast.success('Événement supprimé');
+      loadEvents();
+    } catch (error) {
+      console.error('Erreur suppression événement:', error);
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Fonctions utilitaires
+  const resetProviderForm = () => {
+    setProviderForm({ name: '' });
+    setEditingProvider(null);
+    setShowProviderModal(false);
+  };
+
+  const resetLocationForm = () => {
+    setLocationForm({ name: '', color: '#3B82F6' });
+    setEditingLocation(null);
+    setShowLocationModal(false);
+  };
+
+  const resetEventForm = () => {
+    setEventForm({
+      event_date: '',
+      location_id: '',
+      provider_ids: [],
+    });
+    setEditingEvent(null);
+    setShowEventModal(false);
+  };
+
+  const startEditProvider = (provider: Provider) => {
+    setProviderForm({ name: provider.name });
+    setEditingProvider(provider);
+    setShowProviderModal(true);
+  };
+
+  const startEditLocation = (location: Location) => {
+    setLocationForm({ name: location.name, color: location.color });
+    setEditingLocation(location);
+    setShowLocationModal(true);
+  };
+
+  const startEditEvent = (event: EventItem) => {
+    setEventForm({
+      event_date: event.event_date,
+      location_id: event.location_id,
+      provider_ids: event.provider_ids,
+    });
+    setEditingEvent(event);
+    setShowEventModal(true);
+  };
+
+  const openEventModal = (date: Date) => {
+    setEventForm({
+      event_date: date.toISOString().slice(0, 10),
+      location_id: locations[0]?.id || '',
+      provider_ids: [],
+    });
+    setShowEventModal(true);
+  };
+
+  // Filtrage des événements
+  const getFilteredEvents = () => {
+    return events.filter(event => {
+      const matchesProvider = selectedProvider === 'all' || 
+        event.provider_ids.includes(selectedProvider);
+      const matchesLocation = selectedLocation === 'all' || 
+        event.location_id === selectedLocation;
+      const matchesSearch = !searchTerm || 
+        event.location?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      return matchesProvider && matchesLocation && matchesSearch;
+    });
+  };
+
+  const getEventsForDate = (date: Date) => {
+    const dateStr = date.toISOString().slice(0, 10);
+    return getFilteredEvents().filter(event => event.event_date === dateStr);
+  };
+
+  const getProviderName = (providerId: string) => {
+    return providers.find(p => p.id === providerId)?.name || 'Prestataire inconnu';
+  };
+
+  // Export PDF amélioré
+  const exportPlanningPDF = async () => {
+    try {
+      const element = document.getElementById('planning-export');
+      if (!element) {
+        toast.error('Élément de planning non trouvé');
+        return;
+      }
+
+      // Préparer les données pour l'export
+      const filteredEvents = getFilteredEvents();
+      const providerName = selectedProvider === 'all' ? 'Tous' : 
+        providers.find(p => p.id === selectedProvider)?.name || 'Inconnu';
+      const locationName = selectedLocation === 'all' ? 'Tous' : 
+        locations.find(l => l.id === selectedLocation)?.name || 'Inconnu';
+      
+      const fileName = `planning-${providerName}-${locationName}-${new Date().toISOString().slice(0, 10)}`;
+      
+      await exportElementAsPDF('planning-export', fileName);
+      toast.success('Planning exporté en PDF');
+    } catch (error) {
+      console.error('Erreur export PDF:', error);
+      toast.error('Erreur lors de l\'export PDF');
+    }
+  };
+
+  // Contenu du calendrier
   const tileContent = ({ date }: { date: Date }) => {
-    const dayEvents = eventsForDay(date);
+    const dayEvents = getEventsForDate(date);
     if (dayEvents.length === 0) return null;
+
     return (
-      <div className="space-y-0.5 text-xs mt-1">
-        {dayEvents.map(ev => (
+      <div className="mt-1 space-y-1">
+        {dayEvents.slice(0, 3).map(event => (
           <div
-            key={ev.id}
-            style={{ backgroundColor: ev.location?.color || '#555' }}
-            className="px-1 rounded"
+            key={event.id}
+            className="text-xs px-1 py-0.5 rounded text-white font-medium truncate"
+            style={{ backgroundColor: event.location?.color || '#6B7280' }}
+            title={`${event.location?.name} - ${event.provider_ids.map(id => getProviderName(id)).join(', ')}`}
           >
-            {ev.location?.name}
+            {event.location?.name}
           </div>
         ))}
+        {dayEvents.length > 3 && (
+          <div className="text-xs text-gray-400 text-center">
+            +{dayEvents.length - 3} autres
+          </div>
+        )}
       </div>
     );
   };
 
-  return (
-    <div className="text-white space-y-6">
-      <h2 className="text-2xl font-bold flex items-center gap-2">
-        <CalendarIcon /> Planning Evenementiel
-      </h2>
+  const tileClassName = ({ date }: { date: Date }) => {
+    const dayEvents = getEventsForDate(date);
+    if (dayEvents.length === 0) return '';
+    return 'has-events';
+  };
 
-      <div className="flex gap-4 mb-4">
-        <button
-          onClick={() => setActiveTab('calendar')}
-          className={`font-semibold ${
-            activeTab === 'calendar'
-              ? 'text-yellow-400 border-b-2 border-yellow-400'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Planning
-        </button>
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`font-semibold ${
-            activeTab === 'settings'
-              ? 'text-yellow-400 border-b-2 border-yellow-400'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Parametrage
-        </button>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-white text-xl">Chargement du planning...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+            <CalendarIcon className="text-blue-400" size={32} />
+            Planning Événementiel
+          </h1>
+          <p className="text-gray-400">
+            Gérez vos événements, prestataires et lieux de prestations
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={exportPlanningPDF}
+            className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"
+          >
+            <Download size={16} />
+            Export PDF
+          </button>
+          <button
+            onClick={() => setShowEventModal(true)}
+            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2"
+          >
+            <Plus size={16} />
+            Nouvel Événement
+          </button>
+        </div>
       </div>
 
+      {/* Statistiques rapides */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
+          <div className="text-2xl font-bold text-white">{events.length}</div>
+          <div className="text-gray-400 text-sm">Événements total</div>
+        </div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
+          <div className="text-2xl font-bold text-blue-400">{providers.length}</div>
+          <div className="text-gray-400 text-sm">Prestataires</div>
+        </div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
+          <div className="text-2xl font-bold text-green-400">{locations.length}</div>
+          <div className="text-gray-400 text-sm">Lieux</div>
+        </div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
+          <div className="text-2xl font-bold text-yellow-400">
+            {events.filter(e => new Date(e.event_date) >= new Date()).length}
+          </div>
+          <div className="text-gray-400 text-sm">À venir</div>
+        </div>
+      </div>
+
+      {/* Navigation par onglets */}
+      <div className="flex flex-wrap gap-4 border-b border-white/20">
+        {[
+          { id: 'calendar', label: 'Planning', icon: CalendarIcon },
+          { id: 'providers', label: 'Prestataires', icon: Users },
+          { id: 'locations', label: 'Lieux', icon: MapPin },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${
+              activeTab === tab.id
+                ? 'text-blue-400 border-b-2 border-blue-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <tab.icon size={20} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Contenu des onglets */}
       {activeTab === 'calendar' && (
-        <>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              Prestataire:
-              <select
-                value={selectedProvider}
-                onChange={e => setSelectedProvider(e.target.value)}
-                className="dark-select ml-2 rounded px-2 py-1"
-              >
-                <option value="all">Tous</option>
-                {providers.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              onClick={() => exportElementAsPDF('planning-calendar', 'planning')}
-              className="flex items-center gap-2 text-sm bg-yellow-500 text-black px-3 py-1 rounded"
-            >
-              <Download size={16} /> Export PDF
-            </button>
-          </div>
-          <div id="planning-calendar" className="bg-white/5 p-4 rounded-lg w-[60%] mx-auto">
-            <Calendar onClickDay={openModal} tileContent={tileContent} />
-          </div>
-          {modalDate && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-gray-900 p-6 rounded space-y-4 w-80">
-                <h3 className="text-lg font-semibold">Ajouter un evenement</h3>
-                <div className="space-y-2">
-                  <p>Date: {modalDate.toLocaleDateString()}</p>
+        <div className="space-y-6">
+          {/* Filtres et contrôles */}
+          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+            <div className="flex flex-col lg:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
+                <input
+                  type="text"
+                  placeholder="Rechercher par lieu..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="text-gray-400" size={20} />
                   <select
-                    value={form.location_id}
-                    onChange={e => setForm({ ...form, location_id: e.target.value })}
-                    className="dark-select w-full p-2 rounded"
+                    value={selectedProvider}
+                    onChange={e => setSelectedProvider(e.target.value)}
+                    className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
                   >
-                    {locations.map(loc => (
-                      <option key={loc.id} value={loc.id}>
-                        {loc.name}
+                    <option value="all">Tous les prestataires</option>
+                    {providers.map(provider => (
+                      <option key={provider.id} value={provider.id}>
+                        {provider.name}
                       </option>
                     ))}
                   </select>
-                  <div className="space-y-1">
-                    {providers.map(prov => (
-                      <label key={prov.id} className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={form.provider_ids.includes(prov.id)}
-                          onChange={() =>
-                            setForm(prev => {
-                              const exists = prev.provider_ids.includes(prov.id);
-                              return {
-                                ...prev,
-                                provider_ids: exists
-                                  ? prev.provider_ids.filter(id => id !== prov.id)
-                                  : [...prev.provider_ids, prov.id],
-                              };
-                            })
-                          }
-                        />
-                        <span className="text-sm">{prov.name}</span>
-                      </label>
-                    ))}
-                  </div>
                 </div>
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => setModalDate(null)} className="px-3 py-1 border rounded">
-                    Annuler
-                  </button>
-                  <button
-                    onClick={saveEvent}
-                    className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-2"
+                
+                <div className="flex items-center gap-2">
+                  <MapPin className="text-gray-400" size={20} />
+                  <select
+                    value={selectedLocation}
+                    onChange={e => setSelectedLocation(e.target.value)}
+                    className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
                   >
-                    <Plus size={16} /> Enregistrer
-                  </button>
+                    <option value="all">Tous les lieux</option>
+                    {locations.map(location => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
-          )}
-        </>
-      )}
-
-      {activeTab === 'settings' && (
-        <div className="space-y-8">
-          <div>
-            <h3 className="font-semibold mb-2">Lieux de prestation</h3>
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                addLocation();
-              }}
-              className="flex items-center gap-2 mb-4"
-            >
-              <input
-                value={newLocation.name}
-                onChange={e => setNewLocation({ ...newLocation, name: e.target.value })}
-                placeholder="Nom du lieu"
-                className="flex-1 p-2 rounded bg-gray-800 border border-gray-700"
-              />
-              <input
-                type="color"
-                value={newLocation.color}
-                onChange={e => setNewLocation({ ...newLocation, color: e.target.value })}
-                className="w-10 h-10 p-0 border-none"
-              />
-              <button type="submit" className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-1">
-                <Plus size={16} /> Ajouter
-              </button>
-            </form>
-            <ul className="space-y-1">
-              {locations.map(loc => (
-                <li key={loc.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-4 h-4 rounded" style={{ backgroundColor: loc.color }} />
-                  <span>{loc.name}</span>
-                </li>
-              ))}
-            </ul>
           </div>
 
-          <div>
-            <h3 className="font-semibold mb-2">Prestataires</h3>
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                addProvider();
-              }}
-              className="flex items-center gap-2 mb-4"
+          {/* Calendrier principal */}
+          <div className="grid lg:grid-cols-4 gap-6">
+            {/* Calendrier */}
+            <div className="lg:col-span-3">
+              <div 
+                id="planning-export" 
+                className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-white">
+                    Planning {selectedProvider !== 'all' && `- ${providers.find(p => p.id === selectedProvider)?.name}`}
+                  </h3>
+                  <div className="text-gray-400 text-sm">
+                    {getFilteredEvents().length} événement(s) affiché(s)
+                  </div>
+                </div>
+                
+                <div className="calendar-container">
+                  <style jsx>{`
+                    .calendar-container .react-calendar {
+                      width: 100%;
+                      background: transparent;
+                      border: none;
+                      color: white;
+                      font-family: inherit;
+                    }
+                    .calendar-container .react-calendar__tile {
+                      background: rgba(255, 255, 255, 0.05);
+                      border: 1px solid rgba(255, 255, 255, 0.1);
+                      color: white;
+                      padding: 0.75rem 0.5rem;
+                      height: auto;
+                      min-height: 80px;
+                      position: relative;
+                    }
+                    .calendar-container .react-calendar__tile:hover {
+                      background: rgba(59, 130, 246, 0.2);
+                      cursor: pointer;
+                    }
+                    .calendar-container .react-calendar__tile--active {
+                      background: rgba(59, 130, 246, 0.3) !important;
+                    }
+                    .calendar-container .react-calendar__tile--now {
+                      background: rgba(251, 191, 36, 0.2);
+                    }
+                    .calendar-container .react-calendar__month-view__weekdays {
+                      background: rgba(255, 255, 255, 0.1);
+                    }
+                    .calendar-container .react-calendar__month-view__weekdays__weekday {
+                      padding: 0.75rem;
+                      color: #9CA3AF;
+                      font-weight: 600;
+                      text-transform: uppercase;
+                      font-size: 0.75rem;
+                    }
+                    .calendar-container .react-calendar__navigation {
+                      margin-bottom: 1rem;
+                    }
+                    .calendar-container .react-calendar__navigation button {
+                      background: rgba(255, 255, 255, 0.1);
+                      border: 1px solid rgba(255, 255, 255, 0.2);
+                      color: white;
+                      padding: 0.5rem 1rem;
+                      border-radius: 0.5rem;
+                      font-weight: 600;
+                    }
+                    .calendar-container .react-calendar__navigation button:hover {
+                      background: rgba(59, 130, 246, 0.3);
+                    }
+                  `}</style>
+                  
+                  <Calendar
+                    onClickDay={openEventModal}
+                    tileContent={tileContent}
+                    tileClassName={tileClassName}
+                    value={currentDate}
+                    onChange={(date) => setCurrentDate(date as Date)}
+                    locale="fr-FR"
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Panneau latéral - Événements du jour sélectionné */}
+            <div className="lg:col-span-1">
+              <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 sticky top-6">
+                <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Clock className="text-blue-400" size={20} />
+                  {currentDate.toLocaleDateString('fr-FR', { 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long' 
+                  })}
+                </h4>
+                
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {getEventsForDate(currentDate).map(event => (
+                    <div
+                      key={event.id}
+                      className="bg-white/5 rounded-lg p-3 border border-white/10"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: event.location?.color }}
+                        />
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => startEditEvent(event)}
+                            className="p-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            onClick={() => deleteEvent(event.id)}
+                            className="p-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="text-white font-medium text-sm mb-1">
+                        {event.location?.name}
+                      </div>
+                      
+                      <div className="text-gray-400 text-xs">
+                        {event.provider_ids.map(id => getProviderName(id)).join(', ')}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {getEventsForDate(currentDate).length === 0 && (
+                    <div className="text-center py-8">
+                      <CalendarIcon className="text-gray-400 mx-auto mb-2" size={32} />
+                      <p className="text-gray-400 text-sm">Aucun événement ce jour</p>
+                      <button
+                        onClick={() => openEventModal(currentDate)}
+                        className="mt-3 bg-blue-500/20 text-blue-400 px-3 py-1 rounded-lg text-sm hover:bg-blue-500/30 transition-colors"
+                      >
+                        Ajouter un événement
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'providers' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-white">Gestion des Prestataires</h3>
+            <button
+              onClick={() => setShowProviderModal(true)}
+              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2"
             >
-              <input
-                value={newProvider.name}
-                onChange={e => setNewProvider({ name: e.target.value })}
-                placeholder="Nom du prestataire"
-                className="flex-1 p-2 rounded bg-gray-800 border border-gray-700"
-              />
-              <button type="submit" className="bg-yellow-500 text-black px-3 py-1 rounded flex items-center gap-1">
-                <Plus size={16} /> Ajouter
+              <Plus size={16} />
+              Nouveau Prestataire
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {providers.map(provider => (
+              <div
+                key={provider.id}
+                className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-500/20 rounded-lg p-2">
+                      <User className="text-blue-400" size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold">{provider.name}</h4>
+                      <p className="text-gray-400 text-sm">
+                        {events.filter(e => e.provider_ids.includes(provider.id)).length} événement(s)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => startEditProvider(provider)}
+                      className="p-2 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteProvider(provider.id)}
+                      className="p-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="text-gray-400 text-xs">
+                  Créé le {new Date(provider.created_at).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {providers.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="text-gray-400 mx-auto mb-4" size={48} />
+              <h4 className="text-white font-semibold mb-2">Aucun prestataire</h4>
+              <p className="text-gray-400 mb-4">Ajoutez votre premier prestataire</p>
+              <button
+                onClick={() => setShowProviderModal(true)}
+                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-full font-semibold"
+              >
+                Ajouter un prestataire
               </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'locations' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-white">Gestion des Lieux</h3>
+            <button
+              onClick={() => setShowLocationModal(true)}
+              className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"
+            >
+              <Plus size={16} />
+              Nouveau Lieu
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {locations.map(location => (
+              <div
+                key={location.id}
+                className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-white/20"
+                      style={{ backgroundColor: location.color }}
+                    />
+                    <div>
+                      <h4 className="text-white font-semibold">{location.name}</h4>
+                      <p className="text-gray-400 text-sm">
+                        {events.filter(e => e.location_id === location.id).length} événement(s)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => startEditLocation(location)}
+                      className="p-2 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteLocation(location.id)}
+                      className="p-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="text-gray-400 text-xs">
+                  Créé le {new Date(location.created_at).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {locations.length === 0 && (
+            <div className="text-center py-12">
+              <MapPin className="text-gray-400 mx-auto mb-4" size={48} />
+              <h4 className="text-white font-semibold mb-2">Aucun lieu</h4>
+              <p className="text-gray-400 mb-4">Ajoutez votre premier lieu de prestation</p>
+              <button
+                onClick={() => setShowLocationModal(true)}
+                className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-full font-semibold"
+              >
+                Ajouter un lieu
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal Événement */}
+      {showEventModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-white">
+                {editingEvent ? 'Modifier l\'événement' : 'Nouvel événement'}
+              </h3>
+              <button
+                onClick={resetEventForm}
+                className="text-gray-400 hover:text-white transition-colors text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleEventSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Date de l'événement *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={eventForm.event_date}
+                  onChange={e => setEventForm({ ...eventForm, event_date: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Lieu de prestation *
+                </label>
+                <select
+                  required
+                  value={eventForm.location_id}
+                  onChange={e => setEventForm({ ...eventForm, location_id: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
+                >
+                  <option value="">Sélectionner un lieu</option>
+                  {locations.map(location => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Prestataires assignés *
+                </label>
+                <div className="space-y-2 max-h-40 overflow-y-auto bg-white/5 rounded-lg p-3 border border-white/20">
+                  {providers.map(provider => (
+                    <label key={provider.id} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={eventForm.provider_ids.includes(provider.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEventForm({
+                              ...eventForm,
+                              provider_ids: [...eventForm.provider_ids, provider.id]
+                            });
+                          } else {
+                            setEventForm({
+                              ...eventForm,
+                              provider_ids: eventForm.provider_ids.filter(id => id !== provider.id)
+                            });
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-400 bg-white/5 border-white/20 rounded focus:ring-blue-400"
+                      />
+                      <span className="text-white">{provider.name}</span>
+                    </label>
+                  ))}
+                </div>
+                {eventForm.provider_ids.length === 0 && (
+                  <p className="text-red-400 text-sm mt-1">Sélectionnez au moins un prestataire</p>
+                )}
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  <Save size={16} />
+                  {editingEvent ? 'Mettre à jour' : 'Créer l\'événement'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetEventForm}
+                  className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300"
+                >
+                  Annuler
+                </button>
+              </div>
             </form>
-            <ul className="space-y-1 text-sm">
-              {providers.map(p => (
-                <li key={p.id}>{p.name}</li>
-              ))}
-            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Prestataire */}
+      {showProviderModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-white">
+                {editingProvider ? 'Modifier le prestataire' : 'Nouveau prestataire'}
+              </h3>
+              <button
+                onClick={resetProviderForm}
+                className="text-gray-400 hover:text-white transition-colors text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleProviderSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Nom du prestataire *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={providerForm.name}
+                  onChange={e => setProviderForm({ name: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
+                  placeholder="Ex: DJ Martin, Éclairagiste Pro..."
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
+                >
+                  {editingProvider ? 'Mettre à jour' : 'Ajouter'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetProviderForm}
+                  className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Lieu */}
+      {showLocationModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-white">
+                {editingLocation ? 'Modifier le lieu' : 'Nouveau lieu'}
+              </h3>
+              <button
+                onClick={resetLocationForm}
+                className="text-gray-400 hover:text-white transition-colors text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleLocationSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Nom du lieu *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={locationForm.name}
+                  onChange={e => setLocationForm({ ...locationForm, name: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-green-400 focus:outline-none"
+                  placeholder="Ex: Salle des fêtes, Château..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Couleur d'affichage *
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={locationForm.color}
+                    onChange={e => setLocationForm({ ...locationForm, color: e.target.value })}
+                    className="w-12 h-12 rounded-lg border border-white/20 bg-white/5"
+                  />
+                  <input
+                    type="text"
+                    value={locationForm.color}
+                    onChange={e => setLocationForm({ ...locationForm, color: e.target.value })}
+                    className="flex-1 bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-green-400 focus:outline-none"
+                    placeholder="#3B82F6"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300"
+                >
+                  {editingLocation ? 'Mettre à jour' : 'Ajouter'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetLocationForm}
+                  className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -323,4 +1108,3 @@ const AdminPlanningEditor: React.FC = () => {
 };
 
 export default AdminPlanningEditor;
-

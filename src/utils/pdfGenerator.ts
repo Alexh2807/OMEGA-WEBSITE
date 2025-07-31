@@ -125,17 +125,49 @@ export const printInvoice = () => {
  * @param elementId - DOM element id.
  * @param fileName - Name of the resulting PDF file.
  */
-export const exportElementAsPDF = async (elementId: string, fileName: string) => {
+export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
-  const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+  
+  // Configuration optimisée pour l'export de planning
+  const canvas = await html2canvas(element, { 
+    scale: 2, 
+    useCORS: true,
+    backgroundColor: '#1f2937', // Fond sombre pour correspondre au thème
+    logging: false,
+    allowTaint: true,
+    foreignObjectRendering: true,
+  });
+  
   const imgData = canvas.toDataURL('image/png');
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pdfWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-  pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+  let heightLeft = imgHeight;
+  let position = 0;
+
+  // Ajouter un en-tête au PDF
+  pdf.setFontSize(16);
+  pdf.setTextColor(0, 0, 0);
+  pdf.text('Planning OMEGA - Export', 10, 15);
+  pdf.setFontSize(10);
+  pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 10, 25);
+  
+  // Ajouter l'image du planning
+  pdf.addImage(imgData, 'PNG', 0, 30, pdfWidth, imgHeight);
+  heightLeft -= (pageHeight - 30);
+
+  // Gérer les pages multiples si nécessaire
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight;
+    pdf.addPage();
+    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+    heightLeft -= pageHeight;
+  }
+
   pdf.save(`${fileName}.pdf`);
   return true;
 };
