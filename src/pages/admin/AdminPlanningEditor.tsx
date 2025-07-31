@@ -414,35 +414,45 @@ const AdminPlanningEditor: React.FC = () => {
   };
 
   // Contenu du calendrier
-  const tileContent = ({ date }: { date: Date }) => {
+  const tileContent = ({ date, view }: { date: Date; view: string }) => {
+    if (view !== 'month') return null;
+
     const dayEvents = getEventsForDate(date);
     if (dayEvents.length === 0) return null;
 
+    const mainEvent = dayEvents[0];
+
     return (
-      <div className="mt-1 space-y-1">
-        {dayEvents.slice(0, 3).map(event => (
-          <div
-            key={event.id}
-            className="text-xs px-1 py-0.5 rounded text-white font-medium truncate"
-            style={{ backgroundColor: event.location?.color || '#6B7280' }}
-            title={`${event.location?.name} - ${event.provider_ids.map(id => getProviderName(id)).join(', ')}`}
-          >
-            {event.location?.name}
-          </div>
-        ))}
-        {dayEvents.length > 3 && (
-          <div className="text-xs text-gray-400 text-center">
-            +{dayEvents.length - 3} autres
+      <div
+        className="h-full w-full absolute top-0 left-0 p-1 flex flex-col text-white overflow-hidden"
+        style={{ 
+          backgroundColor: mainEvent.location?.color || '#374151',
+          textShadow: '0 1px 2px rgba(0,0,0,0.5)' 
+        }}
+      >
+        <strong className="font-bold text-xs truncate pt-5">
+          {mainEvent.location?.name}
+        </strong>
+        <p className="text-xs truncate">
+          {mainEvent.provider_ids.map(id => getProviderName(id)).join(', ')}
+        </p>
+        {dayEvents.length > 1 && (
+          <div className="mt-auto text-right text-xs font-bold">
+            + {dayEvents.length - 1}
           </div>
         )}
       </div>
     );
   };
 
-  const tileClassName = ({ date }: { date: Date }) => {
+  const tileClassName = ({ date, view }: { date: Date; view: string }) => {
+    if (view !== 'month') return null;
     const dayEvents = getEventsForDate(date);
-    if (dayEvents.length === 0) return '';
-    return 'has-events';
+    const classes = [];
+    if (dayEvents.length > 0) {
+      classes.push('has-events');
+    }
+    return classes.join(' ');
   };
 
   if (loading) {
@@ -614,10 +624,10 @@ const AdminPlanningEditor: React.FC = () => {
                       background: rgba(255, 255, 255, 0.05);
                       border: 1px solid rgba(255, 255, 255, 0.1);
                       color: white;
-                      padding: 0.75rem 0.5rem;
-                      height: auto;
-                      min-height: 80px;
+                      padding: 0;
+                      height: 100px;
                       position: relative;
+                      overflow: hidden;
                     }
                     .calendar-container .react-calendar__tile:hover {
                       background: rgba(59, 130, 246, 0.2);
@@ -628,6 +638,24 @@ const AdminPlanningEditor: React.FC = () => {
                     }
                     .calendar-container .react-calendar__tile--now {
                       background: rgba(251, 191, 36, 0.2);
+                    }
+                    .calendar-container .react-calendar__tile.has-events {
+                      padding: 0;
+                    }
+                    .calendar-container .react-calendar__tile.has-events .react-calendar__tile__label {
+                      font-weight: bold;
+                      color: white;
+                      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+                    }
+                    .calendar-container .react-calendar__month-view__days__day-number {
+                      position: absolute;
+                      top: 5px;
+                      right: 5px;
+                      z-index: 10;
+                      background: rgba(0,0,0,0.3);
+                      padding: 2px 5px;
+                      border-radius: 5px;
+                      font-size: 0.75rem;
                     }
                     .calendar-container .react-calendar__month-view__weekdays {
                       background: rgba(255, 255, 255, 0.1);
