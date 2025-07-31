@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateInvoicePDF, printInvoice } from '../pdfGenerator';
+import { generateInvoicePDF, printInvoice, exportElementAsPDF } from '../pdfGenerator';
 
 // Mock jsPDF and html2canvas for tests where they would be called
 vi.mock('jspdf', () => ({
@@ -23,5 +23,11 @@ describe('pdfGenerator utilities', () => {
 
   it('printInvoice throws when element missing', () => {
     expect(() => printInvoice()).toThrow('Élément de la facture non trouvé');
+  });
+
+  it('exportElementAsPDF throws when element missing', async () => {
+    await expect(exportElementAsPDF('missing', 'test')).rejects.toThrow(
+      'Élément non trouvé'
+    );
   });
 });

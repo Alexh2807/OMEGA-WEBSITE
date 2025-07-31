@@ -6,12 +6,14 @@ import {
   Package,
   MessageSquare,
   ShoppingCart,
+  Calendar,
   Settings,
 } from 'lucide-react';
 import AdminDashboard from './admin/AdminDashboard';
 import AdminUsers from './admin/AdminUsers';
 import AdminProducts from './admin/AdminProducts';
 import AdminOrders from './admin/AdminOrders';
+import AdminPlanningEditor from './admin/AdminPlanningEditor';
 import AdminMessages from './admin/AdminMessages';
 import AdminBilling from './admin/AdminBilling';
 
@@ -60,6 +62,7 @@ const AdminPage = () => {
     { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'products', label: 'Produits', icon: Package },
     { id: 'orders', label: 'Commandes', icon: ShoppingCart },
+    { id: 'planning', label: 'Planning', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'billing', label: 'Facturation', icon: Settings },
     { id: 'settings', label: 'Paramètres', icon: Settings },
@@ -73,6 +76,8 @@ const AdminPage = () => {
         return <AdminProducts />;
       case 'orders':
         return <AdminOrders />;
+      case 'planning':
+        return <AdminPlanningEditor />;
       case 'messages':
         return <AdminMessages />;
       case 'billing':
