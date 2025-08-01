@@ -405,6 +405,14 @@ const AdminPlanningEditor: React.FC = () => {
     return [...filteredEventsForCalendar, ...selectionEvents];
   }, [filteredEventsForCalendar, multiSelectedDates]);
 
+  // *** CORRECTION : Fonction d'aide pour simplifier le JSX ***
+  const getButtonClass = (monthValue: number) => {
+    const baseClass = 'px-3 py-1 text-sm rounded-md';
+    if (numberOfMonths === monthValue) {
+      return `${baseClass} bg-blue-600 text-white`;
+    }
+    return `${baseClass} bg-white/10 hover:bg-white/20 text-gray-300`;
+  };
 
   // --- Rendu JSX ---
   if (loading) return <div className="flex items-center justify-center h-64 text-white text-xl">Chargement du planning...</div>;
@@ -459,8 +467,9 @@ const AdminPlanningEditor: React.FC = () => {
             </div>
              <div className="flex justify-center md:justify-end items-center gap-2 mt-4">
                 <span className="text-sm text-gray-300">Vue:</span>
-                <button onClick={() => setNumberOfMonths(1)} className={`px-3 py-1 text-sm rounded-md ${numberOfMonths === 1 ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`}>1 Mois</button>
-                <button onClick={() => setNumberOfMonths(3)} className={`px-3 py-1 text-sm rounded-md ${numberOfMonths === 3 ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`}>3 Mois</button>
+                {/* *** CORRECTION : Utilisation de la fonction d'aide pour les classes *** */}
+                <button onClick={() => setNumberOfMonths(1)} className={getButtonClass(1)}>1 Mois</button>
+                <button onClick={() => setNumberOfMonths(3)} className={getButtonClass(3)}>3 Mois</button>
              </div>
           </div>
           <div id="planning-export" className={isPrinting ? 'calendar-container-light' : 'calendar-container-dark'}>
