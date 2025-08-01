@@ -77,6 +77,14 @@ const AdminPlanningEditor: React.FC = () => {
   const [providerForm, setProviderForm] = useState({ name: '' });
   const [locationForm, setLocationForm] = useState({ name: '', color: '#3B82F6' });
 
+  // --- Fonctions utilitaires ---
+  const toYYYYMMDD = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // --- Chargement des données ---
   const loadProviders = async () => {
     const { data, error } = await supabase.from('planning_providers').select('*').order('name');
@@ -94,8 +102,8 @@ const AdminPlanningEditor: React.FC = () => {
     const { data, error } = await supabase
       .from('planning_events')
       .select('*, location:planning_locations(*)')
-      .gte('event_date', start.toISOString().slice(0, 10))
-      .lte('event_date', end.toISOString().slice(0, 10));
+      .gte('event_date', toYYYYMMDD(start))
+      .lte('event_date', toYYYYMMDD(end));
     if (error) { toast.error('Erreur chargement événements'); }
     else { setEvents(data || []); }
   }, []);
@@ -168,7 +176,7 @@ const AdminPlanningEditor: React.FC = () => {
         if (selectionInfo) {
           let currentDate = new Date(selectionInfo.start);
           while (currentDate < selectionInfo.end) {
-            eventsToInsert.push({ event_date: currentDate.toISOString().slice(0, 10), location_id: eventForm.location_id, provider_ids: eventForm.provider_ids });
+            eventsToInsert.push({ event_date: toYYYYMMDD(currentDate), location_id: eventForm.location_id, provider_ids: eventForm.provider_ids });
             currentDate.setDate(currentDate.getDate() + 1);
           }
         } else if (multiSelectedDates.length > 0) {
@@ -192,7 +200,6 @@ const AdminPlanningEditor: React.FC = () => {
   const deleteLocation = (id: string) => confirmAndDelete('Supprimer ce lieu ?', supabase.from('planning_locations').delete().eq('id', id));
   const deleteEvent = (id: string) => { confirmAndDelete('Supprimer cet événement ?', supabase.from('planning_events').delete().eq('id', id)); resetEventForm(); };
 
-  // --- Fonctions utilitaires ---
   const resetProviderForm = () => { setProviderForm({ name: '' }); setEditingProvider(null); setShowProviderModal(false); };
   const resetLocationForm = () => { setLocationForm({ name: '', color: '#3B82F6' }); setEditingLocation(null); setShowLocationModal(false); };
   const resetEventForm = () => { setEventForm({ location_id: '', provider_ids: [] }); setEditingEvent(null); setShowEventModal(false); setSelectionInfo(null); setMultiSelectedDates([]); };
@@ -205,10 +212,33 @@ const AdminPlanningEditor: React.FC = () => {
 
   // --- Gestionnaires FullCalendar ---
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
-  const handleSelect = (selectInfo: any) => { setMultiSelectedDates([]); setEditingEvent(null); setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] }); setSelectionInfo({ start: selectInfo.start, end: selectInfo.end }); setShowEventModal(true); calendarRef.current?.getApi().unselect(); };
+
+  const handleSelect = (selectInfo: any) => {
+    if (selectInfo.jsEvent && selectInfo.jsEvent.ctrlKey) {
+        calendarRef.current?.getApi().unselect();
+        return;
+    }
+    setMultiSelectedDates([]);
+    setEditingEvent(null);
+    setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
+    setSelectionInfo({ start: selectInfo.start, end: selectInfo.end });
+    setShowEventModal(true);
+  };
+  
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
-  const handleDateClick = (arg: any) => { if (arg.jsEvent.ctrlKey) { const dateStr = arg.dateStr; setMultiSelectedDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]); } };
-  const handleEventDrop = async (info: any) => await supabase.from('planning_events').update({ event_date: info.event.start.toISOString().slice(0, 10) }).eq('id', info.event.id);
+  
+  const handleDateClick = (arg: any) => {
+    if (arg.jsEvent.ctrlKey) {
+        const dateStr = arg.dateStr;
+        setMultiSelectedDates(prev =>
+            prev.includes(dateStr)
+                ? prev.filter(d => d !== dateStr)
+                : [...prev, dateStr]
+        );
+    }
+  };
+  
+  const handleEventDrop = async (info: any) => await supabase.from('planning_events').update({ event_date: toYYYYMMDD(info.event.start) }).eq('id', info.event.id);
 
   // --- Fonctions de rendu et de formatage ---
   const allCalendarEvents = useMemo(() => {
@@ -237,7 +267,7 @@ const AdminPlanningEditor: React.FC = () => {
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-white">{events.length}</div><div className="text-gray-400 text-sm">Événements affichés</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-blue-400">{providers.length}</div><div className="text-gray-400 text-sm">Prestataires</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-green-400">{locations.length}</div><div className="text-gray-400 text-sm">Lieux</div></div>
-        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-yellow-400">{events.filter(e => e.event_date >= new Date().toISOString().slice(0,10)).length}</div><div className="text-gray-400 text-sm">À venir</div></div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-yellow-400">{events.filter(e => e.event_date >= toYYYYMMDD(new Date())).length}</div><div className="text-gray-400 text-sm">À venir</div></div>
       </div>
 
       <div className="flex flex-wrap gap-4 border-b border-white/20">
@@ -263,7 +293,7 @@ const AdminPlanningEditor: React.FC = () => {
              </div>
           </div>
           <div id="planning-export" className="calendar-container-dark">
-            <style>{`.calendar-container-dark{--fc-bg-color:rgba(17,24,39,0.5);--fc-border-color:rgba(255,255,255,0.1);--fc-text-color:#E5E7EB;--fc-text-secondary-color:#9CA3AF;--fc-button-bg-color:rgba(255,255,255,0.05);--fc-button-hover-bg-color:rgba(59,130,246,0.3);--fc-button-active-bg-color:rgba(59,130,246,0.4);--fc-today-bg-color:rgba(59,130,246,0.15);--fc-select-bg-color:rgba(59,130,246,0.25)}.calendar-container-dark .fc{background:var(--fc-bg-color);backdrop-filter:blur(10px);border:1px solid var(--fc-border-color);border-radius:1rem;padding:1.5rem;color:var(--fc-text-color)}.fc .fc-toolbar-title{color:#FFFFFF;font-weight:700}.fc .fc-button{background:var(--fc-button-bg-color);border:1px solid var(--fc-border-color);color:var(--fc-text-color);transition:background-color .3s;text-transform:capitalize}.fc .fc-button:hover{background:var(--fc-button-hover-bg-color)}.fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--fc-button-active-bg-color);border-color:var(--fc-button-active-bg-color)}.fc .fc-daygrid-day{border-color:var(--fc-border-color);transition:background-color .3s}.fc .fc-day-today{background-color:var(--fc-today-bg-color)!important}.fc .fc-daygrid-day-number{color:var(--fc-text-secondary-color);padding:.5em}.fc .fc-col-header-cell{background:rgba(255,255,255,0.05);color:var(--fc-text-secondary-color);border-color:var(--fc-border-color)}.fc .fc-daygrid-event{border-radius:4px;padding:2px 4px;margin-top:2px;font-size:.7rem;font-weight:500;box-shadow:0 2px 4px rgba(0,0,0,.2)}.fc .fc-daygrid-day.fc-day-future .fc-daygrid-day-number{color:var(--fc-text-color)}.fc-h-event .fc-event-main{padding:2px 4px}.calendar-container-light{--fc-bg-color:#ffffff;--fc-border-color:#e2e8f0;--fc-text-color:#1a202c;--fc-text-secondary-color:#718096;--fc-button-bg-color:#f8fafc;--fc-button-hover-bg-color:#edf2f7;--fc-button-active-bg-color:#dbeafe;--fc-today-bg-color:rgba(59,130,246,0.1);--fc-select-bg-color:rgba(59,130,246,0.2)}.calendar-container-light .fc{background:var(--fc-bg-color);border:1px solid var(--fc-border-color);border-radius:1rem;padding:1.5rem;color:var(--fc-text-color)}.calendar-container-light .fc .fc-toolbar-title{color:#1a202c}.calendar-container-light .fc .fc-button{background:var(--fc-button-bg-color);border:1px solid var(--fc-border-color);color:var(--fc-text-color)}.calendar-container-light .fc .fc-button:hover{background:var(--fc-button-hover-bg-color)}.calendar-container-light .fc .fc-daygrid-day{border-color:var(--fc-border-color)}.calendar-container-light .fc .fc-day-today{background-color:var(--fc-today-bg-color)!important}.calendar-container-light .fc .fc-daygrid-day-number{color:var(--fc-text-secondary-color)}.calendar-container-light .fc .fc-col-header-cell{background:#f8fafc;color:var(--fc-text-secondary-color);border-color:var(--fc-border-color)}.calendar-container-light .fc .fc-daygrid-event{border-radius:4px;padding:2px 4px;margin-top:2px;font-size:.7rem;font-weight:500;color:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.1)}.calendar-container-light .fc .fc-daygrid-day.fc-day-future .fc-daygrid-day-number{color:var(--fc-text-color)}.calendar-container-light .fc-h-event .fc-event-main{padding:2px 4px}`}</style>
+            <style>{`.calendar-container-dark{--fc-bg-color:rgba(17,24,39,0.5);--fc-border-color:rgba(255,255,255,0.1);--fc-text-color:#E5E7EB;--fc-text-secondary-color:#9CA3AF;--fc-button-bg-color:rgba(255,255,255,0.05);--fc-button-hover-bg-color:rgba(59,130,246,0.3);--fc-button-active-bg-color:rgba(59,130,246,0.4);--fc-today-bg-color:rgba(59,130,246,0.15);--fc-select-bg-color:rgba(59,130,246,0.25)}.calendar-container-dark .fc{background:var(--fc-bg-color);backdrop-filter:blur(10px);border:1px solid var(--fc-border-color);border-radius:1rem;padding:1.5rem;color:var(--fc-text-color)}.fc .fc-toolbar-title{color:#FFFFFF;font-weight:700}.fc .fc-button{background:var(--fc-button-bg-color);border:1px solid var(--fc-border-color);color:var(--fc-text-color);transition:background-color .3s;text-transform:capitalize}.fc .fc-button:hover{background:var(--fc-button-hover-bg-color)}.fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--fc-button-active-bg-color);border-color:var(--fc-button-active-bg-color)}.fc .fc-daygrid-day{border-color:var(--fc-border-color);transition:background-color .3s}.fc .fc-day-today{background-color:var(--fc-today-bg-color)!important}.fc .fc-daygrid-day-number{color:var(--fc-text-secondary-color);padding:.5em}.fc .fc-col-header-cell{background:rgba(255,255,255,0.05);color:var(--fc-text-secondary-color);border-color:var(--fc-border-color)}.fc .fc-daygrid-event{border-radius:4px;padding:2px 4px;margin-top:2px;font-size:.7rem;font-weight:500;box-shadow:0 2px 4px rgba(0,0,0,.2)}.fc .fc-daygrid-day.fc-day-future .fc-daygrid-day-number{color:var(--fc-text-color)}.fc-h-event .fc-event-main{padding:2px 4px}`}</style>
             <FullCalendar
                 ref={calendarRef}
                 key={`${numberOfMonths}-${providers.length}-${locations.length}`}
@@ -314,7 +344,7 @@ const AdminPlanningEditor: React.FC = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
             <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingEvent ? `Modifier: ${new Date(editingEvent.event_date + 'T00:00:00').toLocaleDateString('fr-FR')}` : 'Nouvel événement'}</h3><button onClick={resetEventForm} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-            {!editingEvent&&selectionInfo&&(<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création du {selectionInfo.start.toLocaleDateString('fr-FR')} au {new Date(selectionInfo.end.getTime()-864e5).toLocaleDateString('fr-FR')}</p>)}
+            {!editingEvent&&selectionInfo&&(<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création du {toYYYYMMDD(selectionInfo.start)} au {toYYYYMMDD(new Date(selectionInfo.end.getTime()-864e5))}</p>)}
             {!editingEvent && multiSelectedDates.length > 0 && (<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création sur <b>{multiSelectedDates.length} dates</b> sélectionnées.</p>)}
             <form onSubmit={handleEventSubmit} className="space-y-6">
               <div><label className="block text-sm font-medium text-gray-300 mb-2">Lieu *</label><select required value={eventForm.location_id} onChange={e=>setEventForm({...eventForm, location_id:e.target.value})} className="dark-select w-full"><option value="">Sélectionner un lieu</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
@@ -367,6 +397,6 @@ const AdminPlanningEditor: React.FC = () => {
       )}
     </div>
   );
-}; 
+};
 
 export default AdminPlanningEditor;
