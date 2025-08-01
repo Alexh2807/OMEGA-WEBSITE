@@ -464,27 +464,25 @@ const AdminPlanningEditor: React.FC = () => {
     const dayEvents = getEventsForDate(date);
     if (dayEvents.length === 0) return null;
 
-    const mainEvent = dayEvents[0];
-
     return (
-      <div
-        className="h-full w-full absolute top-0 left-0 p-1 flex flex-col text-white overflow-hidden"
-        style={{ 
-          backgroundColor: mainEvent.location?.color || '#374151',
-          textShadow: '0 1px 2px rgba(0,0,0,0.5)' 
-        }}
-      >
-        <strong className="font-bold text-xs truncate pt-5">
-          {mainEvent.location?.name}
-        </strong>
-        <p className="text-xs truncate">
-          {mainEvent.provider_ids.map(id => getProviderName(id)).join(', ')}
-        </p>
-        {dayEvents.length > 1 && (
-          <div className="mt-auto text-right text-xs font-bold">
-            + {dayEvents.length - 1}
+      <div className="absolute inset-0 flex flex-col">
+        {dayEvents.map(event => (
+          <div
+            key={event.id}
+            className="flex-1 p-1 overflow-hidden text-white text-[10px]"
+            style={{
+              backgroundColor: event.location?.color || '#374151',
+              textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+            }}
+          >
+            <div className="font-bold truncate">
+              {event.location?.name}
+            </div>
+            <div className="truncate">
+              {event.provider_ids.map(id => getProviderName(id)).join(', ')}
+            </div>
           </div>
-        )}
+        ))}
       </div>
     );
   };
