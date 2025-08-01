@@ -16,8 +16,10 @@ import {
   Palette,
   X,
   Layers,
+  Loader2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { exportElementAsPDF } from '../../utils/pdfGenerator'; // Assurez-vous que le chemin est correct
 import toast from 'react-hot-toast';
 
 // --- Interfaces de types ---
@@ -59,9 +61,10 @@ const AdminPlanningEditor: React.FC = () => {
   const [viewRange, setViewRange] = useState<{ start: Date; end: Date } | null>(null);
   const [numberOfMonths, setNumberOfMonths] = useState(3);
 
-  // Sélection multiple
+  // Sélection multiple et export
   const [multiSelectedDates, setMultiSelectedDates] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [isExporting, setIsExporting] = useState(false); // État pour le chargement du PDF
   
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -169,7 +172,6 @@ const AdminPlanningEditor: React.FC = () => {
     if (!eventForm.location_id || eventForm.provider_ids.length === 0) {
       return toast.error('Veuillez sélectionner un lieu et au moins un prestataire.');
     }
-    
     let success = false;
     if (editingEvent) {
       success = await handleGenericSubmit(supabase.from('planning_events').update({ location_id: eventForm.location_id, provider_ids: eventForm.provider_ids }).eq('id', editingEvent.id), 'Événement mis à jour !');
@@ -188,7 +190,6 @@ const AdminPlanningEditor: React.FC = () => {
         success = await handleGenericSubmit(supabase.from('planning_events').insert(eventsToInsert), `${eventsToInsert.length} événement(s) créé(s) !`);
       }
     }
-
     if(success) {
         forceRefresh();
         resetEventForm();
@@ -202,22 +203,9 @@ const AdminPlanningEditor: React.FC = () => {
     }
     return false;
   };
-
-  const deleteProvider = async (id: string) => {
-    const success = await confirmAndDelete('Supprimer ce prestataire ?', supabase.from('planning_providers').delete().eq('id', id));
-    if(success) loadProviders();
-  }
-  const deleteLocation = async (id: string) => {
-    const success = await confirmAndDelete('Supprimer ce lieu ?', supabase.from('planning_locations').delete().eq('id', id));
-    if(success) loadLocations();
-  }
-  const deleteEvent = async (id: string) => { 
-    const success = await confirmAndDelete('Supprimer cet événement ?', supabase.from('planning_events').delete().eq('id', id));
-    if(success) {
-      forceRefresh();
-      resetEventForm();
-    }
-  };
+  const deleteProvider = async (id: string) => { const success = await confirmAndDelete('Supprimer ce prestataire ?', supabase.from('planning_providers').delete().eq('id', id)); if(success) loadProviders(); }
+  const deleteLocation = async (id: string) => { const success = await confirmAndDelete('Supprimer ce lieu ?', supabase.from('planning_locations').delete().eq('id', id)); if(success) loadLocations(); }
+  const deleteEvent = async (id: string) => { const success = await confirmAndDelete('Supprimer cet événement ?', supabase.from('planning_events').delete().eq('id', id)); if(success) { forceRefresh(); resetEventForm(); } };
 
   const resetProviderForm = () => { setProviderForm({ name: '' }); setEditingProvider(null); setShowProviderModal(false); };
   const resetLocationForm = () => { setLocationForm({ name: '', color: '#3B82F6' }); setEditingLocation(null); setShowLocationModal(false); };
@@ -226,50 +214,42 @@ const AdminPlanningEditor: React.FC = () => {
   const startEditLocation = (l: Location) => { setLocationForm({ name: l.name, color: l.color }); setEditingLocation(l); setShowLocationModal(true); };
 
   // --- Fonctions de gestion en masse ---
-  const handleBulkDelete = async () => {
-    const success = await confirmAndDelete(`Supprimer tous les événements sur les ${multiSelectedDates.length} dates ?`, supabase.from('planning_events').delete().in('event_date', multiSelectedDates));
-    if(success) {
-        forceRefresh();
-        resetEventForm();
-    }
-  }
+  const handleBulkDelete = async () => { const success = await confirmAndDelete(`Supprimer tous les événements sur les ${multiSelectedDates.length} dates ?`, supabase.from('planning_events').delete().in('event_date', multiSelectedDates)); if(success) { forceRefresh(); resetEventForm(); } }
   const handleBulkCreate = () => { if (multiSelectedDates.length > 0) { setEditingEvent(null); setSelectionInfo(null); setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] }); setShowEventModal(true); } };
 
   // --- Gestionnaires FullCalendar ---
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
-
   const handleSelect = (selectInfo: any) => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
     calendarApi.unselect();
-    if (isMultiSelectMode) {
-        const dateStr = selectInfo.startStr;
-        setMultiSelectedDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]);
-        return;
-    }
-    setMultiSelectedDates([]);
-    setEditingEvent(null);
-    setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
-    setSelectionInfo({ start: selectInfo.start, end: selectInfo.end });
-    setShowEventModal(true);
+    if (isMultiSelectMode) { const dateStr = selectInfo.startStr; setMultiSelectedDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]); return; }
+    setMultiSelectedDates([]); setEditingEvent(null); setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] }); setSelectionInfo({ start: selectInfo.start, end: selectInfo.end }); setShowEventModal(true);
   };
-  
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
-    
   const handleEventDrop = async (info: any) => {
     const { event, oldEvent } = info;
     const newDate = toYYYYMMDD(event.start);
     const eventId = event.id;
     setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: newDate } : e));
     const { error } = await supabase.from('planning_events').update({ event_date: newDate }).eq('id', eventId);
-    if (error) {
-        toast.error("Le déplacement a échoué. Rétablissement de l'événement.");
-        setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e));
-        info.revert();
+    if (error) { toast.error("Le déplacement a échoué."); setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e)); info.revert(); }
+  };
+  const handleExportPDF = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    const toastId = toast.loading('Génération du PDF en cours...');
+    try {
+      await exportElementAsPDF('planning-export', `planning-${toYYYYMMDD(new Date())}`);
+      toast.success('PDF généré avec succès !', { id: toastId });
+    } catch (error) {
+      console.error("Erreur d'export PDF:", error);
+      toast.error('La génération du PDF a échoué.', { id: toastId });
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  // --- Fonctions de rendu et de formatage ---
   const allCalendarEvents = useMemo(() => {
     const filtered = events.filter(event => (selectedProvider === 'all' || event.provider_ids.includes(selectedProvider)) && (selectedLocation === 'all' || event.location_id === selectedLocation));
     const backgroundSelection = multiSelectedDates.map(date => ({ id: `selection-${date}`, start: date, allDay: true, display: 'background', backgroundColor: 'rgba(59, 130, 246, 0.4)' }));
@@ -287,16 +267,19 @@ const AdminPlanningEditor: React.FC = () => {
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3"><CalendarIcon className="text-blue-400" size={32} /> Planning Événementiel</h1>
           <p className="text-gray-400">Activez le mode sélection pour choisir plusieurs dates, ou glissez pour sélectionner une période.</p>
         </div>
-        <button onClick={() => toast.info('La fonction PDF est en cours de maintenance.')} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"><Download size={16} /> Export PDF</button>
+        <button onClick={handleExportPDF} disabled={isExporting} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+          {isExporting ? 'Génération...' : 'Export PDF'}
+        </button>
       </div>
       
+      {/* Cards, Tabs, etc. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-white">{events.length}</div><div className="text-gray-400 text-sm">Événements affichés</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-blue-400">{providers.length}</div><div className="text-gray-400 text-sm">Prestataires</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-green-400">{locations.length}</div><div className="text-gray-400 text-sm">Lieux</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-yellow-400">{events.filter(e => e.event_date >= toYYYYMMDD(new Date())).length}</div><div className="text-gray-400 text-sm">À venir</div></div>
       </div>
-
       <div className="flex flex-wrap gap-4 border-b border-white/20">
         {[ { id: 'calendar', label: 'Planning', icon: CalendarIcon }, { id: 'providers', label: 'Prestataires', icon: Users }, { id: 'locations', label: 'Lieux', icon: MapPin } ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${activeTab === tab.id ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'}`}><tab.icon size={20} /> {tab.label}</button>
@@ -324,10 +307,7 @@ const AdminPlanningEditor: React.FC = () => {
           <div id="planning-export" className="calendar-container-dark relative">
             {multiSelectedDates.length > 0 && (
                 <div className="sticky top-4 z-40 w-max mx-auto bg-gray-900/80 backdrop-blur-lg border border-white/20 rounded-xl shadow-2xl p-3 flex items-center gap-4 transition-all duration-300 animate-fade-in-up mb-4">
-                    <div className="flex items-center gap-2 text-white font-bold">
-                        <Layers size={20} className="text-blue-400" />
-                        <span>{multiSelectedDates.length} jour(s) sélectionné(s)</span>
-                    </div>
+                    <div className="flex items-center gap-2 text-white font-bold"><Layers size={20} className="text-blue-400" /><span>{multiSelectedDates.length} jour(s) sélectionné(s)</span></div>
                     <div className="h-8 w-px bg-white/20"></div>
                     <div className="flex items-center gap-2">
                         <button onClick={handleBulkCreate} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Plus size={16} /> Créer</button>
@@ -362,66 +342,12 @@ const AdminPlanningEditor: React.FC = () => {
         </div>
       )}
       
-      {activeTab === 'providers' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between"><h3 className="text-xl font-bold text-white">Gestion des Prestataires</h3><button onClick={()=>setShowProviderModal(true)} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2"><Plus size={16}/> Nouveau Prestataire</button></div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {providers.map(p=>(<div key={p.id} className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="bg-blue-500/20 rounded-lg p-2"><User className="text-blue-400" size={20}/></div><div><h4 className="text-white font-semibold">{p.name}</h4><p className="text-gray-400 text-sm">{events.filter(e=>e.provider_ids.includes(p.id)).length} événement(s)</p></div></div><div className="flex gap-1"><button onClick={()=>startEditProvider(p)} className="p-2 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"><Edit3 size={14}/></button><button onClick={()=>deleteProvider(p.id)} className="p-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"><Trash2 size={14}/></button></div></div></div>))}
-          </div>
-          {providers.length===0&&(<div className="text-center py-12"><Users className="text-gray-400 mx-auto mb-4" size={48}/><h4 className="text-white font-semibold mb-2">Aucun prestataire</h4><p className="text-gray-400 mb-4">Ajoutez votre premier prestataire</p><button onClick={()=>setShowProviderModal(true)} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-full font-semibold">Ajouter un prestataire</button></div>)}
-        </div>
-      )}
-
-      {activeTab === 'locations' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between"><h3 className="text-xl font-bold text-white">Gestion des Lieux</h3><button onClick={()=>setShowLocationModal(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"><Plus size={16}/> Nouveau Lieu</button></div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {locations.map(l=>(<div key={l.id} className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full border-2 border-white/20" style={{backgroundColor: l.color}}/><div><h4 className="text-white font-semibold">{l.name}</h4><p className="text-gray-400 text-sm">{events.filter(e=>e.location_id===l.id).length} événement(s)</p></div></div><div className="flex gap-1"><button onClick={()=>startEditLocation(l)} className="p-2 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"><Edit3 size={14}/></button><button onClick={()=>deleteLocation(l.id)} className="p-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"><Trash2 size={14}/></button></div></div></div>))}
-          </div>
-          {locations.length===0&&(<div className="text-center py-12"><MapPin className="text-gray-400 mx-auto mb-4" size={48}/><h4 className="text-white font-semibold mb-2">Aucun lieu</h4><p className="text-gray-400 mb-4">Ajoutez votre premier lieu</p><button onClick={()=>setShowLocationModal(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-full font-semibold">Ajouter un lieu</button></div>)}
-        </div>
-      )}
-
-      {showEventModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingEvent ? `Modifier: ${new Date(editingEvent.event_date + 'T00:00:00').toLocaleDateString('fr-FR')}` : 'Nouvel événement'}</h3><button onClick={resetEventForm} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-            {!editingEvent&&selectionInfo&&(<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création du {toYYYYMMDD(selectionInfo.start)} au {toYYYYMMDD(new Date(selectionInfo.end.getTime()-864e5))}</p>)}
-            {!editingEvent && multiSelectedDates.length > 0 && (<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création sur <b>{multiSelectedDates.length} dates</b> sélectionnées.</p>)}
-            <form onSubmit={handleEventSubmit} className="space-y-6">
-              <div><label className="block text-sm font-medium text-gray-300 mb-2">Lieu *</label><select required value={eventForm.location_id} onChange={e=>setEventForm({...eventForm, location_id:e.target.value})} className="dark-select w-full"><option value="">Sélectionner un lieu</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
-              <div><label className="block text-sm font-medium text-gray-300 mb-2">Prestataires *</label><div className="space-y-2 max-h-40 overflow-y-auto bg-white/5 rounded-lg p-3 border border-white/20">{providers.map(p=>(<label key={p.id} className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={eventForm.provider_ids.includes(p.id)} onChange={e=>{const newIds=e.target.checked?[...eventForm.provider_ids, p.id]:eventForm.provider_ids.filter(id=>id!==p.id);setEventForm({...eventForm, provider_ids: newIds})}} className="w-4 h-4 text-blue-400 bg-white/5 border-white/20 rounded focus:ring-blue-400"/><span className="text-white">{p.name}</span></label>))}</div></div>
-              <div className="flex gap-4">
-                <button type="submit" className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"><Save size={16}/>{editingEvent?'Mettre à jour':'Créer'}</button>
-                {editingEvent&&(<button type="button" onClick={()=>deleteEvent(editingEvent.id)} className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"><Trash2 size={16}/>Supprimer</button>)}
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {showProviderModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full">
-            <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingProvider ? 'Modifier prestataire' : 'Nouveau prestataire'}</h3><button onClick={resetProviderForm} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-            <form onSubmit={handleProviderSubmit} className="space-y-6">
-              <div><label className="block text-sm font-medium text-gray-300 mb-2">Nom *</label><input type="text" required value={providerForm.name} onChange={e=>setProviderForm({name: e.target.value})} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400" placeholder="Ex: DJ Martin"/></div>
-              <div className="flex gap-4"><button type="submit" className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold">{editingProvider ? 'Mettre à jour' : 'Ajouter'}</button><button type="button" onClick={resetProviderForm} className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold">Annuler</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-      {showLocationModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full">
-            <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingLocation ? 'Modifier le lieu' : 'Nouveau lieu'}</h3><button onClick={resetLocationForm} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-            <form onSubmit={handleLocationSubmit} className="space-y-6">
-              <div><label className="block text-sm font-medium text-gray-300 mb-2">Nom *</label><input type="text" required value={locationForm.name} onChange={e=>setLocationForm({...locationForm, name: e.target.value})} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400" placeholder="Ex: Salle des fêtes"/></div>
-              <div><label className="block text-sm font-medium text-gray-300 mb-2">Couleur *</label><div className="flex items-center gap-3"><input type="color" value={locationForm.color} onChange={e=>setLocationForm({...locationForm, color: e.target.value})} className="w-12 h-12 rounded-lg border border-white/20 bg-white/5"/><input type="text" value={locationForm.color} onChange={e=>setLocationForm({...locationForm, color: e.target.value})} className="flex-1 bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-green-400" placeholder="#3B82F6"/></div></div>
-              <div className="flex gap-4"><button type="submit" className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-semibold">{editingLocation?'Mettre à jour':'Ajouter'}</button><button type="button" onClick={resetLocationForm} className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold">Annuler</button></div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Les autres onglets et modals sont inclus ci-dessous */}
+      {activeTab === 'providers' && ( <div className="space-y-6"> <div className="flex items-center justify-between"><h3 className="text-xl font-bold text-white">Gestion des Prestataires</h3><button onClick={()=>setShowProviderModal(true)} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2"><Plus size={16}/> Nouveau Prestataire</button></div> <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"> {providers.map(p=>(<div key={p.id} className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="bg-blue-500/20 rounded-lg p-2"><User className="text-blue-400" size={20}/></div><div><h4 className="text-white font-semibold">{p.name}</h4><p className="text-gray-400 text-sm">{events.filter(e=>e.provider_ids.includes(p.id)).length} événement(s)</p></div></div><div className="flex gap-1"><button onClick={()=>startEditProvider(p)} className="p-2 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"><Edit3 size={14}/></button><button onClick={()=>deleteProvider(p.id)} className="p-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"><Trash2 size={14}/></button></div></div></div>))} </div> {providers.length===0&&(<div className="text-center py-12"><Users className="text-gray-400 mx-auto mb-4" size={48}/><h4 className="text-white font-semibold mb-2">Aucun prestataire</h4><p className="text-gray-400 mb-4">Ajoutez votre premier prestataire</p><button onClick={()=>setShowProviderModal(true)} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-full font-semibold">Ajouter un prestataire</button></div>)} </div> )}
+      {activeTab === 'locations' && ( <div className="space-y-6"> <div className="flex items-center justify-between"><h3 className="text-xl font-bold text-white">Gestion des Lieux</h3><button onClick={()=>setShowLocationModal(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"><Plus size={16}/> Nouveau Lieu</button></div> <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"> {locations.map(l=>(<div key={l.id} className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full border-2 border-white/20" style={{backgroundColor: l.color}}/><div><h4 className="text-white font-semibold">{l.name}</h4><p className="text-gray-400 text-sm">{events.filter(e=>e.location_id===l.id).length} événement(s)</p></div></div><div className="flex gap-1"><button onClick={()=>startEditLocation(l)} className="p-2 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"><Edit3 size={14}/></button><button onClick={()=>deleteLocation(l.id)} className="p-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"><Trash2 size={14}/></button></div></div></div>))} </div> {locations.length===0&&(<div className="text-center py-12"><MapPin className="text-gray-400 mx-auto mb-4" size={48}/><h4 className="text-white font-semibold mb-2">Aucun lieu</h4><p className="text-gray-400 mb-4">Ajoutez votre premier lieu</p><button onClick={()=>setShowLocationModal(true)} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-full font-semibold">Ajouter un lieu</button></div>)} </div> )}
+      {showEventModal && ( <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full"> <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingEvent ? `Modifier: ${new Date(editingEvent.event_date + 'T00:00:00').toLocaleDateString('fr-FR')}` : 'Nouvel événement'}</h3><button onClick={resetEventForm} className="text-gray-400 hover:text-white text-2xl">×</button></div> {!editingEvent&&selectionInfo&&(<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création du {toYYYYMMDD(selectionInfo.start)} au {toYYYYMMDD(new Date(selectionInfo.end.getTime()-864e5))}</p>)} {!editingEvent && multiSelectedDates.length > 0 && (<p className="text-center text-blue-300 mb-4 bg-blue-500/10 py-2 rounded-lg">Création sur <b>{multiSelectedDates.length} dates</b> sélectionnées.</p>)} <form onSubmit={handleEventSubmit} className="space-y-6"> <div><label className="block text-sm font-medium text-gray-300 mb-2">Lieu *</label><select required value={eventForm.location_id} onChange={e=>setEventForm({...eventForm, location_id:e.target.value})} className="dark-select w-full"><option value="">Sélectionner un lieu</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></div> <div><label className="block text-sm font-medium text-gray-300 mb-2">Prestataires *</label><div className="space-y-2 max-h-40 overflow-y-auto bg-white/5 rounded-lg p-3 border border-white/20">{providers.map(p=>(<label key={p.id} className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={eventForm.provider_ids.includes(p.id)} onChange={e=>{const newIds=e.target.checked?[...eventForm.provider_ids, p.id]:eventForm.provider_ids.filter(id=>id!==p.id);setEventForm({...eventForm, provider_ids: newIds})}} className="w-4 h-4 text-blue-400 bg-white/5 border-white/20 rounded focus:ring-blue-400"/><span className="text-white">{p.name}</span></label>))}</div></div> <div className="flex gap-4"> <button type="submit" className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"><Save size={16}/>{editingEvent?'Mettre à jour':'Créer'}</button> {editingEvent&&(<button type="button" onClick={()=>deleteEvent(editingEvent.id)} className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"><Trash2 size={16}/>Supprimer</button>)} </div> </form> </div> </div> )}
+      {showProviderModal && ( <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full"> <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingProvider ? 'Modifier prestataire' : 'Nouveau prestataire'}</h3><button onClick={resetProviderForm} className="text-gray-400 hover:text-white text-2xl">×</button></div> <form onSubmit={handleProviderSubmit} className="space-y-6"> <div><label className="block text-sm font-medium text-gray-300 mb-2">Nom *</label><input type="text" required value={providerForm.name} onChange={e=>setProviderForm({name: e.target.value})} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400" placeholder="Ex: DJ Martin"/></div> <div className="flex gap-4"><button type="submit" className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold">{editingProvider ? 'Mettre à jour' : 'Ajouter'}</button><button type="button" onClick={resetProviderForm} className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold">Annuler</button></div> </form> </div> </div> )}
+      {showLocationModal && ( <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full"> <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-bold text-white">{editingLocation ? 'Modifier le lieu' : 'Nouveau lieu'}</h3><button onClick={resetLocationForm} className="text-gray-400 hover:text-white text-2xl">×</button></div> <form onSubmit={handleLocationSubmit} className="space-y-6"> <div><label className="block text-sm font-medium text-gray-300 mb-2">Nom *</label><input type="text" required value={locationForm.name} onChange={e=>setLocationForm({...locationForm, name: e.target.value})} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400" placeholder="Ex: Salle des fêtes"/></div> <div><label className="block text-sm font-medium text-gray-300 mb-2">Couleur *</label><div className="flex items-center gap-3"><input type="color" value={locationForm.color} onChange={e=>setLocationForm({...locationForm, color: e.target.value})} className="w-12 h-12 rounded-lg border border-white/20 bg-white/5"/><input type="text" value={locationForm.color} onChange={e=>setLocationForm({...locationForm, color: e.target.value})} className="flex-1 bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-green-400" placeholder="#3B82F6"/></div></div> <div className="flex gap-4"><button type="submit" className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-semibold">{editingLocation?'Mettre à jour':'Ajouter'}</button><button type="button" onClick={resetLocationForm} className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold">Annuler</button></div> </form> </div> </div> )}
     </div>
   );
 };
