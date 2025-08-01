@@ -57,7 +57,6 @@ interface Order {
   profiles: {
     first_name: string;
     last_name: string;
-    email: string;
     phone: string;
   };
 }
@@ -123,7 +122,6 @@ const AdminOrders = () => {
           profiles!orders_user_id_profiles_fkey (
             first_name,
             last_name,
-            email,
             phone
           )
         `)
@@ -189,7 +187,7 @@ const AdminOrders = () => {
           order_id: order.id,
           customer_id: order.user_id,
           customer_name: `${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim() || 'Client',
-          customer_email: order.profiles?.email || '',
+          customer_email: '',
           customer_phone: order.profiles?.phone || '',
           customer_address: order.shipping_address,
           billing_address: order.shipping_address,
@@ -321,7 +319,7 @@ const AdminOrders = () => {
     const matchesSearch = 
       order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (order.profiles?.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (order.profiles?.phone || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || order.priority === priorityFilter;
@@ -469,7 +467,7 @@ const AdminOrders = () => {
                       {`${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim() || 'Client anonyme'}
                     </div>
                     <div className="text-gray-400 text-sm">
-                      {order.profiles?.email || 'Email non disponible'}
+                      {order.profiles?.phone || 'Téléphone non disponible'}
                     </div>
                     <div className="text-gray-400 text-xs">
                       Type: {order.user_type === 'pro' ? 'Professionnel' : 'Particulier'}
@@ -582,7 +580,7 @@ const AdminOrders = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Email:</span>
-                      <span className="text-white">{selectedOrder.profiles?.email || 'Non renseigné'}</span>
+                      <span className="text-white">Non disponible</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Téléphone:</span>
