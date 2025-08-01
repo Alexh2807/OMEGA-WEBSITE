@@ -145,7 +145,7 @@ const AdminDashboard = () => {
   return (
     <div className="p-6">
       {/* Header */}
-      <h1 className="text-2xl text-WHITE-500 font-semibold mb-1">Tableau de Bord</h1>
+      <h1 className="text-2xl text-white-500 font-semibold mb-1">Tableau de Bord</h1>
       <p className="text-sm text-gray-500 mb-4">
         Vue d'ensemble de votre activité OMEGA
       </p>
