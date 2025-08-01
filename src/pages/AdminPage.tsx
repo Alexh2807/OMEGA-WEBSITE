@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   Calendar,
   Settings,
+  FileText, // Ajout de l'icône pour la facturation
 } from 'lucide-react';
 import AdminDashboard from './admin/AdminDashboard';
 import AdminUsers from './admin/AdminUsers';
@@ -22,23 +23,24 @@ const AdminPage = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
+    const handleSwitchTab = (event) => {
+      if (event.detail) {
+        setActiveTab(event.detail);
+      }
+    };
+    
     // Écouter les événements de changement d'onglet
-    const handleSwitchToBilling = () => {
-      console.log('📋 Changement vers onglet Facturation');
-      setActiveTab('billing');
-    };
-
-    const handleSwitchToOrders = () => {
-      console.log('📦 Changement vers onglet Commandes');
-      setActiveTab('orders');
-    };
+    const handleSwitchToBilling = () => setActiveTab('billing');
+    const handleSwitchToOrders = () => setActiveTab('orders');
 
     window.addEventListener('switchToBilling', handleSwitchToBilling);
     window.addEventListener('switchToOrders', handleSwitchToOrders);
+    window.addEventListener('switchAdminTab', handleSwitchTab); // Pour les actions rapides
 
     return () => {
       window.removeEventListener('switchToBilling', handleSwitchToBilling);
       window.removeEventListener('switchToOrders', handleSwitchToOrders);
+      window.removeEventListener('switchAdminTab', handleSwitchTab);
     };
   }, []);
 
@@ -64,7 +66,7 @@ const AdminPage = () => {
     { id: 'orders', label: 'Commandes', icon: ShoppingCart },
     { id: 'planning', label: 'Planning', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
-    { id: 'billing', label: 'Facturation', icon: Settings },
+    { id: 'billing', label: 'Facturation', icon: FileText }, // Icône mise à jour
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 
@@ -82,7 +84,11 @@ const AdminPage = () => {
         return <AdminMessages />;
       case 'billing':
         return <AdminBilling />;
+      // Le cas 'settings' peut être ajouté ici
+      // case 'settings':
+      //   return <AdminSettings />;
       default:
+        // Le dashboard a besoin de la fonction pour changer d'onglet
         return <AdminDashboard />;
     }
   };
