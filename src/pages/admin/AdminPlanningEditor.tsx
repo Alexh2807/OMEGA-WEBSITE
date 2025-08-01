@@ -65,6 +65,7 @@ const AdminPlanningEditor: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   
   // Modals et formulaires
   const [showEventModal, setShowEventModal] = useState(false);
@@ -312,19 +313,23 @@ const AdminPlanningEditor: React.FC = () => {
             provider_ids: eventForm.provider_ids,
           })
           .eq('id', editingEvent.id);
-        
+
         if (error) throw error;
         toast.success('Événement mis à jour');
       } else {
-        const { error } = await supabase
-          .from('planning_events')
-          .insert({
-            event_date: eventForm.event_date,
-            location_id: eventForm.location_id,
-            provider_ids: eventForm.provider_ids,
-          });
-        
-        if (error) throw error;
+        const targetDates = selectedDates.length
+          ? selectedDates
+          : [new Date(eventForm.event_date)];
+        for (const d of targetDates) {
+          const { error } = await supabase
+            .from('planning_events')
+            .insert({
+              event_date: d.toISOString().slice(0, 10),
+              location_id: eventForm.location_id,
+              provider_ids: eventForm.provider_ids,
+            });
+          if (error) throw error;
+        }
         toast.success('Événement ajouté');
       }
       
@@ -375,6 +380,7 @@ const AdminPlanningEditor: React.FC = () => {
     });
     setEditingEvent(null);
     setShowEventModal(false);
+    setSelectedDates([]);
   };
 
   const startEditProvider = (provider: Provider) => {
@@ -396,16 +402,34 @@ const AdminPlanningEditor: React.FC = () => {
       provider_ids: event.provider_ids,
     });
     setEditingEvent(event);
+    setSelectedDates([new Date(event.event_date)]);
     setShowEventModal(true);
   };
 
-  const openEventModal = (date: Date) => {
+  const openEventModal = (date?: Date) => {
+    const baseDate = date || selectedDates[0] || currentDate;
     setEventForm({
-      event_date: date.toISOString().slice(0, 10),
+      event_date: baseDate.toISOString().slice(0, 10),
       location_id: locations[0]?.id || '',
       provider_ids: [],
     });
+    setSelectedDates([baseDate]);
     setShowEventModal(true);
+  };
+
+  const handleDayClick = (date: Date, event: any) => {
+    setCurrentDate(date);
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedDates(prev => {
+        const exists = prev.some(d => d.toDateString() === date.toDateString());
+        if (exists) {
+          return prev.filter(d => d.toDateString() !== date.toDateString());
+        }
+        return [...prev, date];
+      });
+    } else {
+      setSelectedDates([date]);
+    }
   };
 
   // Filtrage des événements
@@ -494,6 +518,9 @@ const AdminPlanningEditor: React.FC = () => {
     if (dayEvents.length > 0) {
       classes.push('has-events');
     }
+    if (selectedDates.some(d => d.toDateString() === date.toDateString())) {
+      classes.push('selected');
+    }
     return classes.join(' ');
   };
 
@@ -527,7 +554,7 @@ const AdminPlanningEditor: React.FC = () => {
             Export PDF
           </button>
           <button
-            onClick={() => setShowEventModal(true)}
+            onClick={() => openEventModal()}
             className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2"
           >
             <Plus size={16} />
@@ -684,6 +711,9 @@ const AdminPlanningEditor: React.FC = () => {
                     .calendar-container .react-calendar__tile.has-events {
                       padding: 0;
                     }
+                    .calendar-container .react-calendar__tile.selected {
+                      background: rgba(59, 130, 246, 0.4);
+                    }
                     .calendar-container .react-calendar__tile.has-events .react-calendar__tile__label {
                       font-weight: bold;
                       color: white;
@@ -726,7 +756,7 @@ const AdminPlanningEditor: React.FC = () => {
                   `}</style>
                   
                   <Calendar
-                    onClickDay={openEventModal}
+                    onClickDay={handleDayClick}
                     tileContent={tileContent}
                     tileClassName={tileClassName}
                     value={currentDate}
@@ -743,12 +773,17 @@ const AdminPlanningEditor: React.FC = () => {
               <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10 sticky top-6">
                 <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                   <Clock className="text-blue-400" size={20} />
-                  {currentDate.toLocaleDateString('fr-FR', { 
-                    weekday: 'long', 
-                    day: 'numeric', 
-                    month: 'long' 
+                  {currentDate.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long'
                   })}
                 </h4>
+                {selectedDates.length > 1 && (
+                  <div className="text-blue-400 text-sm mb-2">
+                    {selectedDates.length} dates sélectionnées
+                  </div>
+                )}
                 
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {getEventsForDate(currentDate).map(event => (
@@ -792,7 +827,7 @@ const AdminPlanningEditor: React.FC = () => {
                       <CalendarIcon className="text-gray-400 mx-auto mb-2" size={32} />
                       <p className="text-gray-400 text-sm">Aucun événement ce jour</p>
                       <button
-                        onClick={() => openEventModal(currentDate)}
+                        onClick={() => openEventModal()}
                         className="mt-3 bg-blue-500/20 text-blue-400 px-3 py-1 rounded-lg text-sm hover:bg-blue-500/30 transition-colors"
                       >
                         Ajouter un événement
