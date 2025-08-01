@@ -60,9 +60,8 @@ const AdminPlanningEditor: React.FC = () => {
   const [viewRange, setViewRange] = useState<{ start: Date; end: Date } | null>(null);
   const [numberOfMonths, setNumberOfMonths] = useState(3);
 
-  // Sélection multiple et export
+  // Sélection multiple
   const [multiSelectedDates, setMultiSelectedDates] = useState<string[]>([]);
-  const [isPrinting, setIsPrinting] = useState(false);
   
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -212,13 +211,6 @@ const AdminPlanningEditor: React.FC = () => {
   const handleEventDrop = async (info: any) => await supabase.from('planning_events').update({ event_date: info.event.start.toISOString().slice(0, 10) }).eq('id', info.event.id);
 
   // --- Fonctions de rendu et de formatage ---
-  const handleExportPDF = async () => {
-    setIsPrinting(true);
-    await new Promise(r => setTimeout(r, 300));
-    await exportElementAsPDF('planning-export', 'planning');
-    setIsPrinting(false);
-  };
-  
   const allCalendarEvents = useMemo(() => {
     const filtered = events.filter(event => (selectedProvider === 'all' || event.provider_ids.includes(selectedProvider)) && (selectedLocation === 'all' || event.location_id === selectedLocation));
     const backgroundSelection = multiSelectedDates.map(date => ({ id: `selection-${date}`, start: date, allDay: true, display: 'background', backgroundColor: 'rgba(59, 130, 246, 0.4)' }));
@@ -238,14 +230,14 @@ const AdminPlanningEditor: React.FC = () => {
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3"><CalendarIcon className="text-blue-400" size={32} /> Planning Événementiel</h1>
           <p className="text-gray-400">Utilisez CTRL+Clic pour sélectionner plusieurs dates, ou glissez pour sélectionner une période.</p>
         </div>
-        <button onClick={handleExportPDF} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"><Download size={16} /> Export PDF</button>
+        <button onClick={() => toast.info('La fonction PDF est en cours de maintenance.')} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"><Download size={16} /> Export PDF</button>
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-white">{events.length}</div><div className="text-gray-400 text-sm">Événements affichés</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-blue-400">{providers.length}</div><div className="text-gray-400 text-sm">Prestataires</div></div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-green-400">{locations.length}</div><div className="text-gray-400 text-sm">Lieux</div></div>
-        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-yellow-400">{events.filter(e => new Date(e.event_date) >= new Date()).length}</div><div className="text-gray-400 text-sm">À venir</div></div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-yellow-400">{events.filter(e => e.event_date >= new Date().toISOString().slice(0,10)).length}</div><div className="text-gray-400 text-sm">À venir</div></div>
       </div>
 
       <div className="flex flex-wrap gap-4 border-b border-white/20">
@@ -270,7 +262,7 @@ const AdminPlanningEditor: React.FC = () => {
                 <button onClick={() => setNumberOfMonths(3)} className={getButtonClass(3)}>3 Mois</button>
              </div>
           </div>
-          <div id="planning-export" className={isPrinting ? 'calendar-container-light' : 'calendar-container-dark'}>
+          <div id="planning-export" className="calendar-container-dark">
             <style>{`.calendar-container-dark{--fc-bg-color:rgba(17,24,39,0.5);--fc-border-color:rgba(255,255,255,0.1);--fc-text-color:#E5E7EB;--fc-text-secondary-color:#9CA3AF;--fc-button-bg-color:rgba(255,255,255,0.05);--fc-button-hover-bg-color:rgba(59,130,246,0.3);--fc-button-active-bg-color:rgba(59,130,246,0.4);--fc-today-bg-color:rgba(59,130,246,0.15);--fc-select-bg-color:rgba(59,130,246,0.25)}.calendar-container-dark .fc{background:var(--fc-bg-color);backdrop-filter:blur(10px);border:1px solid var(--fc-border-color);border-radius:1rem;padding:1.5rem;color:var(--fc-text-color)}.fc .fc-toolbar-title{color:#FFFFFF;font-weight:700}.fc .fc-button{background:var(--fc-button-bg-color);border:1px solid var(--fc-border-color);color:var(--fc-text-color);transition:background-color .3s;text-transform:capitalize}.fc .fc-button:hover{background:var(--fc-button-hover-bg-color)}.fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--fc-button-active-bg-color);border-color:var(--fc-button-active-bg-color)}.fc .fc-daygrid-day{border-color:var(--fc-border-color);transition:background-color .3s}.fc .fc-day-today{background-color:var(--fc-today-bg-color)!important}.fc .fc-daygrid-day-number{color:var(--fc-text-secondary-color);padding:.5em}.fc .fc-col-header-cell{background:rgba(255,255,255,0.05);color:var(--fc-text-secondary-color);border-color:var(--fc-border-color)}.fc .fc-daygrid-event{border-radius:4px;padding:2px 4px;margin-top:2px;font-size:.7rem;font-weight:500;box-shadow:0 2px 4px rgba(0,0,0,.2)}.fc .fc-daygrid-day.fc-day-future .fc-daygrid-day-number{color:var(--fc-text-color)}.fc-h-event .fc-event-main{padding:2px 4px}.calendar-container-light{--fc-bg-color:#ffffff;--fc-border-color:#e2e8f0;--fc-text-color:#1a202c;--fc-text-secondary-color:#718096;--fc-button-bg-color:#f8fafc;--fc-button-hover-bg-color:#edf2f7;--fc-button-active-bg-color:#dbeafe;--fc-today-bg-color:rgba(59,130,246,0.1);--fc-select-bg-color:rgba(59,130,246,0.2)}.calendar-container-light .fc{background:var(--fc-bg-color);border:1px solid var(--fc-border-color);border-radius:1rem;padding:1.5rem;color:var(--fc-text-color)}.calendar-container-light .fc .fc-toolbar-title{color:#1a202c}.calendar-container-light .fc .fc-button{background:var(--fc-button-bg-color);border:1px solid var(--fc-border-color);color:var(--fc-text-color)}.calendar-container-light .fc .fc-button:hover{background:var(--fc-button-hover-bg-color)}.calendar-container-light .fc .fc-daygrid-day{border-color:var(--fc-border-color)}.calendar-container-light .fc .fc-day-today{background-color:var(--fc-today-bg-color)!important}.calendar-container-light .fc .fc-daygrid-day-number{color:var(--fc-text-secondary-color)}.calendar-container-light .fc .fc-col-header-cell{background:#f8fafc;color:var(--fc-text-secondary-color);border-color:var(--fc-border-color)}.calendar-container-light .fc .fc-daygrid-event{border-radius:4px;padding:2px 4px;margin-top:2px;font-size:.7rem;font-weight:500;color:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.1)}.calendar-container-light .fc .fc-daygrid-day.fc-day-future .fc-daygrid-day-number{color:var(--fc-text-color)}.calendar-container-light .fc-h-event .fc-event-main{padding:2px 4px}`}</style>
             <FullCalendar
                 ref={calendarRef}
