@@ -4,20 +4,26 @@ import {
   Search,
   Filter,
   Eye,
-  Edit3,
   Package,
+  Calendar,
+  User,
+  MapPin,
+  CreditCard,
   Truck,
   CheckCircle,
   Clock,
+  XCircle,
   AlertCircle,
-  Calendar,
-  Euro,
-  User,
-  MapPin,
+  Edit3,
   FileText,
+  Download,
+  RefreshCw,
   ExternalLink,
   RotateCcw,
-  X,
+  DollarSign,
+  Mail,
+  Phone,
+  Building,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
@@ -29,14 +35,15 @@ interface Order {
   tax: number;
   total: number;
   status: string;
-  user_type: string;
-  priority: string;
-  estimated_delivery: string;
+  shipping_address: any;
   tracking_link: string;
   admin_notes: string;
+  notes: string;
+  priority: string;
+  estimated_delivery: string;
   created_at: string;
   updated_at: string;
-  shipping_address: any;
+  user_type: string;
   order_items: {
     id: string;
     quantity: number;
@@ -50,6 +57,8 @@ interface Order {
   profiles: {
     first_name: string;
     last_name: string;
+    email: string;
+    phone: string;
   };
 }
 
@@ -61,67 +70,45 @@ const AdminOrders = () => {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [orderInvoices, setOrderInvoices] = useState<{ [key: string]: any }>(
-    {}
-  );
-  const [showRefundModal, setShowRefundModal] = useState(false);
-  const [refundData, setRefundData] = useState({
-    amount: '',
-    reason: '',
-    adminNotes: '',
+  const [editForm, setEditForm] = useState({
+    status: '',
+    tracking_link: '',
+    admin_notes: '',
+    notes: '',
+    priority: '',
+    estimated_delivery: '',
   });
-  const [refundLoading, setRefundLoading] = useState(false);
-
-  useEffect(() => {
-    // Vérifier si on doit ouvrir une commande spécifique
-    const openOrderId = sessionStorage.getItem('openOrderId');
-    if (openOrderId && orders.length > 0) {
-      sessionStorage.removeItem('openOrderId');
-      const order = orders.find(o => o.id === openOrderId);
-      if (order) {
-        console.log(
-          '🎯 Ouverture automatique de la commande:',
-          order.id.slice(0, 8)
-        );
-        setSelectedOrder(order);
-        setShowOrderModal(true);
-      }
-    }
-  }, [orders]);
 
   useEffect(() => {
     loadOrders();
-    loadOrderInvoices();
-  }, []);
-
-  const loadOrderInvoices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('id, invoice_number, order_id, status')
-        .not('order_id', 'is', null);
-
-      if (!error && data) {
-        const invoiceMap: { [key: string]: any } = {};
-        data.forEach(invoice => {
-          if (invoice.order_id) {
-            invoiceMap[invoice.order_id] = invoice;
-          }
-        });
-        setOrderInvoices(invoiceMap);
+    
+    // Écouter l'événement pour ouvrir une commande spécifique
+    const handleOpenOrder = () => {
+      const orderId = sessionStorage.getItem('openOrderId');
+      if (orderId && orders.length > 0) {
+        sessionStorage.removeItem('openOrderId');
+        const order = orders.find(o => o.id === orderId);
+        if (order) {
+          setSelectedOrder(order);
+          setShowOrderModal(true);
+        }
       }
-    } catch (err) {
-      console.error('Erreur chargement factures:', err);
-    }
-  };
+    };
+
+    window.addEventListener('switchToOrders', handleOpenOrder);
+    handleOpenOrder(); // Vérifier immédiatement
+
+    return () => {
+      window.removeEventListener('switchToOrders', handleOpenOrder);
+    };
+  }, [orders]);
+
   const loadOrders = async () => {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select(
-          `
+        .select(`
           *,
           order_items (
             id,
@@ -133,12 +120,13 @@ const AdminOrders = () => {
               image
             )
           ),
-          profiles (
+          profiles!orders_user_id_profiles_fkey (
             first_name,
-            last_name
+            last_name,
+            email,
+            phone
           )
-        `
-        )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -147,8 +135,6 @@ const AdminOrders = () => {
       } else {
         setOrders(data || []);
       }
-      // Recharger les factures après avoir chargé les commandes
-      loadOrderInvoices();
     } catch (err) {
       console.error('Unexpected error:', err);
       toast.error('Erreur inattendue');
@@ -157,31 +143,14 @@ const AdminOrders = () => {
     }
   };
 
-  const updateOrderStatus = async (
-    orderId: string,
-    status: string,
-    adminNotes?: string,
-    trackingLink?: string,
-    estimatedDelivery?: string,
-    priority?: string
-  ) => {
+  const updateOrder = async (orderId: string, updates: any) => {
     try {
-      const updateData: any = {
-        status,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (adminNotes !== undefined && adminNotes.trim() !== '')
-        updateData.admin_notes = adminNotes;
-      if (trackingLink !== undefined && trackingLink.trim() !== '')
-        updateData.tracking_link = trackingLink;
-      if (estimatedDelivery !== undefined && estimatedDelivery !== '')
-        updateData.estimated_delivery = estimatedDelivery;
-      if (priority !== undefined) updateData.priority = priority;
-
       const { error } = await supabase
         .from('orders')
-        .update(updateData)
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', orderId);
 
       if (error) {
@@ -191,9 +160,6 @@ const AdminOrders = () => {
         toast.success('Commande mise à jour avec succès');
         loadOrders();
         setShowEditModal(false);
-        setEditingOrder(null);
-        // Recharger les factures après mise à jour
-        loadOrderInvoices();
       }
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -201,419 +167,165 @@ const AdminOrders = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <CheckCircle className="text-green-400" size={20} />;
-      case 'shipped':
-        return <Truck className="text-blue-400" size={20} />;
-      case 'delivered':
-        return <Package className="text-green-500" size={20} />;
-      case 'cancelled':
-        return <AlertCircle className="text-red-400" size={20} />;
-      default:
-        return <Clock className="text-yellow-400" size={20} />;
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'Confirmée';
-      case 'shipped':
-        return 'Expédiée';
-      case 'delivered':
-        return 'Livrée';
-      case 'cancelled':
-        return 'Annulée';
-      default:
-        return 'En attente';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'text-green-400 bg-green-500/20';
-      case 'shipped':
-        return 'text-blue-400 bg-blue-500/20';
-      case 'delivered':
-        return 'text-green-500 bg-green-500/20';
-      case 'cancelled':
-        return 'text-red-400 bg-red-500/20';
-      default:
-        return 'text-yellow-400 bg-yellow-500/20';
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return 'text-red-400 bg-red-500/20';
-      case 'high':
-        return 'text-orange-400 bg-orange-500/20';
-      case 'normal':
-        return 'text-blue-400 bg-blue-500/20';
-      case 'low':
-        return 'text-gray-400 bg-gray-500/20';
-      default:
-        return 'text-blue-400 bg-blue-500/20';
-    }
-  };
-
-  const createInvoiceFromOrder = async (orderId: string) => {
+  const createInvoiceFromOrder = async (order: Order) => {
     try {
-      const loadingToast = toast.loading('Création de la facture en cours...');
+      const toastId = toast.loading('Création de la facture...');
 
-      // Récupérer les détails de la commande avec les items
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .select(
-          `
-          *,
-          order_items (
-            *,
-            product:products (*)
-          ),
-          profiles!orders_user_id_profiles_fkey (
-            first_name,
-            last_name
-          )
-        `
-        )
-        .eq('id', orderId)
-        .single();
+      // Utiliser la nouvelle fonction atomique pour obtenir le numéro de facture
+      const { data: invoiceNumber, error: numberError } = await supabase
+        .rpc('get_next_invoice_number');
 
-      if (orderError) {
-        console.error('Error loading order:', orderError);
-        toast.dismiss(loadingToast);
-        toast.error('Erreur lors du chargement de la commande');
+      if (numberError) {
+        console.error('Error getting invoice number:', numberError);
+        toast.error('Erreur lors de la génération du numéro de facture', { id: toastId });
         return;
       }
 
-      // Récupérer l'email utilisateur depuis la session courante ou via RPC
-      const { data: userData, error: userError } = await supabase.rpc(
-        'get_user_email',
-        {
-          user_uuid: order.user_id,
-        }
-      );
-
-      let customerEmail = '';
-      if (userError || !userData) {
-        // Fallback : demander l'email si RPC échoue
-        customerEmail =
-          prompt(
-            `Email du client pour la facture (commande #${order.id.slice(0, 8)}) :`
-          ) || '';
-        if (!customerEmail) {
-          toast.dismiss(loadingToast);
-          toast.error('Email requis pour créer la facture');
-          return;
-        }
-      } else {
-        customerEmail = userData;
-      }
-
-      const profile = order.profiles;
-      if (!profile) {
-        toast.dismiss(loadingToast);
-        toast.error('Profil client introuvable');
-        return;
-      }
-
-      const customerName =
-        `${profile.first_name || ''} ${profile.last_name || ''}`.trim() ||
-        'Client';
-
-      console.log('Création facture pour:', {
-        customerName,
-        customerEmail,
-        orderId,
-      });
-
-      // Créer la facture
+      // Créer la facture avec le numéro généré atomiquement
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
-          order_id: orderId,
+          invoice_number: invoiceNumber,
+          order_id: order.id,
           customer_id: order.user_id,
-          customer_name: customerName,
-          customer_email: customerEmail,
+          customer_name: `${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim() || 'Client',
+          customer_email: order.profiles?.email || '',
+          customer_phone: order.profiles?.phone || '',
           customer_address: order.shipping_address,
           billing_address: order.shipping_address,
-          status: 'draft',
+          status: 'sent',
           subtotal_ht: order.sub_total,
           tax_amount: order.tax,
           total_ttc: order.total,
-          amount_paid: order.stripe_payment_intent_id ? order.total : 0,
-          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
+          amount_paid: order.total, // Commande déjà payée
+          due_date: new Date().toISOString().split('T')[0],
           payment_terms: 30,
-          notes: `Facture générée automatiquement depuis la commande #${order.id.slice(0, 8)}`,
-          legal_mentions: 'Mentions légales OMEGA',
+          notes: order.notes,
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+          sent_at: new Date().toISOString(),
+          paid_at: new Date().toISOString(), // Marquer comme payée immédiatement
         })
         .select()
         .single();
 
       if (invoiceError) {
         console.error('Error creating invoice:', invoiceError);
-        toast.dismiss(loadingToast);
-        toast.error(`Erreur création facture: ${invoiceError.message}`);
+        toast.error('Erreur lors de la création de la facture: ' + invoiceError.message, { id: toastId });
         return;
       }
 
-      console.log('Facture créée:', invoice);
+      // Créer les items de la facture
+      const invoiceItems = order.order_items.map(item => ({
+        invoice_id: invoice.id,
+        product_id: item.product.id,
+        description: item.product.name,
+        quantity: item.quantity,
+        unit_price_ht: order.user_type === 'pro' ? item.price : item.price / 1.2,
+        tax_rate: 20.00,
+        total_ht: order.user_type === 'pro' ? item.price * item.quantity : (item.price * item.quantity) / 1.2,
+        total_ttc: item.price * item.quantity,
+        sort_order: 0,
+      }));
 
-      // Créer les lignes de facture à partir des items de commande
-      const invoiceItems =
-        order.order_items?.map((item: any, index: number) => {
-          const unitPriceHT =
-            order.user_type === 'pro' ? item.price : item.price / 1.2;
-          return {
-            invoice_id: invoice.id,
-            product_id: item.product_id,
-            description: item.product?.name || 'Produit',
-            quantity: item.quantity,
-            unit_price_ht: unitPriceHT,
-            tax_rate: 20.0,
-            sort_order: index,
-          };
-        }) || [];
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(invoiceItems);
 
-      if (invoiceItems.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('invoice_items')
-          .insert(invoiceItems);
-
-        if (itemsError) {
-          console.error('Error creating invoice items:', itemsError);
-          toast.dismiss(loadingToast);
-          toast.error('Erreur lors de la création des lignes de facture');
-          return;
-        }
+      if (itemsError) {
+        console.error('Error creating invoice items:', itemsError);
+        toast.error('Erreur lors de la création des items de facture', { id: toastId });
+        return;
       }
 
-      // Si la commande a été payée (stripe_payment_intent_id existe), créer un enregistrement de paiement
-      if (order.stripe_payment_intent_id) {
-        const { error: paymentError } = await supabase
-          .from('payment_records')
-          .insert({
-            invoice_id: invoice.id,
-            amount: order.total,
-            payment_date: new Date(order.created_at)
-              .toISOString()
-              .split('T')[0],
-            payment_method: 'carte',
-            reference: order.stripe_payment_intent_id,
-            notes: 'Paiement par carte bancaire via Stripe',
-          });
-
-        if (paymentError) {
-          console.error('Error creating payment record:', paymentError);
-          // Ne pas faire échouer la création de facture pour autant
-          toast('⚠️ Facture créée mais enregistrement de paiement échoué');
-        } else {
-          // Mettre à jour le statut de la facture à "payé"
-          await supabase
-            .from('invoices')
-            .update({
-              status: 'paid',
-              paid_at: new Date().toISOString(),
-            })
-            .eq('id', invoice.id);
-        }
-      }
-
-      toast.dismiss(loadingToast);
-      toast.success(`✅ Facture ${invoice.invoice_number} créée avec succès !`);
-
-      // Stocker l'ID de la facture et naviguer vers la facturation
-      console.log('💾 Stockage ID facture pour ouverture:', invoice.id);
+      toast.success(`Facture ${invoiceNumber} créée avec succès !`, { id: toastId });
+      
+      // Ouvrir la facture dans l'onglet facturation
       sessionStorage.setItem('openInvoiceId', invoice.id);
-
-      // Déclencher l'événement pour changer d'onglet avec un délai
-      setTimeout(() => {
-        console.log('🔄 Déclenchement événement switchToBilling');
-        window.dispatchEvent(new CustomEvent('switchToBilling'));
-
-        // Recharger les factures pour mettre à jour l'état des boutons
-        loadOrderInvoices();
-      }, 100);
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      toast.error('Erreur inattendue');
+      window.dispatchEvent(new CustomEvent('switchToBilling'));
+      
+    } catch (err: any) {
+      console.error('Error creating invoice:', err);
+      toast.error('Erreur lors de la création de la facture');
     }
   };
 
-  const handleInvoiceAction = async (orderId: string) => {
-    // Vérifier si une facture existe déjà
-    try {
-      const { data: existingInvoice, error } = await supabase
-        .from('invoices')
-        .select('id, invoice_number')
-        .eq('order_id', orderId);
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Erreur vérification facture:', error);
-        toast.error('Erreur lors de la vérification');
-        return;
-      }
-
-      if (existingInvoice && existingInvoice.length > 0) {
-        // Facture existe, aller directement dessus
-        console.log(
-          '🔗 Navigation vers facture existante:',
-          existingInvoice[0].invoice_number
-        );
-        sessionStorage.setItem('openInvoiceId', existingInvoice[0].id);
-        window.dispatchEvent(new CustomEvent('switchToBilling'));
-      } else {
-        // Pas de facture, en créer une
-        console.log(
-          "🆕 Création d'une nouvelle facture pour commande:",
-          orderId
-        );
-        createInvoiceFromOrder(orderId);
-      }
-    } catch (err) {
-      console.error('Erreur inattendue:', err);
-      toast.error('Erreur inattendue');
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return <CheckCircle className="text-green-400" size={16} />;
+      case 'shipped':
+        return <Truck className="text-blue-400" size={16} />;
+      case 'delivered':
+        return <Package className="text-green-500" size={16} />;
+      case 'cancelled':
+        return <XCircle className="text-red-400" size={16} />;
+      default:
+        return <Clock className="text-yellow-400" size={16} />;
     }
   };
 
-  const handleRefund = async (order: Order) => {
-    if (!order.stripe_payment_intent_id) {
-      toast.error('Aucun paiement Stripe associé à cette commande');
-      return;
-    }
+  const getStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      confirmed: 'Confirmée',
+      shipped: 'Expédiée',
+      delivered: 'Livrée',
+      cancelled: 'Annulée',
+      pending: 'En attente',
+    };
+    return statusMap[status] || 'Inconnu';
+  };
 
-    // Calculer le montant maximum remboursable
-    const { data: existingRefunds } = await supabase
-      .from('refunds')
-      .select('amount')
-      .eq('order_id', order.id)
-      .eq('status', 'succeeded');
+  const getStatusColor = (status: string) => {
+    const colorMap: { [key: string]: string } = {
+      confirmed: 'text-green-400 bg-green-500/20',
+      shipped: 'text-blue-400 bg-blue-500/20',
+      delivered: 'text-green-500 bg-green-500/20',
+      cancelled: 'text-red-400 bg-red-500/20',
+      pending: 'text-yellow-400 bg-yellow-500/20',
+    };
+    return colorMap[status] || 'text-gray-400 bg-gray-500/20';
+  };
 
-    const totalRefunded =
-      existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0;
-    const maxRefundable = order.total - totalRefunded;
+  const getPriorityColor = (priority: string) => {
+    const colorMap: { [key: string]: string } = {
+      urgent: 'text-red-400 bg-red-500/20',
+      high: 'text-orange-400 bg-orange-500/20',
+      normal: 'text-blue-400 bg-blue-500/20',
+      low: 'text-gray-400 bg-gray-500/20',
+    };
+    return colorMap[priority] || 'text-blue-400 bg-blue-500/20';
+  };
 
-    if (maxRefundable <= 0) {
-      toast.error('Cette commande a déjà été entièrement remboursée');
-      return;
-    }
-
-    setSelectedOrder(order);
-    setRefundData({
-      amount: maxRefundable.toFixed(2),
-      reason: '',
-      adminNotes: '',
+  const startEdit = (order: Order) => {
+    setEditForm({
+      status: order.status,
+      tracking_link: order.tracking_link || '',
+      admin_notes: order.admin_notes || '',
+      notes: order.notes || '',
+      priority: order.priority || 'normal',
+      estimated_delivery: order.estimated_delivery || '',
     });
-    setShowRefundModal(true);
+    setSelectedOrder(order);
+    setShowEditModal(true);
   };
 
-  // Dans le fichier src/pages/admin/AdminOrders.tsx
-
-  const processRefund = async (e: React.FormEvent) => {
+  const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder) return;
-
-    // ⭐ CORRECTION : Trouver la facture associée à la commande
-    const invoice = orderInvoices[selectedOrder.id];
-
-    if (!invoice || !invoice.id) {
-      toast.error(
-        "Veuillez d'abord créer une facture pour cette commande avant de la rembourser."
-      );
-      return;
+    if (selectedOrder) {
+      updateOrder(selectedOrder.id, editForm);
     }
-
-    setRefundLoading(true);
-    const toastId = toast.loading('Traitement du remboursement...');
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        toast.error('Session expirée', { id: toastId });
-        setRefundLoading(false);
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-refund`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            // ⭐ CORRECTION : On envoie invoiceId, pas orderId
-            invoiceId: invoice.id,
-            amount: parseFloat(refundData.amount),
-            reason: refundData.reason,
-            adminNotes: refundData.adminNotes,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erreur lors du remboursement');
-      }
-
-      toast.success(result.message || 'Remboursement traité avec succès', {
-        id: toastId,
-      });
-      setShowRefundModal(false);
-      setSelectedOrder(null);
-      setRefundData({ amount: '', reason: '', adminNotes: '' });
-
-      await loadOrders();
-    } catch (error: any) {
-      console.error('Erreur remboursement:', error);
-      toast.error(error.message || 'Erreur lors du remboursement', {
-        id: toastId,
-      });
-    } finally {
-      setRefundLoading(false);
-    }
-  };
-
-  const getRefundableAmount = async (order: Order) => {
-    const { data: existingRefunds } = await supabase
-      .from('refunds')
-      .select('amount')
-      .eq('order_id', order.id)
-      .eq('status', 'succeeded');
-
-    const totalRefunded =
-      existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0;
-    return order.total - totalRefunded;
-  };
-
-  const isRefundable = (order: Order) => {
-    return (
-      order.stripe_payment_intent_id &&
-      (order.status === 'confirmed' ||
-        order.status === 'shipped' ||
-        order.status === 'delivered')
-    );
   };
 
   const filteredOrders = orders.filter(order => {
-    const customerName = order.profiles
-      ? `${order.profiles.first_name} ${order.profiles.last_name}`
-      : '';
-    const matchesSearch =
+    const customerName = `${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim();
+    const matchesSearch = 
       order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      statusFilter === 'all' || order.status === statusFilter;
-    const matchesPriority =
-      priorityFilter === 'all' || order.priority === priorityFilter;
+      customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.profiles?.email || '').toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    const matchesPriority = priorityFilter === 'all' || order.priority === priorityFilter;
+    
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
@@ -630,36 +342,33 @@ const AdminOrders = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <ShoppingCart className="text-yellow-400" size={32} />
+            <ShoppingCart className="text-purple-400" size={32} />
             Gestion des Commandes
           </h1>
           <p className="text-gray-400">
-            Suivez et gérez toutes les commandes clients
+            Gérez les commandes clients et leur statut de livraison
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-yellow-400">
-            {orders
-              .filter(order => order.status !== 'cancelled')
-              .reduce((sum, order) => sum + order.total, 0)
-              .toFixed(2)}
-            €
-          </div>
-          <div className="text-gray-400 text-sm">Chiffre d'affaires total</div>
-        </div>
+        <button
+          onClick={loadOrders}
+          className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center gap-2"
+        >
+          <RefreshCw size={16} />
+          Actualiser
+        </button>
       </div>
 
       {/* Statistiques rapides */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
           <div className="text-2xl font-bold text-white">{orders.length}</div>
           <div className="text-gray-400 text-sm">Total commandes</div>
         </div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-yellow-400">
-            {orders.filter(o => o.status === 'pending').length}
+          <div className="text-2xl font-bold text-green-400">
+            {orders.filter(o => o.status === 'confirmed').length}
           </div>
-          <div className="text-gray-400 text-sm">En attente</div>
+          <div className="text-gray-400 text-sm">Confirmées</div>
         </div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
           <div className="text-2xl font-bold text-blue-400">
@@ -668,10 +377,16 @@ const AdminOrders = () => {
           <div className="text-gray-400 text-sm">Expédiées</div>
         </div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-green-400">
+          <div className="text-2xl font-bold text-purple-400">
             {orders.filter(o => o.status === 'delivered').length}
           </div>
           <div className="text-gray-400 text-sm">Livrées</div>
+        </div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
+          <div className="text-2xl font-bold text-yellow-400">
+            {orders.reduce((sum, o) => sum + o.total, 0).toFixed(2)}€
+          </div>
+          <div className="text-gray-400 text-sm">Chiffre d'affaires</div>
         </div>
       </div>
 
@@ -685,10 +400,10 @@ const AdminOrders = () => {
             />
             <input
               type="text"
-              placeholder="Rechercher par ID ou client..."
+              placeholder="Rechercher par ID, nom client ou email..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+              className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -696,7 +411,7 @@ const AdminOrders = () => {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+              className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-purple-400 focus:outline-none [&>option]:bg-gray-800 [&>option]:text-white"
             >
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
@@ -708,7 +423,7 @@ const AdminOrders = () => {
             <select
               value={priorityFilter}
               onChange={e => setPriorityFilter(e.target.value)}
-              className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+              className="bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-purple-400 focus:outline-none [&>option]:bg-gray-800 [&>option]:text-white"
             >
               <option value="all">Toutes priorités</option>
               <option value="urgent">Urgent</option>
@@ -726,27 +441,13 @@ const AdminOrders = () => {
           <table className="w-full">
             <thead className="bg-white/5">
               <tr>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Commande
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Client
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Statut
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Priorité
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Total
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Date
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Actions
-                </th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Commande</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Client</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Statut</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Priorité</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Total</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Date</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -756,47 +457,40 @@ const AdminOrders = () => {
                   className="border-t border-white/10 hover:bg-white/5 transition-colors"
                 >
                   <td className="p-4">
-                    <div>
-                      <div className="text-white font-semibold">
-                        #{order.id.slice(0, 8)}
-                      </div>
-                      <div className="text-gray-400 text-sm flex items-center gap-1">
-                        <User size={12} />
-                        {order.user_type === 'pro'
-                          ? 'Professionnel'
-                          : 'Particulier'}
-                      </div>
+                    <div className="font-semibold text-white">
+                      #{order.id.slice(0, 8)}
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      {order.order_items?.length || 0} article(s)
                     </div>
                   </td>
                   <td className="p-4">
                     <div className="text-white">
-                      {order.profiles
-                        ? `${order.profiles.first_name} ${order.profiles.last_name}`
-                        : 'Client inconnu'}
+                      {`${order.profiles?.first_name || ''} ${order.profiles?.last_name || ''}`.trim() || 'Client anonyme'}
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      {order.profiles?.email || 'Email non disponible'}
+                    </div>
+                    <div className="text-gray-400 text-xs">
+                      Type: {order.user_type === 'pro' ? 'Professionnel' : 'Particulier'}
                     </div>
                   </td>
                   <td className="p-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}
-                    >
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                       {getStatusText(order.status)}
                     </span>
                   </td>
                   <td className="p-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}
-                    >
-                      {order.priority?.charAt(0).toUpperCase() +
-                        order.priority?.slice(1) || 'Normal'}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}>
+                      {order.priority?.charAt(0).toUpperCase() + order.priority?.slice(1) || 'Normal'}
                     </span>
                   </td>
                   <td className="p-4">
-                    <div className="text-white font-semibold">
+                    <div className="font-semibold text-white">
                       {order.total.toFixed(2)}€
                     </div>
                     <div className="text-gray-400 text-sm">
-                      {order.order_items?.length || 0} article
-                      {(order.order_items?.length || 0) > 1 ? 's' : ''}
+                      HT: {order.sub_total.toFixed(2)}€
                     </div>
                   </td>
                   <td className="p-4">
@@ -806,7 +500,7 @@ const AdminOrders = () => {
                     <div className="text-gray-400 text-sm">
                       {new Date(order.created_at).toLocaleTimeString('fr-FR', {
                         hour: '2-digit',
-                        minute: '2-digit',
+                        minute: '2-digit'
                       })}
                     </div>
                   </td>
@@ -823,55 +517,19 @@ const AdminOrders = () => {
                         <Eye size={16} />
                       </button>
                       <button
-                        onClick={() => {
-                          setEditingOrder(order);
-                          setShowEditModal(true);
-                        }}
+                        onClick={() => startEdit(order)}
                         className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
                         title="Modifier"
                       >
                         <Edit3 size={16} />
                       </button>
-
-                      {isRefundable(order) && (
-                        <button
-                          onClick={() => handleRefund(order)}
-                          className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors"
-                          title="Rembourser"
-                        >
-                          <RotateCcw size={16} />
-                        </button>
-                      )}
-
-                      {/* Bouton facture dynamique */}
-                      {orderInvoices[order.id] ? (
-                        // Facture existe - Bouton rouge avec icône de navigation
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleInvoiceAction(order.id)}
-                            className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                            title={`Facture ${orderInvoices[order.id].invoice_number} - Cliquer pour voir`}
-                          >
-                            <FileText size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleInvoiceAction(order.id)}
-                            className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                            title="Aller à la facture"
-                          >
-                            <ExternalLink size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        // Pas de facture - Bouton vert pour créer
-                        <button
-                          onClick={() => handleInvoiceAction(order.id)}
-                          className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-                          title="Créer une facture"
-                        >
-                          <FileText size={16} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => createInvoiceFromOrder(order)}
+                        className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
+                        title="Créer facture"
+                      >
+                        <FileText size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -884,9 +542,7 @@ const AdminOrders = () => {
       {filteredOrders.length === 0 && (
         <div className="text-center py-12">
           <ShoppingCart className="text-gray-400 mx-auto mb-4" size={48} />
-          <h3 className="text-white font-semibold mb-2">
-            Aucune commande trouvée
-          </h3>
+          <h3 className="text-white font-semibold mb-2">Aucune commande trouvée</h3>
           <p className="text-gray-400">
             Aucune commande ne correspond à vos critères de recherche
           </p>
@@ -910,58 +566,34 @@ const AdminOrders = () => {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-8">
-              {/* Informations commande */}
+              {/* Informations client */}
               <div className="space-y-6">
                 <div>
-                  <h4 className="text-white font-semibold mb-3">
-                    Informations générales
+                  <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                    <User className="text-blue-400" size={20} />
+                    Informations Client
                   </h4>
-                  <div className="space-y-2 text-sm">
+                  <div className="bg-white/5 rounded-lg p-4 space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Statut:</span>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}
-                      >
-                        {getStatusText(selectedOrder.status)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Priorité:</span>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${getPriorityColor(selectedOrder.priority)}`}
-                      >
-                        {selectedOrder.priority?.charAt(0).toUpperCase() +
-                          selectedOrder.priority?.slice(1)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Type client:</span>
+                      <span className="text-gray-400">Nom:</span>
                       <span className="text-white">
-                        {selectedOrder.user_type === 'pro'
-                          ? 'Professionnel'
-                          : 'Particulier'}
+                        {`${selectedOrder.profiles?.first_name || ''} ${selectedOrder.profiles?.last_name || ''}`.trim() || 'Non renseigné'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Date:</span>
+                      <span className="text-gray-400">Email:</span>
+                      <span className="text-white">{selectedOrder.profiles?.email || 'Non renseigné'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Téléphone:</span>
+                      <span className="text-white">{selectedOrder.profiles?.phone || 'Non renseigné'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Type:</span>
                       <span className="text-white">
-                        {new Date(selectedOrder.created_at).toLocaleString(
-                          'fr-FR'
-                        )}
+                        {selectedOrder.user_type === 'pro' ? 'Professionnel' : 'Particulier'}
                       </span>
                     </div>
-                    {selectedOrder.estimated_delivery && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">
-                          Livraison estimée:
-                        </span>
-                        <span className="text-white">
-                          {new Date(
-                            selectedOrder.estimated_delivery
-                          ).toLocaleDateString('fr-FR')}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -969,293 +601,202 @@ const AdminOrders = () => {
                 {selectedOrder.shipping_address && (
                   <div>
                     <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
-                      <MapPin size={16} />
-                      Adresse de livraison
+                      <MapPin className="text-green-400" size={20} />
+                      Adresse de Livraison
                     </h4>
-                    <div className="bg-white/5 rounded-lg p-4 text-sm">
-                      <div className="text-white font-medium">
-                        {selectedOrder.shipping_address.first_name}{' '}
-                        {selectedOrder.shipping_address.last_name}
+                    <div className="bg-white/5 rounded-lg p-4">
+                      <div className="text-white">
+                        {selectedOrder.shipping_address.first_name} {selectedOrder.shipping_address.last_name}
                       </div>
                       {selectedOrder.shipping_address.company && (
-                        <div className="text-gray-300">
-                          {selectedOrder.shipping_address.company}
-                        </div>
+                        <div className="text-gray-300">{selectedOrder.shipping_address.company}</div>
                       )}
-                      <div className="text-gray-300">
+                      <div className="text-gray-300 mt-2">
                         {selectedOrder.shipping_address.address_line_1}
-                      </div>
-                      {selectedOrder.shipping_address.address_line_2 && (
-                        <div className="text-gray-300">
-                          {selectedOrder.shipping_address.address_line_2}
-                        </div>
-                      )}
-                      <div className="text-gray-300">
-                        {selectedOrder.shipping_address.postal_code}{' '}
-                        {selectedOrder.shipping_address.city}
-                      </div>
-                      <div className="text-gray-300">
+                        {selectedOrder.shipping_address.address_line_2 && (
+                          <><br />{selectedOrder.shipping_address.address_line_2}</>
+                        )}
+                        <br />
+                        {selectedOrder.shipping_address.postal_code} {selectedOrder.shipping_address.city}
+                        <br />
                         {selectedOrder.shipping_address.country}
                       </div>
                       {selectedOrder.shipping_address.phone && (
-                        <div className="text-gray-300">
+                        <div className="text-gray-300 mt-2">
                           Tél: {selectedOrder.shipping_address.phone}
                         </div>
                       )}
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* Notes admin */}
-                {selectedOrder.admin_notes && (
+              {/* Détails commande */}
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                    <Package className="text-purple-400" size={20} />
+                    Détails de la Commande
+                  </h4>
+                  <div className="bg-white/5 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Statut:</span>
+                      <span className={`px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}>
+                        {getStatusText(selectedOrder.status)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Priorité:</span>
+                      <span className={`px-2 py-1 rounded text-xs ${getPriorityColor(selectedOrder.priority)}`}>
+                        {selectedOrder.priority?.charAt(0).toUpperCase() + selectedOrder.priority?.slice(1) || 'Normal'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Date de commande:</span>
+                      <span className="text-white">
+                        {new Date(selectedOrder.created_at).toLocaleString('fr-FR')}
+                      </span>
+                    </div>
+                    {selectedOrder.estimated_delivery && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Livraison estimée:</span>
+                        <span className="text-white">
+                          {new Date(selectedOrder.estimated_delivery).toLocaleDateString('fr-FR')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Suivi */}
+                {selectedOrder.tracking_link && (
                   <div>
-                    <h4 className="text-white font-semibold mb-3">
-                      Notes administrateur
+                    <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                      <Truck className="text-blue-400" size={20} />
+                      Suivi de Livraison
                     </h4>
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                      <p className="text-blue-300 text-sm">
-                        {selectedOrder.admin_notes}
-                      </p>
+                    <div className="bg-white/5 rounded-lg p-4">
+                      <a
+                        href={selectedOrder.tracking_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 flex items-center gap-2"
+                      >
+                        <ExternalLink size={16} />
+                        Suivre le colis
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {(selectedOrder.admin_notes || selectedOrder.notes) && (
+                  <div>
+                    <h4 className="text-white font-semibold mb-3">Notes</h4>
+                    <div className="space-y-3">
+                      {selectedOrder.admin_notes && (
+                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                          <div className="text-blue-400 font-semibold text-sm mb-1">Note admin:</div>
+                          <div className="text-gray-300 text-sm">{selectedOrder.admin_notes}</div>
+                        </div>
+                      )}
+                      {selectedOrder.notes && (
+                        <div className="bg-white/5 rounded-lg p-3">
+                          <div className="text-gray-400 font-semibold text-sm mb-1">Note client:</div>
+                          <div className="text-gray-300 text-sm">{selectedOrder.notes}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Articles commandés */}
-              <div>
-                <h4 className="text-white font-semibold mb-3">
-                  Articles commandés
-                </h4>
-                <div className="space-y-3 mb-6">
-                  {selectedOrder.order_items?.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-4 p-3 bg-white/5 rounded-lg"
-                    >
-                      <img
-                        src={
-                          item.product.image
-                            ? item.product.image.startsWith('/')
-                              ? item.product.image
-                              : `/${item.product.image}`
-                            : 'https://images.pexels.com/photos/1181467/pexels-photo-1181467.jpeg'
-                        }
-                        alt={item.product.name}
-                        className="w-12 h-12 object-cover rounded"
-                      />
-                      <div className="flex-1">
-                        <div className="text-white font-medium">
-                          {item.product.name}
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          Quantité: {item.quantity} • Prix unitaire:{' '}
-                          {item.price.toFixed(2)}€
-                        </div>
-                      </div>
-                      <div className="text-white font-semibold">
-                        {(item.price * item.quantity).toFixed(2)}€
+            {/* Articles commandés */}
+            <div className="mt-8">
+              <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
+                <Package className="text-green-400" size={20} />
+                Articles Commandés
+              </h4>
+              <div className="space-y-3">
+                {selectedOrder.order_items?.map(item => (
+                  <div key={item.id} className="bg-white/5 rounded-lg p-4 flex items-center gap-4">
+                    <img
+                      src={
+                        item.product.image
+                          ? item.product.image.startsWith('/')
+                            ? item.product.image
+                            : `/${item.product.image}`
+                          : 'https://images.pexels.com/photos/1181467/pexels-photo-1181467.jpeg'
+                      }
+                      alt={item.product.name}
+                      className="w-16 h-16 object-cover rounded-lg"
+                    />
+                    <div className="flex-1">
+                      <h5 className="text-white font-semibold">{item.product.name}</h5>
+                      <div className="text-gray-400 text-sm">
+                        Quantité: {item.quantity} • Prix unitaire: {item.price.toFixed(2)}€
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-white font-bold">
+                      {(item.price * item.quantity).toFixed(2)}€
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                {/* Récapitulatif */}
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Sous-total:</span>
-                      <span className="text-white">
-                        {selectedOrder.sub_total.toFixed(2)}€
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">TVA:</span>
-                      <span className="text-white">
-                        {selectedOrder.tax.toFixed(2)}€
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t border-white/20 pt-2 font-semibold">
-                      <span className="text-white">Total:</span>
-                      <span className="text-yellow-400 text-lg">
-                        {selectedOrder.total.toFixed(2)}€
-                      </span>
-                    </div>
+              {/* Totaux */}
+              <div className="mt-6 flex justify-end">
+                <div className="w-64 space-y-2">
+                  <div className="flex justify-between text-gray-300">
+                    <span>Sous-total HT:</span>
+                    <span>{selectedOrder.sub_total.toFixed(2)}€</span>
+                  </div>
+                  <div className="flex justify-between text-gray-300">
+                    <span>TVA (20%):</span>
+                    <span>{selectedOrder.tax.toFixed(2)}€</span>
+                  </div>
+                  <div className="flex justify-between text-xl font-bold text-white border-t border-white/20 pt-2">
+                    <span>Total TTC:</span>
+                    <span>{selectedOrder.total.toFixed(2)}€</span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Modal remboursement */}
-      {showRefundModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <RotateCcw className="text-orange-400" size={28} />
-                Remboursement
-              </h3>
+            <div className="flex gap-4 mt-8">
               <button
-                onClick={() => {
-                  setShowRefundModal(false);
-                  setSelectedOrder(null);
-                }}
-                className="text-gray-400 hover:text-white transition-colors text-2xl"
+                onClick={() => startEdit(selectedOrder)}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2"
               >
-                ×
+                <Edit3 size={16} />
+                Modifier
+              </button>
+              <button
+                onClick={() => createInvoiceFromOrder(selectedOrder)}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2"
+              >
+                <FileText size={16} />
+                Créer Facture
+              </button>
+              <button
+                onClick={() => setShowOrderModal(false)}
+                className="border-2 border-white/30 text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/10 transition-colors"
+              >
+                Fermer
               </button>
             </div>
-
-            {/* Informations commande */}
-            <div className="bg-white/5 rounded-lg p-4 mb-6">
-              <h4 className="text-white font-semibold mb-3">
-                Commande à rembourser
-              </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-400">Numéro:</span>
-                  <span className="text-white ml-2">
-                    #{selectedOrder.id.slice(0, 8)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Client:</span>
-                  <span className="text-white ml-2">
-                    {selectedOrder.profiles
-                      ? `${selectedOrder.profiles.first_name} ${selectedOrder.profiles.last_name}`
-                      : 'Client inconnu'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Total:</span>
-                  <span className="text-white ml-2">
-                    {selectedOrder.total.toFixed(2)}€
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Statut:</span>
-                  <span
-                    className={`ml-2 px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}
-                  >
-                    {getStatusText(selectedOrder.status)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <form onSubmit={processRefund} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Montant à rembourser (€) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={selectedOrder.total}
-                  required
-                  value={refundData.amount}
-                  onChange={e =>
-                    setRefundData({ ...refundData, amount: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none"
-                  placeholder="0.00"
-                />
-                <p className="text-gray-400 text-xs mt-1">
-                  Maximum: {selectedOrder.total.toFixed(2)}€
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Raison du remboursement *
-                </label>
-                <select
-                  required
-                  value={refundData.reason}
-                  onChange={e =>
-                    setRefundData({ ...refundData, reason: e.target.value })
-                  }
-                  className="w-full dark-select rounded-lg px-4 py-3 focus:border-orange-400 focus:outline-none"
-                >
-                  <option value="">Sélectionner une raison</option>
-                  <option value="defaut_produit">Défaut produit</option>
-                  <option value="annulation_client">Annulation client</option>
-                  <option value="erreur_commande">Erreur de commande</option>
-                  <option value="retour_produit">Retour produit</option>
-                  <option value="geste_commercial">Geste commercial</option>
-                  <option value="autre">Autre</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Notes administrateur (optionnel)
-                </label>
-                <textarea
-                  rows={3}
-                  value={refundData.adminNotes}
-                  onChange={e =>
-                    setRefundData({ ...refundData, adminNotes: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none resize-none"
-                  placeholder="Notes internes sur ce remboursement..."
-                />
-              </div>
-
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                <h4 className="text-orange-400 font-semibold mb-2">
-                  ⚠️ Attention
-                </h4>
-                <p className="text-gray-300 text-sm">
-                  Cette action va traiter un remboursement via Stripe. Cette
-                  opération est irréversible.
-                </p>
-              </div>
-
-              <div className="flex gap-4">
-                <button
-                  type="submit"
-                  disabled={refundLoading}
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {refundLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Traitement...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw size={20} />
-                      Traiter le Remboursement
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRefundModal(false);
-                    setSelectedOrder(null);
-                  }}
-                  className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300"
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
 
-      {/* Modal édition commande */}
-      {showEditModal && editingOrder && (
+      {/* Modal modification commande */}
+      {showEditModal && selectedOrder && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-white">
-                Modifier la commande
+                Modifier la commande #{selectedOrder.id.slice(0, 8)}
               </h3>
               <button
                 onClick={() => setShowEditModal(false)}
@@ -1265,85 +806,16 @@ const AdminOrders = () => {
               </button>
             </div>
 
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                const formData = new FormData(e.target as HTMLFormElement);
-                updateOrderStatus(
-                  editingOrder.id,
-                  formData.get('status') as string,
-                  (formData.get('admin_notes') as string) || undefined,
-                  (formData.get('tracking_link') as string) || undefined,
-                  (formData.get('estimated_delivery') as string) || undefined,
-                  formData.get('priority') as string
-                );
-              }}
-              className="space-y-6"
-            >
-              {/* Actions rapides */}
-              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/20">
-                <h4 className="text-blue-400 font-semibold mb-3">
-                  🚀 Actions Rapides
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateOrderStatus(editingOrder.id, 'confirmed');
-                    }}
-                    className="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
-                  >
-                    ✅ Confirmer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateOrderStatus(editingOrder.id, 'shipped');
-                    }}
-                    className="bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-colors text-sm font-medium"
-                  >
-                    🚚 Expédier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateOrderStatus(editingOrder.id, 'delivered');
-                    }}
-                    className="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
-                  >
-                    📦 Livrer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          'Êtes-vous sûr de vouloir annuler cette commande ?'
-                        )
-                      ) {
-                        updateOrderStatus(editingOrder.id, 'cancelled');
-                      }
-                    }}
-                    className="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 transition-colors text-sm font-medium"
-                  >
-                    ❌ Annuler
-                  </button>
-                </div>
-                <p className="text-gray-400 text-xs mt-2">
-                  Cliquez sur une action pour changer rapidement le statut sans
-                  remplir le formulaire
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleEditSubmit} className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Statut (ou utilisez les actions rapides ci-dessus)
+                    Statut
                   </label>
                   <select
-                    name="status"
-                    defaultValue={editingOrder.status}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+                    value={editForm.status}
+                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-purple-400 focus:outline-none [&>option]:bg-gray-800 [&>option]:text-white"
                   >
                     <option value="pending">En attente</option>
                     <option value="confirmed">Confirmée</option>
@@ -1357,9 +829,9 @@ const AdminOrders = () => {
                     Priorité
                   </label>
                   <select
-                    name="priority"
-                    defaultValue={editingOrder.priority}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+                    value={editForm.priority}
+                    onChange={e => setEditForm({ ...editForm, priority: e.target.value })}
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-purple-400 focus:outline-none [&>option]:bg-gray-800 [&>option]:text-white"
                   >
                     <option value="low">Basse</option>
                     <option value="normal">Normale</option>
@@ -1371,48 +843,61 @@ const AdminOrders = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Lien de suivi (optionnel)
+                  Lien de suivi
                 </label>
                 <input
                   type="url"
-                  name="tracking_link"
-                  defaultValue={editingOrder.tracking_link || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                  value={editForm.tracking_link}
+                  onChange={e => setEditForm({ ...editForm, tracking_link: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none"
                   placeholder="https://..."
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Date de livraison estimée (optionnel)
+                  Date de livraison estimée
                 </label>
                 <input
                   type="date"
-                  name="estimated_delivery"
-                  defaultValue={editingOrder.estimated_delivery || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
+                  value={editForm.estimated_delivery}
+                  onChange={e => setEditForm({ ...editForm, estimated_delivery: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-purple-400 focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Notes administrateur (optionnel)
+                  Note administrative
                 </label>
                 <textarea
-                  name="admin_notes"
-                  rows={4}
-                  defaultValue={editingOrder.admin_notes || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none resize-none"
-                  placeholder="Notes internes sur cette commande..."
+                  rows={3}
+                  value={editForm.admin_notes}
+                  onChange={e => setEditForm({ ...editForm, admin_notes: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none resize-none"
+                  placeholder="Note visible par le client..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Note interne
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.notes}
+                  onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none resize-none"
+                  placeholder="Note interne (non visible par le client)..."
                 />
               </div>
 
               <div className="flex gap-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-400/25 transition-all duration-300"
+                  className="flex-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
                 >
-                  Mettre à jour avec le formulaire
+                  Mettre à jour
                 </button>
                 <button
                   type="button"
@@ -1430,4 +915,4 @@ const AdminOrders = () => {
   );
 };
 
-export default AdminOrders; 
+export default AdminOrders;
