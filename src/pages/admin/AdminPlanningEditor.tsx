@@ -61,6 +61,7 @@ const AdminPlanningEditor: React.FC = () => {
 
   // Sélection multiple
   const [multiSelectedDates, setMultiSelectedDates] = useState<string[]>([]);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); // NOUVEL ÉTAT
   
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -199,13 +200,23 @@ const AdminPlanningEditor: React.FC = () => {
 
   const resetProviderForm = () => { setProviderForm({ name: '' }); setEditingProvider(null); setShowProviderModal(false); };
   const resetLocationForm = () => { setLocationForm({ name: '', color: '#3B82F6' }); setEditingLocation(null); setShowLocationModal(false); };
-  const resetEventForm = () => { setEventForm({ location_id: '', provider_ids: [] }); setEditingEvent(null); setShowEventModal(false); setSelectionInfo(null); setMultiSelectedDates([]); };
+  const resetEventForm = () => { setEventForm({ location_id: '', provider_ids: [] }); setEditingEvent(null); setShowEventModal(false); setSelectionInfo(null); setMultiSelectedDates([]); setIsMultiSelectMode(false); };
   const startEditProvider = (p: Provider) => { setProviderForm({ name: p.name }); setEditingProvider(p); setShowProviderModal(true); };
   const startEditLocation = (l: Location) => { setLocationForm({ name: l.name, color: l.color }); setEditingLocation(l); setShowLocationModal(true); };
 
   // --- Fonctions de gestion en masse ---
-  const handleBulkDelete = () => confirmAndDelete(`Supprimer tous les événements sur les ${multiSelectedDates.length} dates ?`, supabase.from('planning_events').delete().in('event_date', multiSelectedDates));
-  const handleBulkCreate = () => { if (multiSelectedDates.length > 0) { setEditingEvent(null); setSelectionInfo(null); setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] }); setShowEventModal(true); } };
+  const handleBulkDelete = () => {
+    confirmAndDelete(`Supprimer tous les événements sur les ${multiSelectedDates.length} dates ?`, supabase.from('planning_events').delete().in('event_date', multiSelectedDates));
+    resetEventForm();
+  }
+  const handleBulkCreate = () => {
+    if (multiSelectedDates.length > 0) { 
+        setEditingEvent(null);
+        setSelectionInfo(null);
+        setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
+        setShowEventModal(true);
+    }
+  };
 
   // --- Gestionnaires FullCalendar ---
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
@@ -213,12 +224,16 @@ const AdminPlanningEditor: React.FC = () => {
   const handleSelect = (selectInfo: any) => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
-    if (selectInfo.jsEvent && selectInfo.jsEvent.ctrlKey) {
+    calendarApi.unselect(); // Toujours annuler la sélection visuelle bleue
+
+    // NOUVELLE LOGIQUE : Si le mode sélection multiple est activé, on gère l'ajout/retrait
+    if (isMultiSelectMode) {
         const dateStr = selectInfo.startStr;
         setMultiSelectedDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]);
-        calendarApi.unselect();
         return;
     }
+
+    // Comportement normal pour la sélection de plage
     setMultiSelectedDates([]);
     setEditingEvent(null);
     setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
@@ -228,33 +243,18 @@ const AdminPlanningEditor: React.FC = () => {
   
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
     
-  // CORRIGÉ : Gestion de la synchronisation de l'état local
   const handleEventDrop = async (info: any) => {
     const { event, oldEvent } = info;
     const newDate = toYYYYMMDD(event.start);
     const eventId = event.id;
 
-    // 1. Mise à jour optimiste de l'état local pour une réactivité instantanée
-    setEvents(currentEvents =>
-        currentEvents.map(e =>
-            e.id === eventId ? { ...e, event_date: newDate } : e
-        )
-    );
+    setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: newDate } : e));
 
-    // 2. Sauvegarde en base de données
-    const { error } = await supabase
-        .from('planning_events')
-        .update({ event_date: newDate })
-        .eq('id', eventId);
+    const { error } = await supabase.from('planning_events').update({ event_date: newDate }).eq('id', eventId);
 
-    // 3. En cas d'échec, annuler la modification visuelle et de l'état local
     if (error) {
         toast.error("Le déplacement a échoué. Rétablissement de l'événement.");
-        setEvents(currentEvents =>
-            currentEvents.map(e =>
-                e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e
-            )
-        );
+        setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e));
         info.revert();
     }
   };
@@ -277,7 +277,7 @@ const AdminPlanningEditor: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3"><CalendarIcon className="text-blue-400" size={32} /> Planning Événementiel</h1>
-          <p className="text-gray-400">Utilisez CTRL+Clic pour sélectionner plusieurs dates, ou glissez pour sélectionner une période.</p>
+          <p className="text-gray-400">Activez le mode sélection pour choisir plusieurs dates, ou glissez pour sélectionner une période.</p>
         </div>
         <button onClick={() => toast.info('La fonction PDF est en cours de maintenance.')} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"><Download size={16} /> Export PDF</button>
       </div>
@@ -305,7 +305,9 @@ const AdminPlanningEditor: React.FC = () => {
                   <div className="flex items-center gap-2"><MapPin className="text-gray-400" size={20} /><select value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)} className="dark-select w-full"><option value="all">Tous les lieux</option>{locations.map(l => (<option key={l.id} value={l.id}>{l.name}</option>))}</select></div>
               </div>
             </div>
-             <div className="flex justify-center md:justify-end items-center gap-2 mt-4">
+             <div className="flex justify-center md:justify-end items-center gap-4 mt-4">
+                <button onClick={() => setIsMultiSelectMode(prev => !prev)} className={`flex items-center gap-2 px-3 py-1 text-sm rounded-md transition-colors ${isMultiSelectMode ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`}><Layers size={16}/> Sélection Multiple</button>
+                <div className="h-6 w-px bg-white/20"></div>
                 <span className="text-sm text-gray-300">Vue:</span>
                 <button onClick={() => setNumberOfMonths(1)} className={getButtonClass(1)}>1 Mois</button>
                 <button onClick={() => setNumberOfMonths(3)} className={getButtonClass(3)}>3 Mois</button>
@@ -409,7 +411,7 @@ const AdminPlanningEditor: React.FC = () => {
               <div className="flex items-center gap-2">
                   <button onClick={handleBulkCreate} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Plus size={16} /> Créer</button>
                   <button onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Trash2 size={16} /> Supprimer</button>
-                  <button onClick={() => setMultiSelectedDates([])} className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded-full"><X size={16} /></button>
+                  <button onClick={() => { setMultiSelectedDates([]); setIsMultiSelectMode(false); }} className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded-full"><X size={16} /></button>
               </div>
            </div>
       )}
