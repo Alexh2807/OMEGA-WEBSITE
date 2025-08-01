@@ -121,9 +121,9 @@ export const printInvoice = () => {
 };
 
 /**
- * Export any HTML element as a PDF file.
- * @param elementId - DOM element id.
- * @param fileName - Name of the resulting PDF file.
+ * Exporte un élément HTML en PDF sur une seule page A4.
+ * @param elementId - L'ID de l'élément DOM à exporter.
+ * @param fileName - Le nom du fichier PDF de sortie.
  */
 export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
   const element = document.getElementById(elementId);
@@ -131,34 +131,42 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
  
-  // Configuration optimisée pour l'export de planning
+  // Capture de l'élément en canvas avec une haute résolution et un fond noir
   const canvas = await html2canvas(element, { 
     scale: 2, 
     useCORS: true,
-    backgroundColor: '#111827', // Fond sombre pour correspondre au thème
+    backgroundColor: '#111827', // Fond du thème sombre
     logging: false,
     allowTaint: true,
   });
  
   const imgData = canvas.toDataURL('image/png');
-  const pdf = new jsPDF('l', 'mm', 'a4'); // 'l' for landscape (paysage)
-  const pdfWidth = pdf.internal.pageSize.getWidth();
+  
+  // Création du PDF au format A4 Paysage
+  const pdf = new jsPDF('l', 'mm', 'a4'); 
+  const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-  let heightLeft = imgHeight;
-  let position = 0;
+  
+  const canvasWidth = canvas.width;
+  const canvasHeight = canvas.height;
+  const canvasAspectRatio = canvasWidth / canvasHeight;
 
-  // Ajouter l'image du planning
-  pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-  heightLeft -= pageHeight;
+  // Calcul des dimensions de l'image pour qu'elle s'adapte à la page A4
+  let imgWidth = pageWidth;
+  let imgHeight = imgWidth / canvasAspectRatio;
 
-  // Gérer les pages multiples si nécessaire
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-    heightLeft -= pageHeight;
+  // Si l'image est trop haute, on la redimensionne en se basant sur la hauteur
+  if (imgHeight > pageHeight) {
+    imgHeight = pageHeight;
+    imgWidth = imgHeight * canvasAspectRatio;
   }
+
+  // Centrage de l'image sur la page
+  const xOffset = (pageWidth - imgWidth) / 2;
+  const yOffset = (pageHeight - imgHeight) / 2;
+
+  // Ajout de l'image unique, redimensionnée et centrée, sans pagination
+  pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
 
   pdf.save(`${fileName}.pdf`);
   return true;
