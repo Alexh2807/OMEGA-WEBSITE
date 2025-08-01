@@ -435,12 +435,17 @@ const AdminBilling = () => {
   };
 
   const filteredInvoices = invoices.filter(invoice => {
-    const customerName = invoice.customer
-      ? `${invoice.customer.first_name} ${invoice.customer.last_name}`
-      : invoice.customer_name;
+    // Logique de filtrage rendue plus robuste
+    const customerName =
+      (invoice.customer
+        ? `${invoice.customer.first_name} ${invoice.customer.last_name}`
+        : invoice.customer_name) || '';
+    const invoiceNumber = invoice.invoice_number || '';
+
     const matchesSearch =
-      invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customerName.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesStatus =
       statusFilter === 'all' || invoice.status === statusFilter;
 
@@ -460,11 +465,14 @@ const AdminBilling = () => {
   });
 
   const filteredQuotes = quotes.filter(quote => {
-    const customerName = quote.customer
-      ? `${quote.customer.first_name} ${quote.customer.last_name}`
-      : quote.customer_name;
+    const customerName =
+      (quote.customer
+        ? `${quote.customer.first_name} ${quote.customer.last_name}`
+        : quote.customer_name) || '';
+    const quoteNumber = quote.quote_number || '';
+
     const matchesSearch =
-      quote.quote_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customerName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       statusFilter === 'all' || quote.status === statusFilter;
@@ -477,49 +485,56 @@ const AdminBilling = () => {
       return;
     }
 
-    const dataToExport = filteredInvoices.map(invoice => {
-      const paymentDate = invoice.payment_records?.find(
-        p => p.status === 'succeeded' && p.payment_method !== 'refund'
-      )?.created_at;
+    try {
+      const dataToExport = filteredInvoices.map(invoice => {
+        const paymentDate = invoice.payment_records?.find(
+          p => p.status === 'succeeded' && p.payment_method !== 'refund'
+        )?.created_at;
 
-      return {
-        'Numéro Facture': invoice.invoice_number,
-        'Date Création': format(new Date(invoice.created_at), 'yyyy-MM-dd'),
-        'Date Échéance': invoice.due_date
-          ? format(new Date(invoice.due_date), 'yyyy-MM-dd')
-          : '',
-        Client: invoice.customer
-          ? `${invoice.customer.first_name} ${invoice.customer.last_name}`
-          : invoice.customer_name,
-        'Email Client': invoice.customer_email,
-        Statut: getStatusText(invoice.status),
-        'Total HT': invoice.total_ht.toFixed(2),
-        'Total TVA': invoice.total_tva.toFixed(2),
-        'Total TTC': invoice.total_ttc.toFixed(2),
-        'Montant Payé': invoice.amount_paid.toFixed(2),
-        'Date Paiement': paymentDate
-          ? format(new Date(paymentDate), 'yyyy-MM-dd HH:mm')
-          : '',
-        'ID Commande': invoice.order_id || '',
-      };
-    });
+        return {
+          'Numéro Facture': invoice.invoice_number || '',
+          'Date Création': format(new Date(invoice.created_at), 'yyyy-MM-dd'),
+          'Date Échéance': invoice.due_date
+            ? format(new Date(invoice.due_date), 'yyyy-MM-dd')
+            : '',
+          Client:
+            (invoice.customer
+              ? `${invoice.customer.first_name} ${invoice.customer.last_name}`
+              : invoice.customer_name) || '',
+          'Email Client': invoice.customer_email || '',
+          Statut: getStatusText(invoice.status),
+          'Total HT': (invoice.total_ht || 0).toFixed(2),
+          'Total TVA': (invoice.total_tva || 0).toFixed(2),
+          'Total TTC': (invoice.total_ttc || 0).toFixed(2),
+          'Montant Payé': (invoice.amount_paid || 0).toFixed(2),
+          'Date Paiement': paymentDate
+            ? format(new Date(paymentDate), 'yyyy-MM-dd HH:mm')
+            : '',
+          'ID Commande': invoice.order_id || '',
+        };
+      });
 
-    const csv = Papa.unparse(dataToExport);
-    const blob = new Blob([`\uFEFF${csv}`], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute(
-      'download',
-      `export-factures-${format(new Date(), 'yyyy-MM-dd')}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const csv = Papa.unparse(dataToExport);
+      const blob = new Blob([`\uFEFF${csv}`], {
+        type: 'text/csv;charset=utf-8;',
+      });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
 
-    toast.success('Export CSV généré avec succès !');
+      link.href = url;
+      link.style.visibility = 'hidden';
+      link.download = `export-factures-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('Export CSV généré avec succès !');
+    } catch (error) {
+      console.error("Erreur lors de la génération du CSV:", error);
+      toast.error("Une erreur est survenue lors de l'export.");
+    }
   };
 
   if (loading) {
@@ -724,9 +739,9 @@ const AdminBilling = () => {
                     </td>
                     <td className="p-4">
                       <div className="text-white">
-                        {invoice.customer
+                        {(invoice.customer
                           ? `${invoice.customer.first_name} ${invoice.customer.last_name}`
-                          : invoice.customer_name}
+                          : invoice.customer_name) || 'N/A'}
                       </div>
                       <div className="text-gray-400 text-sm">
                         {invoice.customer_email}
