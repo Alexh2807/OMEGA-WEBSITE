@@ -134,12 +134,15 @@ const AdminDashboard = () => {
 
       // --- 5. Récupérer les activités récentes ---
       const { data: recentOrders } = await supabase.from('orders').select('id, created_at, profiles(first_name, last_name)').order('created_at', { ascending: false }).limit(2);
-      const { data: recentUsers } = await supabase.from('profiles').select('id, created_at, first_name, last_name').order('created_at', { ascending: false }).limit(2);
+      
+      // FIX: Use updated_at for profiles table as created_at does not exist
+      const { data: recentUsers } = await supabase.from('profiles').select('id, updated_at, first_name, last_name').order('updated_at', { ascending: false }).limit(2);
+      
       const { data: recentMessages } = await supabase.from('contact_requests').select('id, created_at, name').order('created_at', { ascending: false }).limit(2);
 
       const activities: RecentActivity[] = [
         ...(recentOrders || []).map(o => ({ type: 'order', message: `Nouvelle commande de ${o.profiles?.first_name || 'un client'}`, time: new Date(o.created_at).toLocaleString('fr-FR'), icon: ShoppingCart, color: 'text-green-400', timestamp: new Date(o.created_at) })),
-        ...(recentUsers || []).map(u => ({ type: 'user', message: `Nouvel utilisateur: ${u.first_name || 'Anonyme'}`, time: new Date(u.created_at).toLocaleString('fr-FR'), icon: Users, color: 'text-blue-400', timestamp: new Date(u.created_at) })),
+        ...(recentUsers || []).map(u => ({ type: 'user', message: `Nouvel utilisateur: ${u.first_name || 'Anonyme'}`, time: new Date(u.updated_at).toLocaleString('fr-FR'), icon: Users, color: 'text-blue-400', timestamp: new Date(u.updated_at) })),
         ...(recentMessages || []).map(m => ({ type: 'message', message: `Nouveau message de ${m.name}`, time: new Date(m.created_at).toLocaleString('fr-FR'), icon: MessageSquare, color: 'text-yellow-400', timestamp: new Date(m.created_at) }))
       ];
       setRecentActivity(activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 4));
