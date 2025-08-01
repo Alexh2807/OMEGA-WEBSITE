@@ -61,7 +61,7 @@ const AdminPlanningEditor: React.FC = () => {
 
   // Sélection multiple
   const [multiSelectedDates, setMultiSelectedDates] = useState<string[]>([]);
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false); // NOUVEL ÉTAT
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   
   const calendarRef = useRef<FullCalendar>(null);
 
@@ -108,6 +108,12 @@ const AdminPlanningEditor: React.FC = () => {
     else { setEvents(data || []); }
   }, []);
 
+  const forceRefresh = useCallback(() => {
+    if (viewRange) {
+        loadEvents(viewRange.start, viewRange.end);
+    }
+  }, [viewRange, loadEvents]);
+
   useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
@@ -118,47 +124,44 @@ const AdminPlanningEditor: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (viewRange) {
-      loadEvents(viewRange.start, viewRange.end);
-    }
-  }, [viewRange, loadEvents]);
-
-  // --- Abonnements Supabase pour la mise à jour en temps réel ---
-  useEffect(() => {
-    const handleDbChanges = () => {
-        if (viewRange) {
-            loadEvents(viewRange.start, viewRange.end);
-        }
-    }
-    const channel = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'planning_events' }, handleDbChanges)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [viewRange, loadEvents]);
+    forceRefresh();
+  }, [forceRefresh]);
 
   // --- Gestionnaires de soumission de formulaires ---
-  const handleGenericSubmit = async (action: any, successMessage: string) => {
+  const handleGenericSubmit = async (action: any, successMessage: string): Promise<boolean> => {
     const { error } = await action;
-    if (error) { toast.error("Une erreur est survenue."); }
-    else { toast.success(successMessage); }
+    if (error) { 
+        toast.error("Une erreur est survenue.");
+        return false;
+    }
+    else { 
+        toast.success(successMessage);
+        return true;
+    }
   };
 
-  const handleProviderSubmit = (e: React.FormEvent) => {
+  const handleProviderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const action = editingProvider
       ? supabase.from('planning_providers').update({ name: providerForm.name }).eq('id', editingProvider.id)
       : supabase.from('planning_providers').insert({ name: providerForm.name });
-    handleGenericSubmit(action, `Prestataire ${editingProvider ? 'mis à jour' : 'ajouté'}.`);
-    resetProviderForm();
+    const success = await handleGenericSubmit(action, `Prestataire ${editingProvider ? 'mis à jour' : 'ajouté'}.`);
+    if(success) {
+      loadProviders();
+      resetProviderForm();
+    }
   };
 
-  const handleLocationSubmit = (e: React.FormEvent) => {
+  const handleLocationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const action = editingLocation
       ? supabase.from('planning_locations').update(locationForm).eq('id', editingLocation.id)
       : supabase.from('planning_locations').insert(locationForm);
-    handleGenericSubmit(action, `Lieu ${editingLocation ? 'mis à jour' : 'ajouté'}.`);
-    resetLocationForm();
+    const success = await handleGenericSubmit(action, `Lieu ${editingLocation ? 'mis à jour' : 'ajouté'}.`);
+    if(success) {
+        loadLocations();
+        resetLocationForm();
+    }
   };
 
   const handleEventSubmit = async (e: React.FormEvent) => {
@@ -166,37 +169,55 @@ const AdminPlanningEditor: React.FC = () => {
     if (!eventForm.location_id || eventForm.provider_ids.length === 0) {
       return toast.error('Veuillez sélectionner un lieu et au moins un prestataire.');
     }
-    try {
-      if (editingEvent) {
-        await handleGenericSubmit(supabase.from('planning_events').update({ location_id: eventForm.location_id, provider_ids: eventForm.provider_ids }).eq('id', editingEvent.id), 'Événement mis à jour !');
-      } else {
-        let eventsToInsert = [];
-        if (selectionInfo) {
-          let currentDate = new Date(selectionInfo.start);
-          while (currentDate < selectionInfo.end) {
-            eventsToInsert.push({ event_date: toYYYYMMDD(currentDate), location_id: eventForm.location_id, provider_ids: eventForm.provider_ids });
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-        } else if (multiSelectedDates.length > 0) {
-          eventsToInsert = multiSelectedDates.map(dateStr => ({ event_date: dateStr, location_id: eventForm.location_id, provider_ids: eventForm.provider_ids }));
+    
+    let success = false;
+    if (editingEvent) {
+      success = await handleGenericSubmit(supabase.from('planning_events').update({ location_id: eventForm.location_id, provider_ids: eventForm.provider_ids }).eq('id', editingEvent.id), 'Événement mis à jour !');
+    } else {
+      let eventsToInsert = [];
+      if (selectionInfo) {
+        let currentDate = new Date(selectionInfo.start);
+        while (currentDate < selectionInfo.end) {
+          eventsToInsert.push({ event_date: toYYYYMMDD(currentDate), location_id: eventForm.location_id, provider_ids: eventForm.provider_ids });
+          currentDate.setDate(currentDate.getDate() + 1);
         }
-        if (eventsToInsert.length > 0) {
-          await handleGenericSubmit(supabase.from('planning_events').insert(eventsToInsert), `${eventsToInsert.length} événement(s) créé(s) !`);
-        }
+      } else if (multiSelectedDates.length > 0) {
+        eventsToInsert = multiSelectedDates.map(dateStr => ({ event_date: dateStr, location_id: eventForm.location_id, provider_ids: eventForm.provider_ids }));
       }
-      resetEventForm();
-    } catch (error) { toast.error('Erreur lors de la sauvegarde.'); }
+      if (eventsToInsert.length > 0) {
+        success = await handleGenericSubmit(supabase.from('planning_events').insert(eventsToInsert), `${eventsToInsert.length} événement(s) créé(s) !`);
+      }
+    }
+
+    if(success) {
+        forceRefresh();
+        resetEventForm();
+    }
   };
 
   // --- Gestionnaires de suppression ---
-  const confirmAndDelete = async (message: string, action: any) => {
+  const confirmAndDelete = async (message: string, action: any): Promise<boolean> => {
     if (window.confirm(message)) {
-      await handleGenericSubmit(action, "Suppression réussie.");
+      return await handleGenericSubmit(action, "Suppression réussie.");
+    }
+    return false;
+  };
+
+  const deleteProvider = async (id: string) => {
+    const success = await confirmAndDelete('Supprimer ce prestataire ?', supabase.from('planning_providers').delete().eq('id', id));
+    if(success) loadProviders();
+  }
+  const deleteLocation = async (id: string) => {
+    const success = await confirmAndDelete('Supprimer ce lieu ?', supabase.from('planning_locations').delete().eq('id', id));
+    if(success) loadLocations();
+  }
+  const deleteEvent = async (id: string) => { 
+    const success = await confirmAndDelete('Supprimer cet événement ?', supabase.from('planning_events').delete().eq('id', id));
+    if(success) {
+      forceRefresh();
+      resetEventForm();
     }
   };
-  const deleteProvider = (id: string) => confirmAndDelete('Supprimer ce prestataire ?', supabase.from('planning_providers').delete().eq('id', id));
-  const deleteLocation = (id: string) => confirmAndDelete('Supprimer ce lieu ?', supabase.from('planning_locations').delete().eq('id', id));
-  const deleteEvent = (id: string) => { confirmAndDelete('Supprimer cet événement ?', supabase.from('planning_events').delete().eq('id', id)); resetEventForm(); };
 
   const resetProviderForm = () => { setProviderForm({ name: '' }); setEditingProvider(null); setShowProviderModal(false); };
   const resetLocationForm = () => { setLocationForm({ name: '', color: '#3B82F6' }); setEditingLocation(null); setShowLocationModal(false); };
@@ -205,18 +226,14 @@ const AdminPlanningEditor: React.FC = () => {
   const startEditLocation = (l: Location) => { setLocationForm({ name: l.name, color: l.color }); setEditingLocation(l); setShowLocationModal(true); };
 
   // --- Fonctions de gestion en masse ---
-  const handleBulkDelete = () => {
-    confirmAndDelete(`Supprimer tous les événements sur les ${multiSelectedDates.length} dates ?`, supabase.from('planning_events').delete().in('event_date', multiSelectedDates));
-    resetEventForm();
-  }
-  const handleBulkCreate = () => {
-    if (multiSelectedDates.length > 0) { 
-        setEditingEvent(null);
-        setSelectionInfo(null);
-        setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
-        setShowEventModal(true);
+  const handleBulkDelete = async () => {
+    const success = await confirmAndDelete(`Supprimer tous les événements sur les ${multiSelectedDates.length} dates ?`, supabase.from('planning_events').delete().in('event_date', multiSelectedDates));
+    if(success) {
+        forceRefresh();
+        resetEventForm();
     }
-  };
+  }
+  const handleBulkCreate = () => { if (multiSelectedDates.length > 0) { setEditingEvent(null); setSelectionInfo(null); setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] }); setShowEventModal(true); } };
 
   // --- Gestionnaires FullCalendar ---
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
@@ -224,16 +241,12 @@ const AdminPlanningEditor: React.FC = () => {
   const handleSelect = (selectInfo: any) => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
-    calendarApi.unselect(); // Toujours annuler la sélection visuelle bleue
-
-    // NOUVELLE LOGIQUE : Si le mode sélection multiple est activé, on gère l'ajout/retrait
+    calendarApi.unselect();
     if (isMultiSelectMode) {
         const dateStr = selectInfo.startStr;
         setMultiSelectedDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]);
         return;
     }
-
-    // Comportement normal pour la sélection de plage
     setMultiSelectedDates([]);
     setEditingEvent(null);
     setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
@@ -247,11 +260,8 @@ const AdminPlanningEditor: React.FC = () => {
     const { event, oldEvent } = info;
     const newDate = toYYYYMMDD(event.start);
     const eventId = event.id;
-
     setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: newDate } : e));
-
     const { error } = await supabase.from('planning_events').update({ event_date: newDate }).eq('id', eventId);
-
     if (error) {
         toast.error("Le déplacement a échoué. Rétablissement de l'événement.");
         setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e));
@@ -266,9 +276,7 @@ const AdminPlanningEditor: React.FC = () => {
     return [...filtered.map(e => ({ id: e.id, title: e.location?.name || '?', start: e.event_date, allDay: true, backgroundColor: e.location?.color, borderColor: e.location?.color, extendedProps: { providers: e.provider_ids.map(id => providers.find(p => p.id === id)?.name).join(', ') } })), ...backgroundSelection];
   }, [events, providers, selectedProvider, selectedLocation, multiSelectedDates]);
 
-  const getButtonClass = (monthValue: number) => {
-    return `px-3 py-1 text-sm rounded-md ${numberOfMonths === monthValue ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`;
-  };
+  const getButtonClass = (monthValue: number) => `px-3 py-1 text-sm rounded-md ${numberOfMonths === monthValue ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`;
 
   if (loading) return <div className="flex items-center justify-center h-64 text-white text-xl">Chargement du planning...</div>;
 
@@ -313,7 +321,21 @@ const AdminPlanningEditor: React.FC = () => {
                 <button onClick={() => setNumberOfMonths(3)} className={getButtonClass(3)}>3 Mois</button>
              </div>
           </div>
-          <div id="planning-export" className="calendar-container-dark">
+          <div id="planning-export" className="calendar-container-dark relative">
+            {multiSelectedDates.length > 0 && (
+                <div className="sticky top-4 z-40 w-max mx-auto bg-gray-900/80 backdrop-blur-lg border border-white/20 rounded-xl shadow-2xl p-3 flex items-center gap-4 transition-all duration-300 animate-fade-in-up mb-4">
+                    <div className="flex items-center gap-2 text-white font-bold">
+                        <Layers size={20} className="text-blue-400" />
+                        <span>{multiSelectedDates.length} jour(s) sélectionné(s)</span>
+                    </div>
+                    <div className="h-8 w-px bg-white/20"></div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleBulkCreate} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Plus size={16} /> Créer</button>
+                        <button onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Trash2 size={16} /> Supprimer</button>
+                        <button onClick={() => { setMultiSelectedDates([]); setIsMultiSelectMode(false); }} className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded-full"><X size={16} /></button>
+                    </div>
+                </div>
+            )}
             <style>{`.calendar-container-dark{--fc-bg-color:rgba(17,24,39,0.5);--fc-border-color:rgba(255,255,255,0.1);--fc-text-color:#E5E7EB;--fc-text-secondary-color:#9CA3AF;--fc-button-bg-color:rgba(255,255,255,0.05);--fc-button-hover-bg-color:rgba(59,130,246,0.3);--fc-button-active-bg-color:rgba(59,130,246,0.4);--fc-today-bg-color:rgba(59,130,246,0.15);--fc-select-bg-color:rgba(59,130,246,0.25)}.calendar-container-dark .fc{background:var(--fc-bg-color);backdrop-filter:blur(10px);border:1px solid var(--fc-border-color);border-radius:1rem;padding:1.5rem;color:var(--fc-text-color)}.fc .fc-toolbar-title{color:#FFFFFF;font-weight:700}.fc .fc-button{background:var(--fc-button-bg-color);border:1px solid var(--fc-border-color);color:var(--fc-text-color);transition:background-color .3s;text-transform:capitalize}.fc .fc-button:hover{background:var(--fc-button-hover-bg-color)}.fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--fc-button-active-bg-color);border-color:var(--fc-button-active-bg-color)}.fc .fc-daygrid-day{border-color:var(--fc-border-color);transition:background-color .3s}.fc .fc-day-today{background-color:var(--fc-today-bg-color)!important}.fc .fc-daygrid-day-number{color:var(--fc-text-secondary-color);padding:.5em}.fc .fc-col-header-cell{background:rgba(255,255,255,0.05);color:var(--fc-text-secondary-color);border-color:var(--fc-border-color)}.fc .fc-daygrid-event{border-radius:4px;padding:2px 4px;margin-top:2px;font-size:.7rem;font-weight:500;box-shadow:0 2px 4px rgba(0,0,0,.2)}.fc .fc-daygrid-day.fc-day-future .fc-daygrid-day-number{color:var(--fc-text-color)}.fc-h-event .fc-event-main{padding:2px 4px}`}</style>
             <FullCalendar
                 ref={calendarRef}
@@ -399,21 +421,6 @@ const AdminPlanningEditor: React.FC = () => {
             </form>
           </div>
         </div>
-      )}
-
-      {multiSelectedDates.length > 0 && (
-           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/80 backdrop-blur-lg border border-white/20 rounded-xl shadow-2xl z-40 p-3 flex items-center gap-4 transition-all duration-300 animate-fade-in-up">
-              <div className="flex items-center gap-2 text-white font-bold">
-                  <Layers size={20} className="text-blue-400" />
-                  <span>{multiSelectedDates.length} jour(s) sélectionné(s)</span>
-              </div>
-              <div className="h-8 w-px bg-white/20"></div>
-              <div className="flex items-center gap-2">
-                  <button onClick={handleBulkCreate} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Plus size={16} /> Créer</button>
-                  <button onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm"><Trash2 size={16} /> Supprimer</button>
-                  <button onClick={() => { setMultiSelectedDates([]); setIsMultiSelectMode(false); }} className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded-full"><X size={16} /></button>
-              </div>
-           </div>
       )}
     </div>
   );
