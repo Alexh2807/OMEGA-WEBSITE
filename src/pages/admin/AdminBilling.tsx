@@ -98,6 +98,7 @@ const AdminBilling = () => {
             product:products (name, sku)
           ),
           payment_records (*),
+          refunds (*),
           customer:profiles!invoices_customer_id_fkey (
             first_name,
             last_name
@@ -235,12 +236,12 @@ const AdminBilling = () => {
 
   const handleRefund = async (invoice: Invoice) => {
     console.log('🔍 Début handleRefund pour facture:', invoice.invoice_number);
-    console.log('📋 Payment records disponibles:', invoice.payment_records);
+    console.log('📋 Refunds disponibles:', invoice.refunds);
 
     // Calculer le montant maximum remboursable
-    const totalRefunded = (invoice.payment_records || [])
-      .filter(record => record.payment_method === 'refund')
-      .reduce((sum, record) => sum + record.amount, 0);
+    const totalRefunded = (invoice.refunds || [])
+      .filter(refund => refund.status === 'succeeded')
+      .reduce((sum, refund) => sum + refund.amount, 0);
 
     const maxRefundable = invoice.total_ttc - totalRefunded;
 
@@ -338,7 +339,7 @@ const AdminBilling = () => {
     // Aucune stratégie n'a fonctionné
     console.error('❌ Aucun identifiant Stripe trouvé pour cette facture');
     console.error('📊 Données disponibles:', {
-      payment_records: invoice.payment_records,
+      refunds: invoice.refunds,
       order_id: invoice.order_id,
     });
 
@@ -419,9 +420,9 @@ const AdminBilling = () => {
   };
 
   const getRefundableAmount = (invoice: Invoice) => {
-    const totalRefunded = (invoice.payment_records || [])
-      .filter(record => record.payment_method === 'refund')
-      .reduce((sum, record) => sum + record.amount, 0);
+    const totalRefunded = (invoice.refunds || [])
+      .filter(refund => refund.status === 'succeeded')
+      .reduce((sum, refund) => sum + refund.amount, 0);
 
     return invoice.total_ttc - totalRefunded;
   };
@@ -432,6 +433,20 @@ const AdminBilling = () => {
       invoice.order_id &&
       getRefundableAmount(invoice) > 0
     );
+  };
+
+  const getPaymentSummary = (invoice: Invoice) => {
+    const amountPaid = (invoice.payment_records || [])
+      .filter(p => p.payment_method !== 'refund')
+      .reduce((sum, p) => sum + p.amount, 0);
+    const totalRefunded = (invoice.refunds || [])
+      .filter(r => r.status === 'succeeded')
+      .reduce((sum, r) => sum + r.amount, 0);
+    const netToPay = Math.max(
+      0,
+      invoice.total_ttc - amountPaid + totalRefunded
+    );
+    return { amountPaid, totalRefunded, netToPay };
   };
 
   const filteredInvoices = invoices.filter(invoice => {
@@ -488,8 +503,9 @@ const AdminBilling = () => {
     try {
       const dataToExport = filteredInvoices.map(invoice => {
         const paymentDate = invoice.payment_records?.find(
-          p => p.status === 'succeeded' && p.payment_method !== 'refund'
+          p => p.payment_method !== 'refund'
         )?.created_at;
+        const summary = getPaymentSummary(invoice);
 
         return {
           'Numéro Facture': invoice.invoice_number || '',
@@ -506,7 +522,10 @@ const AdminBilling = () => {
           'Total HT': (invoice.total_ht || 0).toFixed(2),
           'Total TVA': (invoice.total_tva || 0).toFixed(2),
           'Total TTC': (invoice.total_ttc || 0).toFixed(2),
-          'Montant Payé': (invoice.amount_paid || 0).toFixed(2),
+          'Montant Payé': summary.amountPaid.toFixed(2),
+          'Montant Remboursé': summary.totalRefunded.toFixed(2),
+          'Net à Payer':
+            summary.netToPay <= 0 ? 'REMBOURSÉE' : summary.netToPay.toFixed(2),
           'Date Paiement': paymentDate
             ? format(new Date(paymentDate), 'yyyy-MM-dd HH:mm')
             : '',
@@ -532,7 +551,7 @@ const AdminBilling = () => {
 
       toast.success('Export CSV généré avec succès !');
     } catch (error) {
-      console.error("Erreur lors de la génération du CSV:", error);
+      console.error('Erreur lors de la génération du CSV:', error);
       toast.error("Une erreur est survenue lors de l'export.");
     }
   };
@@ -760,9 +779,20 @@ const AdminBilling = () => {
                       <div className="text-white font-semibold">
                         {invoice.total_ttc.toFixed(2)}€
                       </div>
-                      <div className="text-gray-400 text-sm">
-                        Payé: {invoice.amount_paid.toFixed(2)}€
-                      </div>
+                      {(() => {
+                        const summary = getPaymentSummary(invoice);
+                        return (
+                          <div className="text-gray-400 text-sm">
+                            Payé: {summary.amountPaid.toFixed(2)}€ • Remboursé:{' '}
+                            {summary.totalRefunded.toFixed(2)}€
+                            <br />
+                            Net:{' '}
+                            {summary.netToPay <= 0
+                              ? 'REMBOURSÉE'
+                              : `${summary.netToPay.toFixed(2)}€`}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4">
                       <div className="text-gray-300">

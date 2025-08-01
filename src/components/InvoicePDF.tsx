@@ -22,9 +22,9 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
     const actualAmountPaid = (invoice.payment_records || [])
       .filter(payment => payment.payment_method !== 'refund')
       .reduce((sum, payment) => sum + payment.amount, 0);
-    const totalRefunded = (invoice.payment_records || [])
-      .filter(payment => payment.payment_method === 'refund')
-      .reduce((sum, payment) => sum + Math.abs(payment.amount), 0);
+    const totalRefunded = (invoice.refunds || [])
+      .filter(refund => refund.status === 'succeeded')
+      .reduce((sum, refund) => sum + refund.amount, 0);
     const netToPay = Math.max(
       0,
       invoice.total_ttc - actualAmountPaid + totalRefunded
