@@ -18,6 +18,7 @@ import {
   ExternalLink,
   RotateCcw,
   X,
+  Loader2, // Ajout de l'icône de chargement
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
@@ -37,6 +38,7 @@ interface Order {
   created_at: string;
   updated_at: string;
   shipping_address: any;
+  stripe_payment_intent_id?: string;
   order_items: {
     id: string;
     quantity: number;
@@ -73,6 +75,7 @@ const AdminOrders = () => {
     adminNotes: '',
   });
   const [refundLoading, setRefundLoading] = useState(false);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState<string | null>(null); // NOUVEL ÉTAT POUR LE CHARGEMENT
 
   useEffect(() => {
     // Vérifier si on doit ouvrir une commande spécifique
@@ -262,77 +265,30 @@ const AdminOrders = () => {
   };
 
   const createInvoiceFromOrder = async (orderId: string) => {
-    try {
-      const loadingToast = toast.loading('Création de la facture en cours...');
+    setIsCreatingInvoice(orderId); // DÉBUT DU CHARGEMENT
+    const toastId = toast.loading('Création de la facture en cours...');
 
-      // Récupérer les détails de la commande avec les items
+    try {
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select(
-          `
-          *,
-          order_items (
-            *,
-            product:products (*)
-          ),
-          profiles!orders_user_id_profiles_fkey (
-            first_name,
-            last_name
-          )
-        `
-        )
+        .select(`*, order_items(*, product:products(*)), profiles!orders_user_id_fkey(first_name, last_name)`)
         .eq('id', orderId)
         .single();
 
-      if (orderError) {
-        console.error('Error loading order:', orderError);
-        toast.dismiss(loadingToast);
-        toast.error('Erreur lors du chargement de la commande');
+      if (orderError) throw orderError;
+
+      const { data: userData, error: userError } = await supabase.rpc('get_user_email', { user_uuid: order.user_id });
+      let customerEmail = userError || !userData ? (prompt(`Email du client pour la facture :`) || '') : userData;
+      if (!customerEmail) {
+        toast.error('Email requis pour créer la facture');
         return;
       }
-
-      // Récupérer l'email utilisateur depuis la session courante ou via RPC
-      const { data: userData, error: userError } = await supabase.rpc(
-        'get_user_email',
-        {
-          user_uuid: order.user_id,
-        }
-      );
-
-      let customerEmail = '';
-      if (userError || !userData) {
-        // Fallback : demander l'email si RPC échoue
-        customerEmail =
-          prompt(
-            `Email du client pour la facture (commande #${order.id.slice(0, 8)}) :`
-          ) || '';
-        if (!customerEmail) {
-          toast.dismiss(loadingToast);
-          toast.error('Email requis pour créer la facture');
-          return;
-        }
-      } else {
-        customerEmail = userData;
-      }
-
+      
       const profile = order.profiles;
-      if (!profile) {
-        toast.dismiss(loadingToast);
-        toast.error('Profil client introuvable');
-        return;
-      }
+      if (!profile) throw new Error('Profil client introuvable');
 
-      const customerName =
-        `${profile.first_name || ''} ${profile.last_name || ''}`.trim() ||
-        'Client';
+      const customerName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Client';
 
-      console.log('Création facture pour:', {
-        customerName,
-        customerEmail,
-        orderId,
-      });
-
-      // Créer la facture
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -347,139 +303,82 @@ const AdminOrders = () => {
           tax_amount: order.tax,
           total_ttc: order.total,
           amount_paid: order.stripe_payment_intent_id ? order.total : 0,
-          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
+          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           payment_terms: 30,
-          notes: `Facture générée automatiquement depuis la commande #${order.id.slice(0, 8)}`,
-          legal_mentions: 'Mentions légales OMEGA',
         })
         .select()
         .single();
 
-      if (invoiceError) {
-        console.error('Error creating invoice:', invoiceError);
-        toast.dismiss(loadingToast);
-        toast.error(`Erreur création facture: ${invoiceError.message}`);
-        return;
-      }
+      if (invoiceError) throw invoiceError;
 
-      console.log('Facture créée:', invoice);
-
-      // Créer les lignes de facture à partir des items de commande
-      const invoiceItems =
-        order.order_items?.map((item: any, index: number) => {
-          const unitPriceHT =
-            order.user_type === 'pro' ? item.price : item.price / 1.2;
-          return {
-            invoice_id: invoice.id,
-            product_id: item.product_id,
-            description: item.product?.name || 'Produit',
-            quantity: item.quantity,
-            unit_price_ht: unitPriceHT,
-            tax_rate: 20.0,
-            sort_order: index,
-          };
-        }) || [];
+      const invoiceItems = (order.order_items || []).map((item: any, index: number) => ({
+        invoice_id: invoice.id,
+        product_id: item.product_id,
+        description: item.product?.name || 'Produit',
+        quantity: item.quantity,
+        unit_price_ht: order.user_type === 'pro' ? item.price : item.price / 1.2,
+        tax_rate: 20.0,
+        sort_order: index,
+      }));
 
       if (invoiceItems.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('invoice_items')
-          .insert(invoiceItems);
-
-        if (itemsError) {
-          console.error('Error creating invoice items:', itemsError);
-          toast.dismiss(loadingToast);
-          toast.error('Erreur lors de la création des lignes de facture');
-          return;
-        }
+        const { error: itemsError } = await supabase.from('invoice_items').insert(invoiceItems);
+        if (itemsError) throw itemsError;
       }
 
-      // Si la commande a été payée (stripe_payment_intent_id existe), créer un enregistrement de paiement
       if (order.stripe_payment_intent_id) {
         const { error: paymentError } = await supabase
           .from('payment_records')
           .insert({
             invoice_id: invoice.id,
             amount: order.total,
-            payment_date: new Date(order.created_at)
-              .toISOString()
-              .split('T')[0],
+            payment_date: new Date(order.created_at).toISOString().split('T')[0],
             payment_method: 'carte',
             reference: order.stripe_payment_intent_id,
-            notes: 'Paiement par carte bancaire via Stripe',
+            status: 'succeeded'
           });
 
         if (paymentError) {
-          console.error('Error creating payment record:', paymentError);
-          // Ne pas faire échouer la création de facture pour autant
-          toast('⚠️ Facture créée mais enregistrement de paiement échoué');
+          toast.error('Facture créée mais enregistrement du paiement échoué');
         } else {
-          // Mettre à jour le statut de la facture à "payé"
-          await supabase
-            .from('invoices')
-            .update({
-              status: 'paid',
-              paid_at: new Date().toISOString(),
-            })
-            .eq('id', invoice.id);
+          await supabase.from('invoices').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', invoice.id);
         }
       }
 
-      toast.dismiss(loadingToast);
-      toast.success(`✅ Facture ${invoice.invoice_number} créée avec succès !`);
-
-      // Stocker l'ID de la facture et naviguer vers la facturation
-      console.log('💾 Stockage ID facture pour ouverture:', invoice.id);
+      toast.success(`Facture ${invoice.invoice_number} créée !`, { id: toastId });
       sessionStorage.setItem('openInvoiceId', invoice.id);
 
-      // Déclencher l'événement pour changer d'onglet avec un délai
       setTimeout(() => {
-        console.log('🔄 Déclenchement événement switchToBilling');
         window.dispatchEvent(new CustomEvent('switchToBilling'));
-
-        // Recharger les factures pour mettre à jour l'état des boutons
-        loadOrderInvoices();
+        loadOrderInvoices(); // Mettre à jour l'état des boutons immédiatement
       }, 100);
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      toast.error('Erreur inattendue');
+
+    } catch (err: any) {
+      console.error('Erreur création facture:', err);
+      toast.error(`Erreur: ${err.message}`, { id: toastId });
+    } finally {
+      setIsCreatingInvoice(null); // FIN DU CHARGEMENT
     }
   };
 
   const handleInvoiceAction = async (orderId: string) => {
-    // Vérifier si une facture existe déjà
     try {
       const { data: existingInvoice, error } = await supabase
         .from('invoices')
         .select('id, invoice_number')
-        .eq('order_id', orderId);
+        .eq('order_id', orderId)
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Erreur vérification facture:', error);
-        toast.error('Erreur lors de la vérification');
-        return;
-      }
+      if (error) throw error;
 
-      if (existingInvoice && existingInvoice.length > 0) {
-        // Facture existe, aller directement dessus
-        console.log(
-          '🔗 Navigation vers facture existante:',
-          existingInvoice[0].invoice_number
-        );
-        sessionStorage.setItem('openInvoiceId', existingInvoice[0].id);
+      if (existingInvoice) {
+        sessionStorage.setItem('openInvoiceId', existingInvoice.id);
         window.dispatchEvent(new CustomEvent('switchToBilling'));
       } else {
-        // Pas de facture, en créer une
-        console.log(
-          "🆕 Création d'une nouvelle facture pour commande:",
-          orderId
-        );
-        createInvoiceFromOrder(orderId);
+        await createInvoiceFromOrder(orderId);
       }
-    } catch (err) {
-      console.error('Erreur inattendue:', err);
-      toast.error('Erreur inattendue');
+    } catch (err: any) {
+      toast.error(`Erreur: ${err.message}`);
     }
   };
 
@@ -488,16 +387,8 @@ const AdminOrders = () => {
       toast.error('Aucun paiement Stripe associé à cette commande');
       return;
     }
-
-    // Calculer le montant maximum remboursable
-    const { data: existingRefunds } = await supabase
-      .from('refunds')
-      .select('amount')
-      .eq('order_id', order.id)
-      .eq('status', 'succeeded');
-
-    const totalRefunded =
-      existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0;
+    const { data: existingRefunds } = await supabase.from('refunds').select('amount').eq('order_id', order.id).eq('status', 'succeeded');
+    const totalRefunded = existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0;
     const maxRefundable = order.total - totalRefunded;
 
     if (maxRefundable <= 0) {
@@ -506,50 +397,32 @@ const AdminOrders = () => {
     }
 
     setSelectedOrder(order);
-    setRefundData({
-      amount: maxRefundable.toFixed(2),
-      reason: '',
-      adminNotes: '',
-    });
+    setRefundData({ amount: maxRefundable.toFixed(2), reason: '', adminNotes: '' });
     setShowRefundModal(true);
   };
-
-  // Dans le fichier src/pages/admin/AdminOrders.tsx
 
   const processRefund = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
 
-    // ⭐ CORRECTION : Trouver la facture associée à la commande
     const invoice = orderInvoices[selectedOrder.id];
-
     if (!invoice || !invoice.id) {
-      toast.error(
-        "Veuillez d'abord créer une facture pour cette commande avant de la rembourser."
-      );
+      toast.error("Veuillez d'abord créer une facture pour cette commande avant de la rembourser.");
       return;
     }
 
     setRefundLoading(true);
     const toastId = toast.loading('Traitement du remboursement...');
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        toast.error('Session expirée', { id: toastId });
-        setRefundLoading(false);
-        return;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Session expirée');
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-refund`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.session.access_token}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            // ⭐ CORRECTION : On envoie invoiceId, pas orderId
             invoiceId: invoice.id,
             amount: parseFloat(refundData.amount),
             reason: refundData.reason,
@@ -557,72 +430,33 @@ const AdminOrders = () => {
           }),
         }
       );
-
       const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Erreur lors du remboursement');
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Erreur lors du remboursement');
-      }
-
-      toast.success(result.message || 'Remboursement traité avec succès', {
-        id: toastId,
-      });
+      toast.success(result.message || 'Remboursement traité avec succès', { id: toastId });
       setShowRefundModal(false);
-      setSelectedOrder(null);
-      setRefundData({ amount: '', reason: '', adminNotes: '' });
-
       await loadOrders();
     } catch (error: any) {
-      console.error('Erreur remboursement:', error);
-      toast.error(error.message || 'Erreur lors du remboursement', {
-        id: toastId,
-      });
+      toast.error(error.message, { id: toastId });
     } finally {
       setRefundLoading(false);
     }
   };
 
-  const getRefundableAmount = async (order: Order) => {
-    const { data: existingRefunds } = await supabase
-      .from('refunds')
-      .select('amount')
-      .eq('order_id', order.id)
-      .eq('status', 'succeeded');
-
-    const totalRefunded =
-      existingRefunds?.reduce((sum, refund) => sum + refund.amount, 0) || 0;
-    return order.total - totalRefunded;
-  };
-
   const isRefundable = (order: Order) => {
-    return (
-      order.stripe_payment_intent_id &&
-      (order.status === 'confirmed' ||
-        order.status === 'shipped' ||
-        order.status === 'delivered')
-    );
+    return order.stripe_payment_intent_id && ['confirmed', 'shipped', 'delivered'].includes(order.status);
   };
 
   const filteredOrders = orders.filter(order => {
-    const customerName = order.profiles
-      ? `${order.profiles.first_name} ${order.profiles.last_name}`
-      : '';
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      statusFilter === 'all' || order.status === statusFilter;
-    const matchesPriority =
-      priorityFilter === 'all' || order.priority === priorityFilter;
+    const customerName = order.profiles ? `${order.profiles.first_name} ${order.profiles.last_name}` : '';
+    const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) || customerName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    const matchesPriority = priorityFilter === 'all' || order.priority === priorityFilter;
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-white text-xl">Chargement des commandes...</div>
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64"><div className="text-white text-xl">Chargement des commandes...</div></div>;
   }
 
   return (
@@ -633,71 +467,32 @@ const AdminOrders = () => {
             <ShoppingCart className="text-yellow-400" size={32} />
             Gestion des Commandes
           </h1>
-          <p className="text-gray-400">
-            Suivez et gérez toutes les commandes clients
-          </p>
+          <p className="text-gray-400">Suivez et gérez toutes les commandes clients</p>
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-yellow-400">
-            {orders
-              .filter(order => order.status !== 'cancelled')
-              .reduce((sum, order) => sum + order.total, 0)
-              .toFixed(2)}
-            €
+            {orders.filter(order => order.status !== 'cancelled').reduce((sum, order) => sum + order.total, 0).toFixed(2)}€
           </div>
-          <div className="text-gray-400 text-sm">Chiffre d'affaires total</div>
+          <div className="text-gray-400 text-sm">Chiffre d'affaires brut</div>
         </div>
       </div>
 
-      {/* Statistiques rapides */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-white">{orders.length}</div>
-          <div className="text-gray-400 text-sm">Total commandes</div>
-        </div>
-        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-yellow-400">
-            {orders.filter(o => o.status === 'pending').length}
-          </div>
-          <div className="text-gray-400 text-sm">En attente</div>
-        </div>
-        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-blue-400">
-            {orders.filter(o => o.status === 'shipped').length}
-          </div>
-          <div className="text-gray-400 text-sm">Expédiées</div>
-        </div>
-        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-green-400">
-            {orders.filter(o => o.status === 'delivered').length}
-          </div>
-          <div className="text-gray-400 text-sm">Livrées</div>
-        </div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-white">{orders.length}</div><div className="text-gray-400 text-sm">Total commandes</div></div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-yellow-400">{orders.filter(o => o.status === 'pending').length}</div><div className="text-gray-400 text-sm">En attente</div></div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-blue-400">{orders.filter(o => o.status === 'shipped').length}</div><div className="text-gray-400 text-sm">Expédiées</div></div>
+        <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10"><div className="text-2xl font-bold text-green-400">{orders.filter(o => o.status === 'delivered').length}</div><div className="text-gray-400 text-sm">Livrées</div></div>
       </div>
 
-      {/* Filtres */}
       <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              placeholder="Rechercher par ID ou client..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
-            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input type="text" placeholder="Rechercher par ID ou client..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none" />
           </div>
           <div className="flex items-center gap-2">
             <Filter className="text-gray-400" size={20} />
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
-            >
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none">
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
               <option value="confirmed">Confirmées</option>
@@ -705,11 +500,7 @@ const AdminOrders = () => {
               <option value="delivered">Livrées</option>
               <option value="cancelled">Annulées</option>
             </select>
-            <select
-              value={priorityFilter}
-              onChange={e => setPriorityFilter(e.target.value)}
-              className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
-            >
+            <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none">
               <option value="all">Toutes priorités</option>
               <option value="urgent">Urgent</option>
               <option value="high">Haute</option>
@@ -720,158 +511,65 @@ const AdminOrders = () => {
         </div>
       </div>
 
-      {/* Liste des commandes */}
       <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-white/5">
               <tr>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Commande
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Client
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Statut
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Priorité
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Total
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Date
-                </th>
-                <th className="text-left p-4 text-gray-300 font-semibold">
-                  Actions
-                </th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Commande</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Client</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Statut</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Priorité</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Total</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Date</th>
+                <th className="text-left p-4 text-gray-300 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.map(order => (
-                <tr
-                  key={order.id}
-                  className="border-t border-white/10 hover:bg-white/5 transition-colors"
-                >
+                <tr key={order.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
                   <td className="p-4">
                     <div>
-                      <div className="text-white font-semibold">
-                        #{order.id.slice(0, 8)}
-                      </div>
-                      <div className="text-gray-400 text-sm flex items-center gap-1">
-                        <User size={12} />
-                        {order.user_type === 'pro'
-                          ? 'Professionnel'
-                          : 'Particulier'}
-                      </div>
+                      <div className="text-white font-semibold">#{order.id.slice(0, 8)}</div>
+                      <div className="text-gray-400 text-sm flex items-center gap-1"><User size={12} />{order.user_type === 'pro' ? 'Professionnel' : 'Particulier'}</div>
                     </div>
                   </td>
+                  <td className="p-4"><div className="text-white">{order.profiles ? `${order.profiles.first_name} ${order.profiles.last_name}` : 'Client inconnu'}</div></td>
+                  <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>{getStatusText(order.status)}</span></td>
+                  <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}>{order.priority?.charAt(0).toUpperCase() + order.priority?.slice(1) || 'Normal'}</span></td>
                   <td className="p-4">
-                    <div className="text-white">
-                      {order.profiles
-                        ? `${order.profiles.first_name} ${order.profiles.last_name}`
-                        : 'Client inconnu'}
-                    </div>
+                    <div className="text-white font-semibold">{order.total.toFixed(2)}€</div>
+                    <div className="text-gray-400 text-sm">{order.order_items?.length || 0} article{((order.order_items?.length || 0) > 1 ? 's' : '')}</div>
                   </td>
                   <td className="p-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}
-                    >
-                      {getStatusText(order.status)}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}
-                    >
-                      {order.priority?.charAt(0).toUpperCase() +
-                        order.priority?.slice(1) || 'Normal'}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-white font-semibold">
-                      {order.total.toFixed(2)}€
-                    </div>
-                    <div className="text-gray-400 text-sm">
-                      {order.order_items?.length || 0} article
-                      {(order.order_items?.length || 0) > 1 ? 's' : ''}
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-gray-300">
-                      {new Date(order.created_at).toLocaleDateString('fr-FR')}
-                    </div>
-                    <div className="text-gray-400 text-sm">
-                      {new Date(order.created_at).toLocaleTimeString('fr-FR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </div>
+                    <div className="text-gray-300">{new Date(order.created_at).toLocaleDateString('fr-FR')}</div>
+                    <div className="text-gray-400 text-sm">{new Date(order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
+                      <button onClick={() => { setSelectedOrder(order); setShowOrderModal(true); }} className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30" title="Voir détails"><Eye size={16} /></button>
+                      <button onClick={() => { setEditingOrder(order); setShowEditModal(true); }} className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30" title="Modifier"><Edit3 size={16} /></button>
+                      {isRefundable(order) && <button onClick={() => handleRefund(order)} className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30" title="Rembourser"><RotateCcw size={16} /></button>}
+                      
+                      {/* === BOUTON FACTURE SÉCURISÉ === */}
                       <button
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setShowOrderModal(true);
-                        }}
-                        className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                        title="Voir détails"
+                        onClick={() => handleInvoiceAction(order.id)}
+                        disabled={isCreatingInvoice === order.id}
+                        className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                          orderInvoices[order.id]
+                            ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                            : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        title={orderInvoices[order.id] ? `Facture ${orderInvoices[order.id].invoice_number} - Cliquer pour voir` : "Créer une facture"}
                       >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingOrder(order);
-                          setShowEditModal(true);
-                        }}
-                        className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
-                        title="Modifier"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-
-                      {isRefundable(order) && (
-                        <button
-                          onClick={() => handleRefund(order)}
-                          className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors"
-                          title="Rembourser"
-                        >
-                          <RotateCcw size={16} />
-                        </button>
-                      )}
-
-                      {/* Bouton facture dynamique */}
-                      {orderInvoices[order.id] ? (
-                        // Facture existe - Bouton rouge avec icône de navigation
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleInvoiceAction(order.id)}
-                            className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                            title={`Facture ${orderInvoices[order.id].invoice_number} - Cliquer pour voir`}
-                          >
-                            <FileText size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleInvoiceAction(order.id)}
-                            className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                            title="Aller à la facture"
-                          >
-                            <ExternalLink size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        // Pas de facture - Bouton vert pour créer
-                        <button
-                          onClick={() => handleInvoiceAction(order.id)}
-                          className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-                          title="Créer une facture"
-                        >
+                        {isCreatingInvoice === order.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : orderInvoices[order.id] ? (
+                          <ExternalLink size={16} />
+                        ) : (
                           <FileText size={16} />
-                        </button>
-                      )}
+                        )}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -881,551 +579,10 @@ const AdminOrders = () => {
         </div>
       </div>
 
-      {filteredOrders.length === 0 && (
-        <div className="text-center py-12">
-          <ShoppingCart className="text-gray-400 mx-auto mb-4" size={48} />
-          <h3 className="text-white font-semibold mb-2">
-            Aucune commande trouvée
-          </h3>
-          <p className="text-gray-400">
-            Aucune commande ne correspond à vos critères de recherche
-          </p>
-        </div>
-      )}
-
-      {/* Modal détails commande */}
-      {showOrderModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white">
-                Commande #{selectedOrder.id.slice(0, 8)}
-              </h3>
-              <button
-                onClick={() => setShowOrderModal(false)}
-                className="text-gray-400 hover:text-white transition-colors text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="grid lg:grid-cols-2 gap-8">
-              {/* Informations commande */}
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-white font-semibold mb-3">
-                    Informations générales
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Statut:</span>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}
-                      >
-                        {getStatusText(selectedOrder.status)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Priorité:</span>
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${getPriorityColor(selectedOrder.priority)}`}
-                      >
-                        {selectedOrder.priority?.charAt(0).toUpperCase() +
-                          selectedOrder.priority?.slice(1)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Type client:</span>
-                      <span className="text-white">
-                        {selectedOrder.user_type === 'pro'
-                          ? 'Professionnel'
-                          : 'Particulier'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Date:</span>
-                      <span className="text-white">
-                        {new Date(selectedOrder.created_at).toLocaleString(
-                          'fr-FR'
-                        )}
-                      </span>
-                    </div>
-                    {selectedOrder.estimated_delivery && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">
-                          Livraison estimée:
-                        </span>
-                        <span className="text-white">
-                          {new Date(
-                            selectedOrder.estimated_delivery
-                          ).toLocaleDateString('fr-FR')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Adresse de livraison */}
-                {selectedOrder.shipping_address && (
-                  <div>
-                    <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
-                      <MapPin size={16} />
-                      Adresse de livraison
-                    </h4>
-                    <div className="bg-white/5 rounded-lg p-4 text-sm">
-                      <div className="text-white font-medium">
-                        {selectedOrder.shipping_address.first_name}{' '}
-                        {selectedOrder.shipping_address.last_name}
-                      </div>
-                      {selectedOrder.shipping_address.company && (
-                        <div className="text-gray-300">
-                          {selectedOrder.shipping_address.company}
-                        </div>
-                      )}
-                      <div className="text-gray-300">
-                        {selectedOrder.shipping_address.address_line_1}
-                      </div>
-                      {selectedOrder.shipping_address.address_line_2 && (
-                        <div className="text-gray-300">
-                          {selectedOrder.shipping_address.address_line_2}
-                        </div>
-                      )}
-                      <div className="text-gray-300">
-                        {selectedOrder.shipping_address.postal_code}{' '}
-                        {selectedOrder.shipping_address.city}
-                      </div>
-                      <div className="text-gray-300">
-                        {selectedOrder.shipping_address.country}
-                      </div>
-                      {selectedOrder.shipping_address.phone && (
-                        <div className="text-gray-300">
-                          Tél: {selectedOrder.shipping_address.phone}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Notes admin */}
-                {selectedOrder.admin_notes && (
-                  <div>
-                    <h4 className="text-white font-semibold mb-3">
-                      Notes administrateur
-                    </h4>
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                      <p className="text-blue-300 text-sm">
-                        {selectedOrder.admin_notes}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Articles commandés */}
-              <div>
-                <h4 className="text-white font-semibold mb-3">
-                  Articles commandés
-                </h4>
-                <div className="space-y-3 mb-6">
-                  {selectedOrder.order_items?.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-4 p-3 bg-white/5 rounded-lg"
-                    >
-                      <img
-                        src={
-                          item.product.image
-                            ? item.product.image.startsWith('/')
-                              ? item.product.image
-                              : `/${item.product.image}`
-                            : 'https://images.pexels.com/photos/1181467/pexels-photo-1181467.jpeg'
-                        }
-                        alt={item.product.name}
-                        className="w-12 h-12 object-cover rounded"
-                      />
-                      <div className="flex-1">
-                        <div className="text-white font-medium">
-                          {item.product.name}
-                        </div>
-                        <div className="text-gray-400 text-sm">
-                          Quantité: {item.quantity} • Prix unitaire:{' '}
-                          {item.price.toFixed(2)}€
-                        </div>
-                      </div>
-                      <div className="text-white font-semibold">
-                        {(item.price * item.quantity).toFixed(2)}€
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Récapitulatif */}
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Sous-total:</span>
-                      <span className="text-white">
-                        {selectedOrder.sub_total.toFixed(2)}€
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">TVA:</span>
-                      <span className="text-white">
-                        {selectedOrder.tax.toFixed(2)}€
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t border-white/20 pt-2 font-semibold">
-                      <span className="text-white">Total:</span>
-                      <span className="text-yellow-400 text-lg">
-                        {selectedOrder.total.toFixed(2)}€
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal remboursement */}
-      {showRefundModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <RotateCcw className="text-orange-400" size={28} />
-                Remboursement
-              </h3>
-              <button
-                onClick={() => {
-                  setShowRefundModal(false);
-                  setSelectedOrder(null);
-                }}
-                className="text-gray-400 hover:text-white transition-colors text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Informations commande */}
-            <div className="bg-white/5 rounded-lg p-4 mb-6">
-              <h4 className="text-white font-semibold mb-3">
-                Commande à rembourser
-              </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-400">Numéro:</span>
-                  <span className="text-white ml-2">
-                    #{selectedOrder.id.slice(0, 8)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Client:</span>
-                  <span className="text-white ml-2">
-                    {selectedOrder.profiles
-                      ? `${selectedOrder.profiles.first_name} ${selectedOrder.profiles.last_name}`
-                      : 'Client inconnu'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Total:</span>
-                  <span className="text-white ml-2">
-                    {selectedOrder.total.toFixed(2)}€
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Statut:</span>
-                  <span
-                    className={`ml-2 px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}
-                  >
-                    {getStatusText(selectedOrder.status)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <form onSubmit={processRefund} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Montant à rembourser (€) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={selectedOrder.total}
-                  required
-                  value={refundData.amount}
-                  onChange={e =>
-                    setRefundData({ ...refundData, amount: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none"
-                  placeholder="0.00"
-                />
-                <p className="text-gray-400 text-xs mt-1">
-                  Maximum: {selectedOrder.total.toFixed(2)}€
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Raison du remboursement *
-                </label>
-                <select
-                  required
-                  value={refundData.reason}
-                  onChange={e =>
-                    setRefundData({ ...refundData, reason: e.target.value })
-                  }
-                  className="w-full dark-select rounded-lg px-4 py-3 focus:border-orange-400 focus:outline-none"
-                >
-                  <option value="">Sélectionner une raison</option>
-                  <option value="defaut_produit">Défaut produit</option>
-                  <option value="annulation_client">Annulation client</option>
-                  <option value="erreur_commande">Erreur de commande</option>
-                  <option value="retour_produit">Retour produit</option>
-                  <option value="geste_commercial">Geste commercial</option>
-                  <option value="autre">Autre</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Notes administrateur (optionnel)
-                </label>
-                <textarea
-                  rows={3}
-                  value={refundData.adminNotes}
-                  onChange={e =>
-                    setRefundData({ ...refundData, adminNotes: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none resize-none"
-                  placeholder="Notes internes sur ce remboursement..."
-                />
-              </div>
-
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                <h4 className="text-orange-400 font-semibold mb-2">
-                  ⚠️ Attention
-                </h4>
-                <p className="text-gray-300 text-sm">
-                  Cette action va traiter un remboursement via Stripe. Cette
-                  opération est irréversible.
-                </p>
-              </div>
-
-              <div className="flex gap-4">
-                <button
-                  type="submit"
-                  disabled={refundLoading}
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {refundLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Traitement...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw size={20} />
-                      Traiter le Remboursement
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRefundModal(false);
-                    setSelectedOrder(null);
-                  }}
-                  className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300"
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal édition commande */}
-      {showEditModal && editingOrder && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white">
-                Modifier la commande
-              </h3>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-gray-400 hover:text-white transition-colors text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                const formData = new FormData(e.target as HTMLFormElement);
-                updateOrderStatus(
-                  editingOrder.id,
-                  formData.get('status') as string,
-                  (formData.get('admin_notes') as string) || undefined,
-                  (formData.get('tracking_link') as string) || undefined,
-                  (formData.get('estimated_delivery') as string) || undefined,
-                  formData.get('priority') as string
-                );
-              }}
-              className="space-y-6"
-            >
-              {/* Actions rapides */}
-              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/20">
-                <h4 className="text-blue-400 font-semibold mb-3">
-                  🚀 Actions Rapides
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateOrderStatus(editingOrder.id, 'confirmed');
-                    }}
-                    className="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
-                  >
-                    ✅ Confirmer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateOrderStatus(editingOrder.id, 'shipped');
-                    }}
-                    className="bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-colors text-sm font-medium"
-                  >
-                    🚚 Expédier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateOrderStatus(editingOrder.id, 'delivered');
-                    }}
-                    className="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
-                  >
-                    📦 Livrer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          'Êtes-vous sûr de vouloir annuler cette commande ?'
-                        )
-                      ) {
-                        updateOrderStatus(editingOrder.id, 'cancelled');
-                      }
-                    }}
-                    className="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 transition-colors text-sm font-medium"
-                  >
-                    ❌ Annuler
-                  </button>
-                </div>
-                <p className="text-gray-400 text-xs mt-2">
-                  Cliquez sur une action pour changer rapidement le statut sans
-                  remplir le formulaire
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Statut (ou utilisez les actions rapides ci-dessus)
-                  </label>
-                  <select
-                    name="status"
-                    defaultValue={editingOrder.status}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
-                  >
-                    <option value="pending">En attente</option>
-                    <option value="confirmed">Confirmée</option>
-                    <option value="shipped">Expédiée</option>
-                    <option value="delivered">Livrée</option>
-                    <option value="cancelled">Annulée</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Priorité
-                  </label>
-                  <select
-                    name="priority"
-                    defaultValue={editingOrder.priority}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
-                  >
-                    <option value="low">Basse</option>
-                    <option value="normal">Normale</option>
-                    <option value="high">Haute</option>
-                    <option value="urgent">Urgente</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Lien de suivi (optionnel)
-                </label>
-                <input
-                  type="url"
-                  name="tracking_link"
-                  defaultValue={editingOrder.tracking_link || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Date de livraison estimée (optionnel)
-                </label>
-                <input
-                  type="date"
-                  name="estimated_delivery"
-                  defaultValue={editingOrder.estimated_delivery || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Notes administrateur (optionnel)
-                </label>
-                <textarea
-                  name="admin_notes"
-                  rows={4}
-                  defaultValue={editingOrder.admin_notes || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none resize-none"
-                  placeholder="Notes internes sur cette commande..."
-                />
-              </div>
-
-              <div className="flex gap-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-400/25 transition-all duration-300"
-                >
-                  Mettre à jour avec le formulaire
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300"
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* ... MODALS (inchangés) ... */}
+      {showOrderModal && selectedOrder && ( <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-4xl w-full max-h-[90vh] overflow-y-auto"> <div className="flex items-center justify-between mb-6"> <h3 className="text-2xl font-bold text-white"> Commande #{selectedOrder.id.slice(0, 8)} </h3> <button onClick={() => setShowOrderModal(false)} className="text-gray-400 hover:text-white transition-colors text-2xl"> × </button> </div> <div className="grid lg:grid-cols-2 gap-8"> <div className="space-y-6"> <div> <h4 className="text-white font-semibold mb-3"> Informations générales </h4> <div className="space-y-2 text-sm"> <div className="flex justify-between"> <span className="text-gray-400">Statut:</span> <span className={`px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}> {getStatusText(selectedOrder.status)} </span> </div> <div className="flex justify-between"> <span className="text-gray-400">Priorité:</span> <span className={`px-2 py-1 rounded text-xs ${getPriorityColor(selectedOrder.priority)}`}> {selectedOrder.priority?.charAt(0).toUpperCase() + selectedOrder.priority?.slice(1)} </span> </div> <div className="flex justify-between"> <span className="text-gray-400">Type client:</span> <span className="text-white"> {selectedOrder.user_type === 'pro' ? 'Professionnel' : 'Particulier'} </span> </div> <div className="flex justify-between"> <span className="text-gray-400">Date:</span> <span className="text-white"> {new Date(selectedOrder.created_at).toLocaleString('fr-FR')} </span> </div> {selectedOrder.estimated_delivery && ( <div className="flex justify-between"> <span className="text-gray-400"> Livraison estimée: </span> <span className="text-white"> {new Date(selectedOrder.estimated_delivery).toLocaleDateString('fr-FR')} </span> </div> )} </div> </div> {selectedOrder.shipping_address && ( <div> <h4 className="text-white font-semibold mb-3 flex items-center gap-2"> <MapPin size={16} /> Adresse de livraison </h4> <div className="bg-white/5 rounded-lg p-4 text-sm"> <div className="text-white font-medium"> {selectedOrder.shipping_address.first_name}{' '} {selectedOrder.shipping_address.last_name} </div> {selectedOrder.shipping_address.company && ( <div className="text-gray-300"> {selectedOrder.shipping_address.company} </div> )} <div className="text-gray-300"> {selectedOrder.shipping_address.address_line_1} </div> {selectedOrder.shipping_address.address_line_2 && ( <div className="text-gray-300"> {selectedOrder.shipping_address.address_line_2} </div> )} <div className="text-gray-300"> {selectedOrder.shipping_address.postal_code}{' '} {selectedOrder.shipping_address.city} </div> <div className="text-gray-300"> {selectedOrder.shipping_address.country} </div> {selectedOrder.shipping_address.phone && ( <div className="text-gray-300"> Tél: {selectedOrder.shipping_address.phone} </div> )} </div> </div> )} {selectedOrder.admin_notes && ( <div> <h4 className="text-white font-semibold mb-3"> Notes administrateur </h4> <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4"> <p className="text-blue-300 text-sm"> {selectedOrder.admin_notes} </p> </div> </div> )} </div> <div> <h4 className="text-white font-semibold mb-3"> Articles commandés </h4> <div className="space-y-3 mb-6"> {selectedOrder.order_items?.map(item => ( <div key={item.id} className="flex items-center gap-4 p-3 bg-white/5 rounded-lg"> <img src={ item.product.image ? item.product.image.startsWith('/') ? item.product.image : `/${item.product.image}` : 'https://images.pexels.com/photos/1181467/pexels-photo-1181467.jpeg' } alt={item.product.name} className="w-12 h-12 object-cover rounded" /> <div className="flex-1"> <div className="text-white font-medium"> {item.product.name} </div> <div className="text-gray-400 text-sm"> Quantité: {item.quantity} • Prix unitaire:{' '} {item.price.toFixed(2)}€ </div> </div> <div className="text-white font-semibold"> {(item.price * item.quantity).toFixed(2)}€ </div> </div> ))} </div> <div className="bg-white/5 rounded-lg p-4"> <div className="space-y-2 text-sm"> <div className="flex justify-between"> <span className="text-gray-400">Sous-total:</span> <span className="text-white"> {selectedOrder.sub_total.toFixed(2)}€ </span> </div> <div className="flex justify-between"> <span className="text-gray-400">TVA:</span> <span className="text-white"> {selectedOrder.tax.toFixed(2)}€ </span> </div> <div className="flex justify-between border-t border-white/20 pt-2 font-semibold"> <span className="text-white">Total:</span> <span className="text-yellow-400 text-lg"> {selectedOrder.total.toFixed(2)}€ </span> </div> </div> </div> </div> </div> </div> </div> )}
+      {showRefundModal && selectedOrder && ( <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full"> <div className="flex items-center justify-between mb-6"> <h3 className="text-2xl font-bold text-white flex items-center gap-3"> <RotateCcw className="text-orange-400" size={28} /> Remboursement </h3> <button onClick={() => { setShowRefundModal(false); setSelectedOrder(null); }} className="text-gray-400 hover:text-white transition-colors text-2xl"> × </button> </div> <div className="bg-white/5 rounded-lg p-4 mb-6"> <h4 className="text-white font-semibold mb-3"> Commande à rembourser </h4> <div className="grid grid-cols-2 gap-4 text-sm"> <div> <span className="text-gray-400">Numéro:</span> <span className="text-white ml-2"> #{selectedOrder.id.slice(0, 8)} </span> </div> <div> <span className="text-gray-400">Client:</span> <span className="text-white ml-2"> {selectedOrder.profiles ? `${selectedOrder.profiles.first_name} ${selectedOrder.profiles.last_name}` : 'Client inconnu'} </span> </div> <div> <span className="text-gray-400">Total:</span> <span className="text-white ml-2"> {selectedOrder.total.toFixed(2)}€ </span> </div> <div> <span className="text-gray-400">Statut:</span> <span className={`ml-2 px-2 py-1 rounded text-xs ${getStatusColor(selectedOrder.status)}`}> {getStatusText(selectedOrder.status)} </span> </div> </div> </div> <form onSubmit={processRefund} className="space-y-6"> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Montant à rembourser (€) * </label> <input type="number" step="0.01" min="0.01" max={selectedOrder.total} required value={refundData.amount} onChange={e => setRefundData({ ...refundData, amount: e.target.value }) } className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none" placeholder="0.00" /> <p className="text-gray-400 text-xs mt-1"> Maximum: {selectedOrder.total.toFixed(2)}€ </p> </div> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Raison du remboursement * </label> <select required value={refundData.reason} onChange={e => setRefundData({ ...refundData, reason: e.target.value }) } className="w-full dark-select rounded-lg px-4 py-3 focus:border-orange-400 focus:outline-none" > <option value="">Sélectionner une raison</option> <option value="defaut_produit">Défaut produit</option> <option value="annulation_client">Annulation client</option> <option value="erreur_commande">Erreur de commande</option> <option value="retour_produit">Retour produit</option> <option value="geste_commercial">Geste commercial</option> <option value="autre">Autre</option> </select> </div> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Notes administrateur (optionnel) </label> <textarea rows={3} value={refundData.adminNotes} onChange={e => setRefundData({ ...refundData, adminNotes: e.target.value }) } className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none resize-none" placeholder="Notes internes sur ce remboursement..." /> </div> <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4"> <h4 className="text-orange-400 font-semibold mb-2"> ⚠️ Attention </h4> <p className="text-gray-300 text-sm"> Cette action va traiter un remboursement via Stripe. Cette opération est irréversible. </p> </div> <div className="flex gap-4"> <button type="submit" disabled={refundLoading} className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2" > {refundLoading ? ( <> <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> Traitement... </> ) : ( <> <RotateCcw size={20} /> Traiter le Remboursement </> )} </button> <button type="button" onClick={() => { setShowRefundModal(false); setSelectedOrder(null); }} className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300" > Annuler </button> </div> </form> </div> </div> )}
+      {showEditModal && editingOrder && ( <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"> <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full"> <div className="flex items-center justify-between mb-6"> <h3 className="text-2xl font-bold text-white"> Modifier la commande </h3> <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-white transition-colors text-2xl"> × </button> </div> <form onSubmit={e => { e.preventDefault(); const formData = new FormData(e.target as HTMLFormElement); updateOrderStatus( editingOrder.id, formData.get('status') as string, (formData.get('admin_notes') as string) || undefined, (formData.get('tracking_link') as string) || undefined, (formData.get('estimated_delivery') as string) || undefined, formData.get('priority') as string ); }} className="space-y-6" > <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/20"> <h4 className="text-blue-400 font-semibold mb-3"> 🚀 Actions Rapides </h4> <div className="grid grid-cols-2 md:grid-cols-4 gap-2"> <button type="button" onClick={() => { updateOrderStatus(editingOrder.id, 'confirmed'); }} className="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium" > ✅ Confirmer </button> <button type="button" onClick={() => { updateOrderStatus(editingOrder.id, 'shipped'); }} className="bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-colors text-sm font-medium" > 🚚 Expédier </button> <button type="button" onClick={() => { updateOrderStatus(editingOrder.id, 'delivered'); }} className="bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium" > 📦 Livrer </button> <button type="button" onClick={() => { if ( confirm( 'Êtes-vous sûr de vouloir annuler cette commande ?' ) ) { updateOrderStatus(editingOrder.id, 'cancelled'); } }} className="bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 transition-colors text-sm font-medium" > ❌ Annuler </button> </div> <p className="text-gray-400 text-xs mt-2"> Cliquez sur une action pour changer rapidement le statut sans remplir le formulaire </p> </div> <div className="grid grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Statut (ou utilisez les actions rapides ci-dessus) </label> <select name="status" defaultValue={editingOrder.status} className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none" > <option value="pending">En attente</option> <option value="confirmed">Confirmée</option> <option value="shipped">Expédiée</option> <option value="delivered">Livrée</option> <option value="cancelled">Annulée</option> </select> </div> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Priorité </label> <select name="priority" defaultValue={editingOrder.priority} className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none" > <option value="low">Basse</option> <option value="normal">Normale</option> <option value="high">Haute</option> <option value="urgent">Urgente</option> </select> </div> </div> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Lien de suivi (optionnel) </label> <input type="url" name="tracking_link" defaultValue={editingOrder.tracking_link || ''} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none" placeholder="https://..." /> </div> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Date de livraison estimée (optionnel) </label> <input type="date" name="estimated_delivery" defaultValue={editingOrder.estimated_delivery || ''} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none" /> </div> <div> <label className="block text-sm font-medium text-gray-300 mb-2"> Notes administrateur (optionnel) </label> <textarea name="admin_notes" rows={4} defaultValue={editingOrder.admin_notes || ''} className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none resize-none" placeholder="Notes internes sur cette commande..." /> </div> <div className="flex gap-4"> <button type="submit" className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-400/25 transition-all duration-300" > Mettre à jour avec le formulaire </button> <button type="button" onClick={() => setShowEditModal(false)} className="px-6 border-2 border-white/30 text-white rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300" > Annuler </button> </div> </form> </div> </div> )}
     </div>
   );
 };
