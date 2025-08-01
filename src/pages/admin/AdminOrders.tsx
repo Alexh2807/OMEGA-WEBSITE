@@ -265,6 +265,16 @@ const AdminOrders = () => {
     try {
       const loadingToast = toast.loading('Création de la facture en cours...');
 
+      // Générer le numéro de facture de manière atomique
+      const { data: invoiceNumber, error: numberError } = await supabase
+        .rpc('get_next_invoice_number_atomic');
+
+      if (numberError) {
+        console.error('Erreur génération numéro facture:', numberError);
+        toast.error('Erreur lors de la génération du numéro de facture');
+        return;
+      }
+
       // Récupérer les détails de la commande avec les items
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -336,6 +346,7 @@ const AdminOrders = () => {
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
+          invoice_number: invoiceNumber,
           order_id: orderId,
           customer_id: order.user_id,
           customer_name: customerName,
