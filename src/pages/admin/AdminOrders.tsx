@@ -275,7 +275,7 @@ const AdminOrders = () => {
             *,
             product:products (*)
           ),
-          profiles!orders_user_id_fkey (
+          profiles!orders_user_id_profiles_fkey (
             first_name,
             last_name
           )
