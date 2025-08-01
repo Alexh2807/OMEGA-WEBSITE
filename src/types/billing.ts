@@ -80,7 +80,7 @@ export interface Invoice {
   customer_phone?: string;
   customer_address?: any;
   billing_address?: any;
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   subtotal_ht: number;
   tax_amount: number;
   total_ttc: number;
@@ -96,7 +96,6 @@ export interface Invoice {
   paid_at?: string;
   invoice_items?: InvoiceItem[];
   payment_records?: PaymentRecord[];
-  refunds?: Refund[];
   customer?: {
     first_name: string;
     last_name: string;
@@ -123,18 +122,10 @@ export interface InvoiceItem {
 
 export interface PaymentRecord {
   id: string;
-  invoice_id: string | null;
-  order_id: string | null;
+  invoice_id: string;
   amount: number;
   payment_date: string;
-  payment_method:
-    | 'virement'
-    | 'cheque'
-    | 'especes'
-    | 'carte'
-    | 'prelevement'
-    | 'refund';
-  status: 'succeeded' | 'pending' | 'failed';
+  payment_method: 'virement' | 'cheque' | 'especes' | 'carte' | 'prelevement';
   reference?: string;
   notes?: string;
   stripe_charge_id?: string;
