@@ -330,7 +330,7 @@ const AdminPlanningEditor: React.FC = () => {
             });
           if (error) throw error;
         }
-        toast.success('Événement ajouté');
+        toast.success(targetDates.length > 1 ? 'Événements ajoutés' : 'Événement ajouté');
       }
       
       resetEventForm();
@@ -406,14 +406,16 @@ const AdminPlanningEditor: React.FC = () => {
     setShowEventModal(true);
   };
 
-  const openEventModal = (date?: Date) => {
-    const baseDate = date || selectedDates[0] || currentDate;
+  const openEventModal = () => {
+    const baseDate = selectedDates[0] || currentDate;
     setEventForm({
       event_date: baseDate.toISOString().slice(0, 10),
       location_id: locations[0]?.id || '',
       provider_ids: [],
     });
-    setSelectedDates([baseDate]);
+    if (selectedDates.length === 0) {
+      setSelectedDates([baseDate]);
+    }
     setShowEventModal(true);
   };
 
@@ -781,7 +783,9 @@ const AdminPlanningEditor: React.FC = () => {
                 </h4>
                 {selectedDates.length > 1 && (
                   <div className="text-blue-400 text-sm mb-2">
-                    {selectedDates.length} dates sélectionnées
+                    {selectedDates
+                      .map(d => d.toLocaleDateString('fr-FR'))
+                      .join(', ')}
                   </div>
                 )}
                 
@@ -1071,7 +1075,11 @@ const AdminPlanningEditor: React.FC = () => {
                   className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                 >
                   <Save size={16} />
-                  {editingEvent ? 'Mettre à jour' : 'Créer l\'événement'}
+                  {editingEvent
+                    ? 'Mettre à jour'
+                    : selectedDates.length > 1
+                      ? 'Créer les événements'
+                      : 'Créer l\'événement'}
                 </button>
                 <button
                   type="button"
