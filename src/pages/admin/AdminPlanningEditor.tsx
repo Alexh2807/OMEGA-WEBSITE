@@ -125,14 +125,12 @@ const AdminPlanningEditor: React.FC = () => {
   // --- Abonnements Supabase pour la mise à jour en temps réel ---
   useEffect(() => {
     const handleDbChanges = () => {
-        loadProviders();
-        loadLocations();
         if (viewRange) {
             loadEvents(viewRange.start, viewRange.end);
         }
     }
     const channel = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, handleDbChanges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'planning_events' }, handleDbChanges)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [viewRange, loadEvents]);
@@ -212,26 +210,15 @@ const AdminPlanningEditor: React.FC = () => {
   // --- Gestionnaires FullCalendar ---
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
 
-  // CORRIGÉ : Logique de sélection unifiée pour gérer le clic normal ET le CTRL+Clic
   const handleSelect = (selectInfo: any) => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
-    
-    // Gère le CTRL+Clic pour la sélection multiple
     if (selectInfo.jsEvent && selectInfo.jsEvent.ctrlKey) {
         const dateStr = selectInfo.startStr;
-        setMultiSelectedDates(prev => {
-            if (prev.includes(dateStr)) {
-                return prev.filter(d => d !== dateStr);
-            } else {
-                return [...prev, dateStr];
-            }
-        });
-        calendarApi.unselect(); // Annule la sélection visuelle bleue
+        setMultiSelectedDates(prev => prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]);
+        calendarApi.unselect();
         return;
     }
-
-    // Comportement normal pour la sélection de plage (sans CTRL)
     setMultiSelectedDates([]);
     setEditingEvent(null);
     setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
@@ -241,15 +228,35 @@ const AdminPlanningEditor: React.FC = () => {
   
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
     
+  // CORRIGÉ : Gestion de la synchronisation de l'état local
   const handleEventDrop = async (info: any) => {
-    toast.promise(
-        supabase.from('planning_events').update({ event_date: toYYYYMMDD(info.event.start) }).eq('id', info.event.id),
-        {
-          loading: 'Déplacement...',
-          success: 'Événement déplacé !',
-          error: 'Erreur lors du déplacement.',
-        }
-      );
+    const { event, oldEvent } = info;
+    const newDate = toYYYYMMDD(event.start);
+    const eventId = event.id;
+
+    // 1. Mise à jour optimiste de l'état local pour une réactivité instantanée
+    setEvents(currentEvents =>
+        currentEvents.map(e =>
+            e.id === eventId ? { ...e, event_date: newDate } : e
+        )
+    );
+
+    // 2. Sauvegarde en base de données
+    const { error } = await supabase
+        .from('planning_events')
+        .update({ event_date: newDate })
+        .eq('id', eventId);
+
+    // 3. En cas d'échec, annuler la modification visuelle et de l'état local
+    if (error) {
+        toast.error("Le déplacement a échoué. Rétablissement de l'événement.");
+        setEvents(currentEvents =>
+            currentEvents.map(e =>
+                e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e
+            )
+        );
+        info.revert();
+    }
   };
 
   // --- Fonctions de rendu et de formatage ---
