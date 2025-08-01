@@ -1043,4 +1043,3 @@ const AdminBilling = () => {
 };
 
 export default AdminBilling;
-}
