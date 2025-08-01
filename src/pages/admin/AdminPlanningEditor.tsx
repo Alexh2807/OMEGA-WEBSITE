@@ -367,6 +367,6 @@ const AdminPlanningEditor: React.FC = () => {
       )}
     </div>
   );
-};
+}; 
 
 export default AdminPlanningEditor;
