@@ -18,7 +18,6 @@ import {
   Layers,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { exportElementAsPDF } from '../../utils/pdfGenerator';
 import toast from 'react-hot-toast';
 
 // --- Interfaces de types ---
@@ -77,7 +76,7 @@ const AdminPlanningEditor: React.FC = () => {
   const [providerForm, setProviderForm] = useState({ name: '' });
   const [locationForm, setLocationForm] = useState({ name: '', color: '#3B82F6' });
 
-  // --- Fonctions utilitaires ---
+  // --- Fonction utilitaire pour formater les dates sans bug de fuseau horaire ---
   const toYYYYMMDD = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -213,11 +212,26 @@ const AdminPlanningEditor: React.FC = () => {
   // --- Gestionnaires FullCalendar ---
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
 
+  // CORRIGÉ : Logique de sélection unifiée pour gérer le clic normal ET le CTRL+Clic
   const handleSelect = (selectInfo: any) => {
+    const calendarApi = calendarRef.current?.getApi();
+    if (!calendarApi) return;
+    
+    // Gère le CTRL+Clic pour la sélection multiple
     if (selectInfo.jsEvent && selectInfo.jsEvent.ctrlKey) {
-        calendarRef.current?.getApi().unselect();
+        const dateStr = selectInfo.startStr;
+        setMultiSelectedDates(prev => {
+            if (prev.includes(dateStr)) {
+                return prev.filter(d => d !== dateStr);
+            } else {
+                return [...prev, dateStr];
+            }
+        });
+        calendarApi.unselect(); // Annule la sélection visuelle bleue
         return;
     }
+
+    // Comportement normal pour la sélection de plage (sans CTRL)
     setMultiSelectedDates([]);
     setEditingEvent(null);
     setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
@@ -226,19 +240,17 @@ const AdminPlanningEditor: React.FC = () => {
   };
   
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
-  
-  const handleDateClick = (arg: any) => {
-    if (arg.jsEvent.ctrlKey) {
-        const dateStr = arg.dateStr;
-        setMultiSelectedDates(prev =>
-            prev.includes(dateStr)
-                ? prev.filter(d => d !== dateStr)
-                : [...prev, dateStr]
-        );
-    }
+    
+  const handleEventDrop = async (info: any) => {
+    toast.promise(
+        supabase.from('planning_events').update({ event_date: toYYYYMMDD(info.event.start) }).eq('id', info.event.id),
+        {
+          loading: 'Déplacement...',
+          success: 'Événement déplacé !',
+          error: 'Erreur lors du déplacement.',
+        }
+      );
   };
-  
-  const handleEventDrop = async (info: any) => await supabase.from('planning_events').update({ event_date: toYYYYMMDD(info.event.start) }).eq('id', info.event.id);
 
   // --- Fonctions de rendu et de formatage ---
   const allCalendarEvents = useMemo(() => {
@@ -311,7 +323,6 @@ const AdminPlanningEditor: React.FC = () => {
                 dayMaxEvents={3}
                 datesSet={handleDatesSet}
                 select={handleSelect}
-                dateClick={handleDateClick}
                 eventClick={handleEventClick}
                 eventDrop={handleEventDrop}
                 eventContent={eventInfo => (<div className="p-1 overflow-hidden text-white text-[11px] h-full cursor-pointer"><b className="truncate block">{eventInfo.event.title}</b><p className="truncate italic opacity-80">{eventInfo.event.extendedProps.providers}</p></div>)}
