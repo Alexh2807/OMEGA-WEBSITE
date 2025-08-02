@@ -129,7 +129,7 @@ export const printInvoice = () => {
 export const exportElementAsPDF = async (
   elementId: string,
   fileName: string = 'export',
-  fontOffset: number = 0
+  fontOffset: number = 20
 ) => {
   const element = document.getElementById(elementId);
   if (!element) {
