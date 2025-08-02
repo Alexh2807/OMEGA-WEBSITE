@@ -131,39 +131,13 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
  
-  // Capture de l'élément en canvas avec des paramètres optimisés pour éviter les décalages
+  // Capture de l'élément en canvas avec une haute résolution et un fond noir
   const canvas = await html2canvas(element, { 
     scale: 2, 
     useCORS: true,
     backgroundColor: '#111827', // Fond du thème sombre
     logging: false,
     allowTaint: true,
-    letterRendering: true,
-    foreignObjectRendering: false,
-    removeContainer: true,
-    imageTimeout: 0,
-    onclone: (clonedDoc) => {
-      // Forcer la réinitialisation des transformations CSS qui peuvent causer des décalages
-      const allElements = clonedDoc.querySelectorAll('*');
-      allElements.forEach((el: any) => {
-        if (el.style) {
-          el.style.transform = 'none';
-          el.style.webkitTransform = 'none';
-          el.style.msTransform = 'none';
-          el.style.position = el.style.position === 'fixed' ? 'absolute' : el.style.position;
-        }
-      });
-      
-      // Corriger spécifiquement les éléments FullCalendar
-      const fcElements = clonedDoc.querySelectorAll('.fc *');
-      fcElements.forEach((el: any) => {
-        if (el.style) {
-          el.style.lineHeight = '1';
-          el.style.verticalAlign = 'baseline';
-          el.style.transform = 'none';
-        }
-      });
-    }
   });
  
   const imgData = canvas.toDataURL('image/png');
@@ -187,12 +161,13 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     imgWidth = imgHeight * canvasAspectRatio;
   }
 
-  // Centrage horizontal de l'image. Alignement en haut pour éviter un décalage vertical.
+  // Centrage de l'image sur la page
   const xOffset = (pageWidth - imgWidth) / 2;
+  const yOffset = (pageHeight - imgHeight) / 2;
 
-  // Ajout de l'image unique, redimensionnée et alignée en haut, sans pagination
-  pdf.addImage(imgData, 'PNG', xOffset, 0, imgWidth, imgHeight);
+  // Ajout de l'image unique, redimensionnée et centrée, sans pagination
+  pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
 
   pdf.save(`${fileName}.pdf`);
   return true;
-};  
+}; 
