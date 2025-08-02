@@ -124,33 +124,20 @@ export const printInvoice = () => {
  * Exporte un élément HTML en PDF sur une seule page A4.
  * @param elementId - L'ID de l'élément DOM à exporter.
  * @param fileName - Le nom du fichier PDF de sortie.
- * @param fontOffset - Décalage vertical en millimètres pour corriger le rendu des polices.
  */
-export const exportElementAsPDF = async (
-  elementId: string,
-  fileName: string = 'export',
-  fontOffset: number = 200
-) => {
+export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
-
-  // S'assure que les polices sont chargées pour éviter les décalages dans le canvas
-  if (document.fonts && document.fonts.ready) {
-    await document.fonts.ready;
-  }
-
+ 
   // Capture de l'élément en canvas avec une haute résolution et un fond noir
-  const canvas = await html2canvas(element, {
-    scale: 2,
+  const canvas = await html2canvas(element, { 
+    scale: 2, 
     useCORS: true,
     backgroundColor: '#111827', // Fond du thème sombre
     logging: false,
     allowTaint: true,
-    letterRendering: true,
-
-
   });
  
   const imgData = canvas.toDataURL('image/png');
@@ -177,9 +164,9 @@ export const exportElementAsPDF = async (
   // Centrage horizontal de l'image. Alignement en haut pour éviter un décalage vertical.
   const xOffset = (pageWidth - imgWidth) / 2;
 
-  // Ajout de l'image unique, redimensionnée avec un décalage optionnel pour les polices
-  pdf.addImage(imgData, 'PNG', xOffset, fontOffset, imgWidth, imgHeight);
+  // Ajout de l'image unique, redimensionnée et alignée en haut, sans pagination
+  pdf.addImage(imgData, 'PNG', xOffset, 0, imgWidth, imgHeight);
 
   pdf.save(`${fileName}.pdf`);
   return true;
-}; 
+};  
