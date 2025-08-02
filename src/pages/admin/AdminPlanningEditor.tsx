@@ -58,28 +58,21 @@ interface EventItem {
 
 // --- Le Composant Principal ---
 const AdminPlanningEditor: React.FC = () => {
-  // États principaux
   const [events, setEvents] = useState<EventItem[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Navigation et filtres
   const [activeTab, setActiveTab] = useState<'calendar' | 'providers' | 'locations'>('calendar');
   const [selectedProvider, setSelectedProvider] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [selectedEventType, setSelectedEventType] = useState('all');
   const [viewRange, setViewRange] = useState<{ start: Date; end: Date } | null>(null);
   const [numberOfMonths, setNumberOfMonths] = useState(3);
-
-  // Sélection multiple et export
   const [multiSelectedDates, setMultiSelectedDates] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const calendarRef = useRef<FullCalendar>(null);
-
-  // Modals et formulaires
   const [showEventModal, setShowEventModal] = useState(false);
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -102,7 +95,7 @@ const AdminPlanningEditor: React.FC = () => {
   useEffect(() => { const loadInitialData = async () => { setLoading(true); await Promise.all([loadProviders(), loadLocations(), loadEventTypes()]); setLoading(false); }; loadInitialData(); }, []);
   useEffect(() => { forceRefresh(); }, [forceRefresh]);
 
-  const handleGenericSubmit = async (action: any, successMessage: string): Promise<boolean> => { const { error } = await action; if (error) { toast.error("Une erreur est survenue."); return false; } toast.success(successMessage); return true; };
+  const handleGenericSubmit = async (action: any, successMessage: string): Promise<boolean> => { const { error } = await action; if (error) { console.error(error); toast.error(`Erreur: ${error.message}`); return false; } toast.success(successMessage); return true; };
   
   const handleProviderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,22 +149,48 @@ const AdminPlanningEditor: React.FC = () => {
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
   const handleEventDrop = async (info: any) => { const { event, oldEvent } = info; const newDate = toYYYYMMDD(event.start); const eventId = event.id; setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: newDate } : e)); const { error } = await supabase.from('planning_events').update({ event_date: newDate }).eq('id', eventId); if (error) { toast.error("Le déplacement a échoué."); setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e)); info.revert(); } };
   
-  const handleExportPDF = async () => { if (isExporting) return; setIsExporting(true); const toastId = toast.loading('Génération du PDF...'); try { await exportElementAsPDF('planning-export', `planning-${toYYYYMMDD(new Date())}`); toast.success('PDF généré !', { id: toastId }); } catch (error) { toast.error('Échec du PDF.', { id: toastId }); } finally { setIsExporting(false); } };
+  const handleExportPDF = async () => { if (isExporting) return; setIsExporting(true); const toastId = toast.loading('Génération du PDF...'); try { await exportElementAsPDF('planning-export', `planning-${toYYYYMMDD(new Date())}`); toast.success('PDF généré !', { id: toastId }); } catch (error) { console.error(error); toast.error('Échec du PDF.', { id: toastId }); } finally { setIsExporting(false); } };
 
   const filteredEvents = useMemo(() => events.filter(event => (selectedProvider === 'all' || event.provider_ids.includes(selectedProvider)) && (selectedLocation === 'all' || event.location_id === selectedLocation) && (selectedEventType === 'all' || event.location?.event_type_id === selectedEventType)), [events, selectedProvider, selectedLocation, selectedEventType]);
   
   const allCalendarEvents = useMemo(() => { const backgroundSelection = multiSelectedDates.map(date => ({ id: `selection-${date}`, start: date, allDay: true, display: 'background', backgroundColor: 'rgba(59, 130, 246, 0.4)' })); return [ ...filteredEvents.map(e => ({ id: e.id, title: e.location?.name || '?', start: e.event_date, allDay: true, backgroundColor: e.location?.color, borderColor: e.location?.color, extendedProps: { providers: e.provider_ids.map(id => providers.find(p => p.id === id)?.name).join(', '), eventType: e.location?.event_type?.name || 'N/A' } })), ...backgroundSelection ]; }, [filteredEvents, providers, multiSelectedDates]);
 
-  const { eventTypeStats, totalCost } = useMemo(() => {
-    const stats = new Map<string, number>();
-    let cost = 0;
+  const detailedStats = useMemo(() => {
+    const eventTypeMap = new Map<string, { count: number; cost: number }>();
+    const providerCostMap = new Map<string, { count: number; cost: number }>();
+
     filteredEvents.forEach(event => {
-      const typeName = event.location?.event_type?.name || 'Non défini';
-      const typeId = event.location?.event_type_id;
-      stats.set(typeName, (stats.get(typeName) || 0) + 1);
-      if (typeId) { event.provider_ids.forEach(providerId => { const provider = providers.find(p => p.id === providerId); cost += provider?.costs?.[typeId] || 0; }); }
+        const typeId = event.location?.event_type_id;
+        const typeName = event.location?.event_type?.name || 'Non défini';
+
+        let currentTypeStat = eventTypeMap.get(typeName) || { count: 0, cost: 0 };
+        currentTypeStat.count += 1;
+
+        if (typeId) {
+            event.provider_ids.forEach(providerId => {
+                const provider = providers.find(p => p.id === providerId);
+                if (provider) {
+                    const costForEvent = provider.costs?.[typeId] || 0;
+                    currentTypeStat.cost += costForEvent;
+
+                    let currentProviderStat = providerCostMap.get(provider.name) || { count: 0, cost: 0 };
+                    currentProviderStat.count += 1;
+                    currentProviderStat.cost += costForEvent;
+                    providerCostMap.set(provider.name, currentProviderStat);
+                }
+            });
+        }
+        eventTypeMap.set(typeName, currentTypeStat);
     });
-    return { eventTypeStats: Array.from(stats.entries()).sort((a,b) => b[1] - a[1]), totalCost: cost };
+
+    const totalCost = Array.from(providerCostMap.values()).reduce((sum, { cost }) => sum + cost, 0);
+
+    return {
+        eventTypeStats: Array.from(eventTypeMap.entries()).sort((a, b) => b[1].count - a[1].count),
+        providerCostStats: Array.from(providerCostMap.entries()).sort((a, b) => b[1].cost - a[1].cost),
+        totalCost,
+        totalEvents: filteredEvents.length,
+    };
   }, [filteredEvents, providers]);
 
   const getButtonClass = (monthValue: number) => `px-3 py-1 text-sm rounded-md ${numberOfMonths === monthValue ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`;
@@ -190,17 +209,23 @@ const AdminPlanningEditor: React.FC = () => {
       {activeTab === 'calendar' && (
         <div className="space-y-6">
             <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3"><BarChart2 className="text-purple-400" /> Statistiques de la vue</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white/5 p-4 rounded-lg"><div className="text-gray-400 text-sm mb-1">Événements affichés</div><div className="text-2xl font-bold text-white">{filteredEvents.length}</div></div>
-                    <div className="bg-white/5 p-4 rounded-lg"><div className="text-gray-400 text-sm mb-1">Coût total prestataires</div><div className="text-2xl font-bold text-green-400">{totalCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</div></div>
-                    <div className="bg-white/5 p-4 rounded-lg col-span-1 md:col-span-2">
-                        <div className="text-gray-400 text-sm mb-2">Répartition par type</div>
-                        {eventTypeStats.length > 0 ? (
-                            <div className="flex flex-wrap gap-x-4 gap-y-2">
-                                {eventTypeStats.map(([typeName, count]) => (<div key={typeName} className="flex items-center gap-2 text-sm"><span className="text-gray-300">{typeName}:</span><span className="text-white font-bold bg-purple-500/20 px-2 py-0.5 rounded">{count}</span></div>))}
-                            </div>
-                        ) : (<p className="text-center text-gray-500 text-sm py-2">Aucun événement à analyser.</p>)}
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3"><BarChart2 className="text-purple-400" /> Statistiques Détaillées (selon filtres)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-white/5 p-4 rounded-lg space-y-2">
+                        <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Événements affichés</span><span className="text-xl font-bold text-white">{detailedStats.totalEvents}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-gray-400 text-sm">Coût Total Prestataires</span><span className="text-xl font-bold text-green-400">{detailedStats.totalCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span></div>
+                    </div>
+                    <div className="bg-white/5 p-4 rounded-lg">
+                        <div className="text-gray-400 text-sm mb-2">Répartition par Type</div>
+                        <div className="space-y-2 text-sm max-h-24 overflow-y-auto">
+                            {detailedStats.eventTypeStats.length > 0 ? detailedStats.eventTypeStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name}</span><div className="text-right"><span className="text-white font-bold bg-purple-500/20 px-2 py-0.5 rounded">{count}</span><span className="text-green-400 text-xs ml-2">({cost.toFixed(2)}€)</span></div></div>)) : <p className="text-gray-500 text-xs">Aucun événement.</p>}
+                        </div>
+                    </div>
+                    <div className="bg-white/5 p-4 rounded-lg">
+                        <div className="text-gray-400 text-sm mb-2">Coût par Prestataire</div>
+                        <div className="space-y-2 text-sm max-h-24 overflow-y-auto">
+                            {detailedStats.providerCostStats.length > 0 ? detailedStats.providerCostStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name} ({count})</span><span className="text-green-400 font-bold">{cost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span></div>)) : <p className="text-gray-500 text-xs">Aucun coût enregistré.</p>}
+                        </div>
                     </div>
                 </div>
             </div>
