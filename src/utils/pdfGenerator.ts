@@ -143,7 +143,7 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     backgroundColor: '#111827', // Fond du thème sombre
     logging: false,
     allowTaint: true,
-    letterRendering: true,
+    foreignObjectRendering: true,
   });
  
   const imgData = canvas.toDataURL('image/png');
