@@ -144,7 +144,7 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     logging: false,
     allowTaint: true,
     letterRendering: true,
-    foreignObjectRendering: true,
+
 
   });
  
