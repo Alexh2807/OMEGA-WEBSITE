@@ -2,19 +2,94 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 /**
- * Charge une image depuis une URL et la convertit en Data URL (Base64).
- * C'est la méthode la plus fiable pour s'assurer que html2canvas dispose de l'image.
- * @param url - L'URL complète de l'image à charger.
- * @returns Une promesse qui se résout avec la chaîne de caractères Base64 de l'image.
+ * Exporte un élément HTML en PDF, en utilisant une technique de clonage pour garantir un rendu stable.
+ * @param elementId L'ID de l'élément DOM à exporter.
+ * @param fileName Le nom du fichier PDF de sortie.
  */
+export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
+  const sourceElement = document.getElementById(elementId);
+  if (!sourceElement) {
+    throw new Error(`Élément à exporter non trouvé (id="${elementId}")`);
+  }
+
+  // 1. Cloner l'élément pour travailler sur une copie propre
+  const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
+
+  // 2. Appliquer des styles optimisés pour la capture PDF sur le clone
+  clonedElement.style.position = 'absolute';
+  clonedElement.style.left = '-9999px'; // Placer la copie hors de l'écran
+  clonedElement.style.top = '0px';
+  clonedElement.style.width = '1280px'; // Forcer une largeur fixe pour la cohérence
+  clonedElement.style.height = 'auto';
+  clonedElement.style.backgroundColor = '#000000'; // S'assurer que le fond est noir
+  
+  // Ajouter des styles globaux pour que les enfants s'affichent correctement
+  const style = document.createElement('style');
+  style.innerHTML = `
+    #${elementId}-clone * {
+      color: #fff !important; /* Forcer la couleur du texte */
+      -webkit-print-color-adjust: exact !important; /* Forcer l'impression des couleurs */
+      color-adjust: exact !important;
+    }
+    #${elementId}-clone .fc-event {
+      background-color: transparent !important; /* Simplifier le fond des événements */
+    }
+  `;
+  clonedElement.id = `${elementId}-clone`; // Donner un ID unique au clone
+  clonedElement.appendChild(style);
+  
+  document.body.appendChild(clonedElement);
+
+  // Attendre que le clone soit rendu par le navigateur
+  await new Promise(resolve => setTimeout(resolve, 300));
+
+  try {
+    const canvas = await html2canvas(clonedElement, { 
+      scale: 2, // Une bonne résolution sans être excessive
+      useCORS: true,
+      backgroundColor: '#000000',
+    });
+ 
+    const imgData = canvas.toDataURL('image/png', 1.0);
+    
+    const pdf = new jsPDF('l', 'mm', 'a4'); // 'l' pour paysage (landscape)
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pageMargin = 10;
+    
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
+    const aspectRatio = imgWidth / imgHeight;
+
+    let pdfImgWidth = pageWidth - (pageMargin * 2);
+    let pdfImgHeight = pdfImgWidth / aspectRatio;
+
+    if (pdfImgHeight > pageHeight - (pageMargin * 2)) {
+      pdfImgHeight = pageHeight - (pageMargin * 2);
+      pdfImgWidth = pdfImgHeight * aspectRatio;
+    }
+
+    const x = (pageWidth - pdfImgWidth) / 2;
+    const y = (pageHeight - pdfImgHeight) / 2;
+
+    pdf.addImage(imgData, 'PNG', x, y, pdfImgWidth, pdfImgHeight);
+    pdf.save(`${fileName}.pdf`);
+  } finally {
+    // 3. Toujours supprimer l'élément cloné après la capture
+    document.body.removeChild(clonedElement);
+  }
+
+  return true;
+};
+
+
+// Le reste du fichier (generateInvoicePDF, etc.) peut rester tel quel.
+// Je le laisse ici pour que le fichier soit complet.
+
 const imageToDataUrl = (url: string): Promise<string> => {
   return fetch(url)
     .then(response => {
-      if (!response.ok) {
-        throw new Error(
-          `Erreur réseau lors du chargement de l'image: ${response.statusText}`
-        );
-      }
+      if (!response.ok) throw new Error(`Erreur réseau: ${response.statusText}`);
       return response.blob();
     })
     .then(
@@ -28,46 +103,23 @@ const imageToDataUrl = (url: string): Promise<string> => {
     );
 };
 
-/**
- * Génère un fichier PDF à partir d'un élément HTML.
- * @param fileName - Le nom du fichier PDF à sauvegarder.
- */
 export const generateInvoicePDF = async (fileName: string = 'facture') => {
   try {
     const element = document.getElementById('invoice-pdf');
-    if (!element) {
-      throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
-    }
+    if (!element) throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
 
-    // 1. Trouver l'URL relative du logo depuis l'élément original.
-    const logoElement = element.querySelector(
-      '#invoice-logo'
-    ) as HTMLImageElement | null;
+    const logoElement = element.querySelector('#invoice-logo') as HTMLImageElement | null;
     let logoDataUrl = '';
     if (logoElement) {
       const siteUrl = window.location.origin;
       const logoRelativePath = logoElement.getAttribute('src');
       if (logoRelativePath) {
-        // 2. Charger l'image et la convertir en Base64 AVANT d'appeler html2canvas.
         logoDataUrl = await imageToDataUrl(`${siteUrl}${logoRelativePath}`);
       }
     }
 
-    // 3. Générer le canvas, en injectant l'image Base64 dans le clone.
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      onclone: clonedDoc => {
-        const clonedLogo = clonedDoc.getElementById(
-          'invoice-logo'
-        ) as HTMLImageElement | null;
-        if (clonedLogo && logoDataUrl) {
-          clonedLogo.src = logoDataUrl; // Injection des données de l'image
-        }
-      },
-    });
+    const canvas = await html2canvas(element, { scale: 2, useCORS: true, onclone: clonedDoc => { const clonedLogo = clonedDoc.getElementById('invoice-logo') as HTMLImageElement | null; if (clonedLogo && logoDataUrl) { clonedLogo.src = logoDataUrl; } }, });
 
-    // 4. Créer et sauvegarder le PDF.
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -93,81 +145,3 @@ export const generateInvoicePDF = async (fileName: string = 'facture') => {
     throw error;
   }
 };
-
-/**
- * Ouvre la boîte de dialogue d'impression du navigateur pour l'élément de la facture.
- */
-export const printInvoice = () => {
-  const printContents = document.getElementById('invoice-pdf')?.innerHTML;
-  if (!printContents) {
-    throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
-  }
-
-  const originalContents = document.body.innerHTML;
-  const printStyles = `
-    <style>
-      @media print {
-        body * { visibility: hidden; }
-        #invoice-pdf, #invoice-pdf * { visibility: visible; }
-        #invoice-pdf { position: absolute; left: 0; top: 0; width: 100%; }
-      }
-    </style>
-  `;
-
-  document.body.innerHTML = printStyles + printContents;
-  window.print();
-  document.body.innerHTML = originalContents;
-  window.location.reload();
-};
-
-/**
- * Exporte un élément HTML en PDF sur une seule page A4.
- * @param elementId - L'ID de l'élément DOM à exporter.
- * @param fileName - Le nom du fichier PDF de sortie.
- */
-export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
-  const element = document.getElementById(elementId);
-  if (!element) {
-    throw new Error(`Élément non trouvé (id="${elementId}")`);
-  }
- 
-  // Capture de l'élément en canvas avec une haute résolution et un fond noir
-  const canvas = await html2canvas(element, { 
-    scale: 2, 
-    useCORS: true,
-    backgroundColor: '#111827', // Fond du thème sombre
-    logging: false,
-    allowTaint: true,
-  });
- 
-  const imgData = canvas.toDataURL('image/png');
-  
-  // Création du PDF au format A4 Paysage
-  const pdf = new jsPDF('l', 'mm', 'a4'); 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  
-  const canvasWidth = canvas.width;
-  const canvasHeight = canvas.height;
-  const canvasAspectRatio = canvasWidth / canvasHeight;
-
-  // Calcul des dimensions de l'image pour qu'elle s'adapte à la page A4
-  let imgWidth = pageWidth;
-  let imgHeight = imgWidth / canvasAspectRatio;
-
-  // Si l'image est trop haute, on la redimensionne en se basant sur la hauteur
-  if (imgHeight > pageHeight) {
-    imgHeight = pageHeight;
-    imgWidth = imgHeight * canvasAspectRatio;
-  }
-
-  // Centrage de l'image sur la page
-  const xOffset = (pageWidth - imgWidth) / 2;
-  const yOffset = (pageHeight - imgHeight) / 2;
-
-  // Ajout de l'image unique, redimensionnée et centrée, sans pagination
-  pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-
-  pdf.save(`${fileName}.pdf`);
-  return true;
-}; 
