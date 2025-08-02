@@ -229,7 +229,7 @@ const AdminPlanningEditor: React.FC = () => {
                     <div className="bg-white/5 p-4 rounded-lg">
                         <div className="text-gray-400 text-sm mb-2">Répartition par Type</div>
                         <div className="space-y-2 text-sm max-h-24 overflow-y-auto">
-                            {detailedStats.eventTypeStats.length > 0 ? detailedStats.eventTypeStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name}</span><div className="text-right"><span className="text-white font-bold bg-purple-500/20 px-2 py-0.5 rounded">{count}</span><span className=\"text-green-400 text-xs ml-2">({cost.toFixed(2)}€)</span></div></div>)) : <p className=\"text-gray-500 text-xs text-center py-4">Aucun événement.</p>}
+                            {detailedStats.eventTypeStats.length > 0 ? detailedStats.eventTypeStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name}</span><div className="text-right"><span className="text-white font-bold bg-purple-500/20 px-2 py-0.5 rounded">{count}</span><span className="text-green-400 text-xs ml-2">({cost.toFixed(2)}€)</span></div></div>)) : <p className="text-gray-500 text-xs text-center py-4">Aucun événement.</p>}
                         </div>
                     </div>
                     <div className="bg-white/5 p-4 rounded-lg">
