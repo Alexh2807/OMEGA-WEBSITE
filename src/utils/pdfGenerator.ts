@@ -124,8 +124,13 @@ export const printInvoice = () => {
  * Exporte un élément HTML en PDF sur une seule page A4.
  * @param elementId - L'ID de l'élément DOM à exporter.
  * @param fileName - Le nom du fichier PDF de sortie.
+ * @param fontOffset - Décalage vertical en millimètres pour corriger le rendu des polices.
  */
-export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
+export const exportElementAsPDF = async (
+  elementId: string,
+  fileName: string = 'export',
+  fontOffset: number = 0
+) => {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Élément non trouvé (id="${elementId}")`);
@@ -172,8 +177,8 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   // Centrage horizontal de l'image. Alignement en haut pour éviter un décalage vertical.
   const xOffset = (pageWidth - imgWidth) / 2;
 
-  // Ajout de l'image unique, redimensionnée et alignée en haut, sans pagination
-  pdf.addImage(imgData, 'PNG', xOffset, 0, imgWidth, imgHeight);
+  // Ajout de l'image unique, redimensionnée avec un décalage optionnel pour les polices
+  pdf.addImage(imgData, 'PNG', xOffset, fontOffset, imgWidth, imgHeight);
 
   pdf.save(`${fileName}.pdf`);
   return true;

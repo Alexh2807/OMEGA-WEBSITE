@@ -12,17 +12,17 @@ import {
   MapPin,
   Save,
   User,
-  Palette,
   X,
   Layers,
   Loader2,
   BarChart2,
   Tag,
-  Euro,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { exportElementAsPDF } from '../../utils/pdfGenerator';
 import toast from 'react-hot-toast';
+
+const PDF_FONT_OFFSET_MM = 2;
 
 // --- Interfaces de types ---
 interface Provider {
@@ -150,7 +150,7 @@ const AdminPlanningEditor: React.FC = () => {
   const handleEventClick = (clickInfo: any) => { setMultiSelectedDates([]); const event = events.find(e => e.id === clickInfo.event.id); if (event) { setEditingEvent(event); setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids }); setShowEventModal(true); } };
   const handleEventDrop = async (info: any) => { const { event, oldEvent } = info; const newDate = toYYYYMMDD(event.start); const eventId = event.id; setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: newDate } : e)); const { error } = await supabase.from('planning_events').update({ event_date: newDate }).eq('id', eventId); if (error) { toast.error("Le déplacement a échoué."); setEvents(currentEvents => currentEvents.map(e => e.id === eventId ? { ...e, event_date: toYYYYMMDD(oldEvent.start) } : e)); info.revert(); } };
   
-  const handleExportPDF = async () => { if (isExporting) return; setIsExporting(true); const toastId = toast.loading('Génération du PDF...'); try { await exportElementAsPDF('planning-export', `planning-${toYYYYMMDD(new Date())}`); toast.success('PDF généré !', { id: toastId }); } catch (error) { console.error(error); toast.error('Échec du PDF.', { id: toastId }); } finally { setIsExporting(false); } };
+  const handleExportPDF = async () => { if (isExporting) return; setIsExporting(true); const toastId = toast.loading('Génération du PDF...'); try { await exportElementAsPDF('planning-export', `planning-${toYYYYMMDD(new Date())}`, PDF_FONT_OFFSET_MM); toast.success('PDF généré !', { id: toastId }); } catch (error) { console.error(error); toast.error('Échec du PDF.', { id: toastId }); } finally { setIsExporting(false); } };
 
   const filteredEvents = useMemo(() => events.filter(event => (selectedProvider === 'all' || event.provider_ids.includes(selectedProvider)) && (selectedLocation === 'all' || event.location_id === selectedLocation) && (selectedEventType === 'all' || event.location?.event_type_id === selectedEventType)), [events, selectedProvider, selectedLocation, selectedEventType]);
   
