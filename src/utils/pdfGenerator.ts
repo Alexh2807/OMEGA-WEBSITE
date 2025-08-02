@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 /**
- * Exporte un élément HTML en PDF, en utilisant une technique de clonage pour garantir un rendu stable.
+ * Exporte un élément HTML en PDF, en utilisant une technique de clonage et de stylisation pour un rendu fiable.
  * @param elementId L'ID de l'élément DOM à exporter.
  * @param fileName Le nom du fichier PDF de sortie.
  */
@@ -14,40 +14,53 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
 
   // 1. Cloner l'élément pour travailler sur une copie propre
   const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
+  clonedElement.id = `${elementId}-clone-for-pdf`; // ID unique pour le clone
 
   // 2. Appliquer des styles optimisés pour la capture PDF sur le clone
   clonedElement.style.position = 'absolute';
-  clonedElement.style.left = '-9999px'; // Placer la copie hors de l'écran
+  clonedElement.style.left = '-9999px'; // Placer la copie hors de l'écran pour éviter un flash
   clonedElement.style.top = '0px';
   clonedElement.style.width = '1280px'; // Forcer une largeur fixe pour la cohérence
   clonedElement.style.height = 'auto';
   clonedElement.style.backgroundColor = '#000000'; // S'assurer que le fond est noir
   
-  // Ajouter des styles globaux pour que les enfants s'affichent correctement
+  // Ajouter une feuille de style DANS le clone pour surcharger les styles complexes
   const style = document.createElement('style');
   style.innerHTML = `
-    #${elementId}-clone * {
-      color: #fff !important; /* Forcer la couleur du texte */
-      -webkit-print-color-adjust: exact !important; /* Forcer l'impression des couleurs */
+    /* Forcer la couleur du texte et l'impression des couleurs */
+    #${clonedElement.id} * {
+      color: #fff !important;
+      -webkit-print-color-adjust: exact !important;
       color-adjust: exact !important;
     }
-    #${elementId}-clone .fc-event {
-      background-color: transparent !important; /* Simplifier le fond des événements */
+    /* Simplifier drastiquement le style des événements pour corriger l'alignement */
+    #${clonedElement.id} .fc-event-main {
+      display: block !important; /* Remplacer flexbox par un bloc simple */
+      padding: 2px 4px;
+    }
+    #${clonedElement.id} .fc-event-main-frame {
+      display: block !important;
+    }
+    #${clonedElement.id} .fc-event-title-container {
+      display: block !important;
+    }
+    #${clonedElement.id} .fc-event-title {
+        white-space: normal !important; /* Permettre au texte de passer à la ligne */
     }
   `;
-  clonedElement.id = `${elementId}-clone`; // Donner un ID unique au clone
   clonedElement.appendChild(style);
   
   document.body.appendChild(clonedElement);
 
-  // Attendre que le clone soit rendu par le navigateur
+  // Attendre que le navigateur applique les styles au clone
   await new Promise(resolve => setTimeout(resolve, 300));
 
   try {
     const canvas = await html2canvas(clonedElement, { 
-      scale: 2, // Une bonne résolution sans être excessive
+      scale: 2,
       useCORS: true,
       backgroundColor: '#000000',
+      logging: false, // Désactiver les logs pour la propreté
     });
  
     const imgData = canvas.toDataURL('image/png', 1.0);
@@ -83,9 +96,7 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
 };
 
 
-// Le reste du fichier (generateInvoicePDF, etc.) peut rester tel quel.
-// Je le laisse ici pour que le fichier soit complet.
-
+// Le reste du fichier (generateInvoicePDF, etc.) reste inchangé pour ne pas impacter les autres fonctionnalités.
 const imageToDataUrl = (url: string): Promise<string> => {
   return fetch(url)
     .then(response => {
