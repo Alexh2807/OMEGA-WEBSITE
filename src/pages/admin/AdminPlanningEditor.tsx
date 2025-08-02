@@ -58,6 +58,7 @@ interface EventItem {
 
 // --- Le Composant Principal ---
 const AdminPlanningEditor: React.FC = () => {
+  // États principaux
   const [events, setEvents] = useState<EventItem[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -195,6 +196,12 @@ const AdminPlanningEditor: React.FC = () => {
 
   const getButtonClass = (monthValue: number) => `px-3 py-1 text-sm rounded-md ${numberOfMonths === monthValue ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`;
 
+  const tabsConfig = [
+    { id: 'calendar', label: 'Planning', icon: CalendarIcon },
+    { id: 'providers', label: 'Prestataires', icon: Users },
+    { id: 'locations', label: 'Lieux', icon: MapPin }
+  ];
+
   if (loading) return <div className="flex items-center justify-center h-64 text-white text-xl">Chargement du planning...</div>;
 
   return (
@@ -203,7 +210,14 @@ const AdminPlanningEditor: React.FC = () => {
         <div><h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3"><CalendarIcon className="text-blue-400" size={32} /> Planning Événementiel</h1><p className="text-gray-400">Gérez, filtrez et planifiez tous les événements à venir.</p></div>
         <button onClick={handleExportPDF} disabled={isExporting} className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">{isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}{isExporting ? 'Génération...' : 'Export PDF'}</button>
       </div>
-  <div className="flex flex-wrap gap-4 border-b border-white/20"><{[ { id: 'calendar', label: 'Planning', icon: CalendarIcon }, { id: 'providers', label: 'Prestataires', icon: Users }, { id: 'locations', label: 'Lieux', icon: MapPin } ].map(tab => (<button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${activeTab === tab.id ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'}`}><tab.icon size={20} /> {tab.label}</button>))}</div>
+      
+      <div className="flex flex-wrap gap-4 border-b border-white/20">
+        {tabsConfig.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${activeTab === tab.id ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'}`}>
+            <tab.icon size={20} /> {tab.label}
+          </button>
+        ))}
+      </div>
 
       {activeTab === 'calendar' && (
         <div className="space-y-6">
@@ -217,13 +231,13 @@ const AdminPlanningEditor: React.FC = () => {
                     <div className="bg-white/5 p-4 rounded-lg">
                         <div className="text-gray-400 text-sm mb-2">Répartition par Type</div>
                         <div className="space-y-2 text-sm max-h-24 overflow-y-auto">
-                            {detailedStats.eventTypeStats.length > 0 ? detailedStats.eventTypeStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name}</span><div className="text-right"><span className="text-white font-bold bg-purple-500/20 px-2 py-0.5 rounded">{count}</span><span className="text-green-400 text-xs ml-2">({cost.toFixed(2)}€)</span></div></div>)) : <p className="text-gray-500 text-xs">Aucun événement.</p>}
+                            {detailedStats.eventTypeStats.length > 0 ? detailedStats.eventTypeStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name}</span><div className="text-right"><span className="text-white font-bold bg-purple-500/20 px-2 py-0.5 rounded">{count}</span><span className="text-green-400 text-xs ml-2">({cost.toFixed(2)}€)</span></div></div>)) : <p className="text-gray-500 text-xs text-center py-4">Aucun événement.</p>}
                         </div>
                     </div>
                     <div className="bg-white/5 p-4 rounded-lg">
                         <div className="text-gray-400 text-sm mb-2">Coût par Prestataire</div>
                         <div className="space-y-2 text-sm max-h-24 overflow-y-auto">
-                            {detailedStats.providerCostStats.length > 0 ? detailedStats.providerCostStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name} ({count})</span><span className="text-green-400 font-bold">{cost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span></div>)) : <p className="text-gray-500 text-xs">Aucun coût enregistré.</p>}
+                            {detailedStats.providerCostStats.length > 0 ? detailedStats.providerCostStats.map(([name, {count, cost}]) => (<div key={name} className="flex justify-between items-center"><span className="text-gray-300">{name} ({count})</span><span className="text-green-400 font-bold">{cost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span></div>)) : <p className="text-gray-500 text-xs text-center py-4">Aucun coût enregistré.</p>}
                         </div>
                     </div>
                 </div>
