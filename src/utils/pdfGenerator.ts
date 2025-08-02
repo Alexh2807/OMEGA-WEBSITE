@@ -2,19 +2,14 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 /**
- * Charge une image depuis une URL et la convertit en Data URL (Base64).
- * C'est la méthode la plus fiable pour s'assurer que html2canvas dispose de l'image.
- * @param url - L'URL complète de l'image à charger.
- * @returns Une promesse qui se résout avec la chaîne de caractères Base64 de l'image.
+ * Charge une image et la convertit en Data URL (Base64).
+ * @param url - L'URL de l'image.
+ * @returns Une promesse qui se résout avec la chaîne Base64.
  */
 const imageToDataUrl = (url: string): Promise<string> => {
   return fetch(url)
     .then(response => {
-      if (!response.ok) {
-        throw new Error(
-          `Erreur réseau lors du chargement de l'image: ${response.statusText}`
-        );
-      }
+      if (!response.ok) throw new Error(`Erreur réseau: ${response.statusText}`);
       return response.blob();
     })
     .then(
@@ -29,45 +24,35 @@ const imageToDataUrl = (url: string): Promise<string> => {
 };
 
 /**
- * Génère un fichier PDF à partir d'un élément HTML.
- * @param fileName - Le nom du fichier PDF à sauvegarder.
+ * Génère un PDF à partir d'un élément HTML pour une facture.
+ * @param fileName - Le nom du fichier PDF.
  */
 export const generateInvoicePDF = async (fileName: string = 'facture') => {
   try {
     const element = document.getElementById('invoice-pdf');
-    if (!element) {
-      throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
-    }
+    if (!element) throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
 
-    // 1. Trouver l'URL relative du logo depuis l'élément original.
-    const logoElement = element.querySelector(
-      '#invoice-logo'
-    ) as HTMLImageElement | null;
+    const logoElement = element.querySelector('#invoice-logo') as HTMLImageElement | null;
     let logoDataUrl = '';
     if (logoElement) {
       const siteUrl = window.location.origin;
       const logoRelativePath = logoElement.getAttribute('src');
       if (logoRelativePath) {
-        // 2. Charger l'image et la convertir en Base64 AVANT d'appeler html2canvas.
         logoDataUrl = await imageToDataUrl(`${siteUrl}${logoRelativePath}`);
       }
     }
 
-    // 3. Générer le canvas, en injectant l'image Base64 dans le clone.
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       onclone: clonedDoc => {
-        const clonedLogo = clonedDoc.getElementById(
-          'invoice-logo'
-        ) as HTMLImageElement | null;
+        const clonedLogo = clonedDoc.getElementById('invoice-logo') as HTMLImageElement | null;
         if (clonedLogo && logoDataUrl) {
-          clonedLogo.src = logoDataUrl; // Injection des données de l'image
+          clonedLogo.src = logoDataUrl;
         }
       },
     });
 
-    // 4. Créer et sauvegarder le PDF.
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -95,35 +80,9 @@ export const generateInvoicePDF = async (fileName: string = 'facture') => {
 };
 
 /**
- * Ouvre la boîte de dialogue d'impression du navigateur pour l'élément de la facture.
- */
-export const printInvoice = () => {
-  const printContents = document.getElementById('invoice-pdf')?.innerHTML;
-  if (!printContents) {
-    throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
-  }
-
-  const originalContents = document.body.innerHTML;
-  const printStyles = `
-    <style>
-      @media print {
-        body * { visibility: hidden; }
-        #invoice-pdf, #invoice-pdf * { visibility: visible; }
-        #invoice-pdf { position: absolute; left: 0; top: 0; width: 100%; }
-      }
-    </style>
-  `;
-
-  document.body.innerHTML = printStyles + printContents;
-  window.print();
-  document.body.innerHTML = originalContents;
-  window.location.reload();
-};
-
-/**
- * Exporte un élément HTML en PDF sur une seule page A4.
+ * Exporte un élément HTML en PDF, optimisé pour le planning.
  * @param elementId - L'ID de l'élément DOM à exporter.
- * @param fileName - Le nom du fichier PDF de sortie.
+ * @param fileName - Le nom du fichier de sortie.
  */
 export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
   const element = document.getElementById(elementId);
@@ -131,19 +90,23 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
  
-  // Capture de l'élément en canvas avec une haute résolution et un fond noir
+  // Forcer le recalcul du style et de la mise en page
+  window.dispatchEvent(new Event('resize'));
+  await new Promise(resolve => setTimeout(resolve, 500)); // Attendre que le DOM se stabilise
+
   const canvas = await html2canvas(element, { 
-    scale: 2, 
+    scale: 3, // Augmentation de la résolution pour une meilleure qualité
     useCORS: true,
-    backgroundColor: '#111827', // Fond du thème sombre
+    backgroundColor: '#000000', // Fond noir pour correspondre au thème
     logging: false,
     allowTaint: true,
+    // Ignorer les éléments qui posent problème lors de la capture
+    ignoreElements: (el) => el.classList.contains('fc-scroller'),
   });
  
-  const imgData = canvas.toDataURL('image/png');
+  const imgData = canvas.toDataURL('image/png', 0.95); // Utiliser une compression légère
   
-  // Création du PDF au format A4 Paysage
-  const pdf = new jsPDF('l', 'mm', 'a4'); 
+  const pdf = new jsPDF('l', 'mm', 'a4'); // 'l' pour paysage (landscape)
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   
@@ -151,23 +114,19 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   const canvasHeight = canvas.height;
   const canvasAspectRatio = canvasWidth / canvasHeight;
 
-  // Calcul des dimensions de l'image pour qu'elle s'adapte à la page A4
-  let imgWidth = pageWidth;
+  // Calcul pour que l'image s'adapte parfaitement à la page en conservant son ratio
+  let imgWidth = pageWidth - 20; // Ajouter des marges de 10mm de chaque côté
   let imgHeight = imgWidth / canvasAspectRatio;
 
-  // Si l'image est trop haute, on la redimensionne en se basant sur la hauteur
-  if (imgHeight > pageHeight) {
-    imgHeight = pageHeight;
+  if (imgHeight > pageHeight - 20) {
+    imgHeight = pageHeight - 20; // Marges de 10mm en haut et en bas
     imgWidth = imgHeight * canvasAspectRatio;
   }
 
-  // Centrage de l'image sur la page
   const xOffset = (pageWidth - imgWidth) / 2;
   const yOffset = (pageHeight - imgHeight) / 2;
 
-  // Ajout de l'image unique, redimensionnée et centrée, sans pagination
   pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-
   pdf.save(`${fileName}.pdf`);
   return true;
 };
