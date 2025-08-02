@@ -161,12 +161,11 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     imgWidth = imgHeight * canvasAspectRatio;
   }
 
-  // Centrage de l'image sur la page
+  // Centrage horizontal de l'image. Alignement en haut pour éviter un décalage vertical.
   const xOffset = (pageWidth - imgWidth) / 2;
-  const yOffset = (pageHeight - imgHeight) / 2;
 
-  // Ajout de l'image unique, redimensionnée et centrée, sans pagination
-  pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
+  // Ajout de l'image unique, redimensionnée et alignée en haut, sans pagination
+  pdf.addImage(imgData, 'PNG', xOffset, 0, imgWidth, imgHeight);
 
   pdf.save(`${fileName}.pdf`);
   return true;
