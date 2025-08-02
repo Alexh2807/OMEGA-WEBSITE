@@ -165,7 +165,7 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   const xOffset = (pageWidth - imgWidth) / 2;
 
   // Ajout de l'image unique, redimensionnée et alignée en haut, sans pagination
-  pdf.addImage(imgData, 'PNG', xOffset, 0, imgWidth, imgHeight);
+  pdf.addImage(imgData, 'PNG', xOffset, 50, imgWidth, imgHeight);
 
   pdf.save(`${fileName}.pdf`);
   return true;
