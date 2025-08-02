@@ -22,8 +22,6 @@ import { supabase } from '../../lib/supabase';
 import { exportElementAsPDF } from '../../utils/pdfGenerator';
 import toast from 'react-hot-toast';
 
-const PDF_FONT_OFFSET_MM = 2;
-
 // --- Interfaces de types ---
 interface Provider {
   id: string;
