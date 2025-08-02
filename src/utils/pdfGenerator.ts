@@ -130,14 +130,20 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   if (!element) {
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
- 
+
+  // S'assure que les polices sont chargées pour éviter les décalages dans le canvas
+  if (document.fonts && document.fonts.ready) {
+    await document.fonts.ready;
+  }
+
   // Capture de l'élément en canvas avec une haute résolution et un fond noir
-  const canvas = await html2canvas(element, { 
-    scale: 2, 
+  const canvas = await html2canvas(element, {
+    scale: 2,
     useCORS: true,
     backgroundColor: '#111827', // Fond du thème sombre
     logging: false,
     allowTaint: true,
+    foreignObjectRendering: true,
   });
  
   const imgData = canvas.toDataURL('image/png');
