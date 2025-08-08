@@ -40,8 +40,9 @@ const Footer = () => {
                   <a
                     key={index}
                     href="#"
+                    aria-label="Réseau social"
                     className="bg-white/10 hover:bg-gradient-to-r hover:from-blue-500 hover:to-purple-600 hover:text-white p-2 rounded-lg transition-all duration-300 group"
-                  >
+                 >
                     <Icon
                       size={20}
                       className="text-gray-400 group-hover:text-white"
@@ -56,44 +57,44 @@ const Footer = () => {
             <h4 className="text-white font-semibold mb-4">Services</h4>
             <ul className="space-y-2 text-gray-400">
               <li>
-                <a
-                  href="/spectacles"
+                <Link
+                  to="/spectacles"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Spectacles DJ
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/spectacles"
+                <Link
+                  to="/spectacles"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Shows Lumière
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/spectacles"
+                <Link
+                  to="/spectacles"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Effets Spéciaux
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/spectacles"
+                <Link
+                  to="/spectacles"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Soirées Mousse
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/machines"
+                <Link
+                  to="/machines"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Machines Hazer
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -102,44 +103,44 @@ const Footer = () => {
             <h4 className="text-white font-semibold mb-4">Produits</h4>
             <ul className="space-y-2 text-gray-400">
               <li>
-                <a
-                  href="/produits"
+                <Link
+                  to="/produits"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Produits à Mousse
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/machines"
+                <Link
+                  to="/machines"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Machines CO²
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/produits"
+                <Link
+                  to="/produits"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Accessoires
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/produits"
+                <Link
+                  to="/produits"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Pièces Détachées
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/contact"
+                <Link
+                  to="/contact"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Devis Sur Mesure
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -148,28 +149,28 @@ const Footer = () => {
             <h4 className="text-white font-semibold mb-4">Support</h4>
             <ul className="space-y-2 text-gray-400">
               <li>
-                <a
-                  href="/contact"
+                <Link
+                  to="/contact"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Service Client
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/contact"
+                <Link
+                  to="/contact"
                   className="hover:text-blue-400 transition-colors"
                 >
                   SAV
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/contact"
+                <Link
+                  to="/contact"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Contact
-                </a>
+                </Link>
               </li>
               <li>
                 <Link
