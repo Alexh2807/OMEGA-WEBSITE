@@ -122,31 +122,69 @@ export const printInvoice = () => {
 
 /**
  * Exporte un élément HTML en PDF sur une seule page A4.
+ * Ajusté pour un rendu net et aligné du planning (FullCalendar).
+ * - Cible automatiquement l'élément .fc à l'intérieur si présent
+ * - Désactive les effets visuels qui perturbent le rendu (blur, ombres, transforms)
+ * - Fige la largeur/hauteur et la position de scroll
  * @param elementId - L'ID de l'élément DOM à exporter.
  * @param fileName - Le nom du fichier PDF de sortie.
  */
 export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
-  const element = document.getElementById(elementId);
-  if (!element) {
+  const container = document.getElementById(elementId);
+  if (!container) {
     throw new Error(`Élément non trouvé (id="${elementId}")`);
   }
- 
-  // Capture de l'élément en canvas avec une haute résolution et un fond noir
-  const canvas = await html2canvas(element, { 
-    scale: 2, 
+
+  // Si c'est le planning, viser le calendrier interne pour éviter les paddings/outils superposés
+  const target: HTMLElement = (container.querySelector('.fc') as HTMLElement) || container;
+
+  // Mémoriser les dimensions réelles pour un rendu 1:1
+  const { scrollWidth, scrollHeight } = target;
+
+  const canvas = await html2canvas(target, {
+    // Echelle basée sur le devicePixelRatio pour des textes plus nets
+    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
     useCORS: true,
-    backgroundColor: '#111827', // Fond du thème sombre
+    backgroundColor: getComputedStyle(document.body).backgroundColor || '#111827',
+    width: scrollWidth,
+    height: scrollHeight,
+    scrollX: 0,
+    scrollY: -window.scrollY,
     logging: false,
     allowTaint: true,
+    onclone: clonedDoc => {
+      const clonedContainer = clonedDoc.getElementById(elementId) as HTMLElement | null;
+      const clonedCalendar = (clonedContainer?.querySelector('.fc') as HTMLElement) || clonedContainer;
+      if (clonedCalendar) {
+        // Normalisation du style pour la capture
+        const style = clonedCalendar.style as CSSStyleDeclaration & { [key: string]: any };
+        style.transform = 'none';
+        style.boxShadow = 'none';
+        style.backdropFilter = 'none';
+        (style as any)['-webkit-backdrop-filter'] = 'none';
+        style.filter = 'none';
+        style.letterSpacing = 'normal';
+        style.textRendering = 'geometricPrecision';
+        // Forcer la largeur naturelle pour limiter les reflows
+        style.width = `${scrollWidth}px`;
+      }
+      // Désactiver les animations/transitions susceptibles de déplacer le contenu
+      const all = clonedDoc.querySelectorAll('*');
+      all.forEach(el => {
+        const s = (el as HTMLElement).style;
+        s.animation = 'none';
+        s.transition = 'none';
+      });
+    },
   });
- 
+
   const imgData = canvas.toDataURL('image/png');
-  
+
   // Création du PDF au format A4 Paysage
-  const pdf = new jsPDF('l', 'mm', 'a4'); 
+  const pdf = new jsPDF('l', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  
+
   const canvasWidth = canvas.width;
   const canvasHeight = canvas.height;
   const canvasAspectRatio = canvasWidth / canvasHeight;
@@ -155,19 +193,19 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   let imgWidth = pageWidth;
   let imgHeight = imgWidth / canvasAspectRatio;
 
-  // Si l'image est trop haute, on la redimensionne en se basant sur la hauteur
   if (imgHeight > pageHeight) {
     imgHeight = pageHeight;
     imgWidth = imgHeight * canvasAspectRatio;
   }
 
-  // Centrage de l'image sur la page
+  // Marges fines pour éviter que la bordure touche les bords
+  const margin = 5; // mm
+  imgWidth = Math.max(0, imgWidth - margin * 2);
+  imgHeight = Math.max(0, imgHeight - margin * 2);
   const xOffset = (pageWidth - imgWidth) / 2;
   const yOffset = (pageHeight - imgHeight) / 2;
 
-  // Ajout de l'image unique, redimensionnée et centrée, sans pagination
   pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-
   pdf.save(`${fileName}.pdf`);
   return true;
 }; 
