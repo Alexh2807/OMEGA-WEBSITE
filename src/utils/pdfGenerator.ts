@@ -3,17 +3,12 @@ import html2canvas from 'html2canvas';
 
 /**
  * Charge une image depuis une URL et la convertit en Data URL (Base64).
- * C'est la méthode la plus fiable pour s'assurer que html2canvas dispose de l'image.
- * @param url - L'URL complète de l'image à charger.
- * @returns Une promesse qui se résout avec la chaîne de caractères Base64 de l'image.
  */
 const imageToDataUrl = (url: string): Promise<string> => {
   return fetch(url)
     .then(response => {
       if (!response.ok) {
-        throw new Error(
-          `Erreur réseau lors du chargement de l'image: ${response.statusText}`
-        );
+        throw new Error(`Erreur réseau lors du chargement de l'image: ${response.statusText}`);
       }
       return response.blob();
     })
@@ -29,8 +24,7 @@ const imageToDataUrl = (url: string): Promise<string> => {
 };
 
 /**
- * Génère un fichier PDF à partir d'un élément HTML.
- * @param fileName - Le nom du fichier PDF à sauvegarder.
+ * Génère un fichier PDF à partir d'un élément HTML (facture).
  */
 export const generateInvoicePDF = async (fileName: string = 'facture') => {
   try {
@@ -39,35 +33,30 @@ export const generateInvoicePDF = async (fileName: string = 'facture') => {
       throw new Error('Élément de la facture non trouvé (id="invoice-pdf")');
     }
 
-    // 1. Trouver l'URL relative du logo depuis l'élément original.
-    const logoElement = element.querySelector(
-      '#invoice-logo'
-    ) as HTMLImageElement | null;
+    // 1) Précharge du logo en base64 pour éviter pertes CORS
+    const logoElement = element.querySelector('#invoice-logo') as HTMLImageElement | null;
     let logoDataUrl = '';
     if (logoElement) {
       const siteUrl = window.location.origin;
       const logoRelativePath = logoElement.getAttribute('src');
       if (logoRelativePath) {
-        // 2. Charger l'image et la convertir en Base64 AVANT d'appeler html2canvas.
         logoDataUrl = await imageToDataUrl(`${siteUrl}${logoRelativePath}`);
       }
     }
 
-    // 3. Générer le canvas, en injectant l'image Base64 dans le clone.
+    // 2) Capture
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       onclone: clonedDoc => {
-        const clonedLogo = clonedDoc.getElementById(
-          'invoice-logo'
-        ) as HTMLImageElement | null;
+        const clonedLogo = clonedDoc.getElementById('invoice-logo') as HTMLImageElement | null;
         if (clonedLogo && logoDataUrl) {
-          clonedLogo.src = logoDataUrl; // Injection des données de l'image
+          clonedLogo.src = logoDataUrl;
         }
       },
     });
 
-    // 4. Créer et sauvegarder le PDF.
+    // 3) PDF multi-pages
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -95,7 +84,7 @@ export const generateInvoicePDF = async (fileName: string = 'facture') => {
 };
 
 /**
- * Ouvre la boîte de dialogue d'impression du navigateur pour l'élément de la facture.
+ * Impression navigateur d'une facture.
  */
 export const printInvoice = () => {
   const printContents = document.getElementById('invoice-pdf')?.innerHTML;
@@ -121,9 +110,8 @@ export const printInvoice = () => {
 };
 
 /**
- * Exporte un élément HTML en PDF sur une seule page A4.
- * @param elementId - L'ID de l'élément DOM à exporter.
- * @param fileName - Le nom du fichier PDF de sortie.
+ * Exporte un élément HTML en PDF sur une seule page A4 (paysage).
+ * Correction définitive pour FullCalendar : colonnes & scrollers figés.
  */
 export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
   const container = document.getElementById(elementId);
@@ -136,14 +124,35 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
 
   // S'assurer que les polices web sont chargées avant la capture pour éviter les décalages
   if ((document as any).fonts && typeof (document as any).fonts.ready?.then === 'function') {
-    try { await (document as any).fonts.ready; } catch {}
+    try {
+      await (document as any).fonts.ready;
+    } catch {}
   }
 
-  // Mémoriser les dimensions réelles pour un rendu 1:1
+  // ——— MESURES SUR LE VRAI CALENDRIER ———
   const { scrollWidth, scrollHeight } = target;
 
+  // a) Largeurs des colonnes (colgroup)
+  const colEls = target.querySelectorAll<HTMLTableColElement>('.fc-scrollgrid-sync-table col');
+  const colWidths: number[] = [];
+  colEls.forEach(col => {
+    const w =
+      (col.style.width && col.style.width.endsWith('px'))
+        ? parseFloat(col.style.width)
+        : (col.getBoundingClientRect().width || 0);
+    colWidths.push(Math.max(0, Math.round(w)));
+  });
+
+  // b) Dimensions des scrollers (pour conserver la place de la scrollbar)
+  const scrollerDims: Array<{ idx: number; width: number; height: number }> = [];
+  const scrollers = target.querySelectorAll<HTMLElement>('.fc-scroller');
+  scrollers.forEach((el, idx) => {
+    const r = el.getBoundingClientRect();
+    scrollerDims.push({ idx, width: Math.round(r.width), height: Math.round(r.height) });
+  });
+
+  // ——— CAPTURE AVEC INJECTION DANS LE CLONE ———
   const canvas = await html2canvas(target, {
-    // Echelle basée sur le devicePixelRatio pour des textes plus nets
     scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
     useCORS: true,
     backgroundColor: getComputedStyle(document.body).backgroundColor || '#111827',
@@ -153,44 +162,71 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     scrollY: -window.scrollY,
     logging: false,
     allowTaint: true,
+    windowWidth: Math.max(scrollWidth, document.documentElement.clientWidth),
+    windowHeight: Math.max(scrollHeight, document.documentElement.clientHeight),
     onclone: clonedDoc => {
       const clonedContainer = clonedDoc.getElementById(elementId) as HTMLElement | null;
       const clonedCalendar = (clonedContainer?.querySelector('.fc') as HTMLElement) || clonedContainer;
-      if (clonedCalendar) {
-        // Normalisation du style pour la capture
-        const style = clonedCalendar.style as CSSStyleDeclaration & { [key: string]: any };
-        style.transform = 'none';
-        style.boxShadow = 'none';
-        style.backdropFilter = 'none';
-        (style as any)['-webkit-backdrop-filter'] = 'none';
-        style.filter = 'none';
-        style.letterSpacing = 'normal';
-        style.textRendering = 'geometricPrecision';
-        // Forcer la largeur naturelle pour limiter les reflows
-        style.width = `${scrollWidth}px`;
+      if (!clonedCalendar) return;
 
-        // Éviter les scrollbars internes qui peuvent tronquer ou décaler
-        const scrollers = clonedCalendar.querySelectorAll('.fc-scroller');
-        scrollers.forEach((el: Element) => {
-          const s = (el as HTMLElement).style;
-          s.overflow = 'visible';
-          s.maxHeight = 'none';
-          s.height = 'auto';
-        });
-      }
-      // Désactiver les animations/transitions susceptibles de déplacer le contenu
-      const all = clonedDoc.querySelectorAll('*');
-      all.forEach(el => {
-        const s = (el as HTMLElement).style;
-        s.animation = 'none';
-        s.transition = 'none';
+      // Neutraliser styles instables
+      const style = clonedCalendar.style as CSSStyleDeclaration & { [key: string]: any };
+      style.transform = 'none';
+      style.boxShadow = 'none';
+      style.backdropFilter = 'none';
+      (style as any)['-webkit-backdrop-filter'] = 'none';
+      style.filter = 'none';
+      style.letterSpacing = 'normal';
+      style.textRendering = 'geometricPrecision';
+      style.width = `${scrollWidth}px`;
+
+      // Couper anim/transition pour éviter reflows
+      clonedDoc.querySelectorAll<HTMLElement>('*').forEach(s => {
+        s.style.animation = 'none';
+        s.style.transition = 'none';
       });
+
+      // (A) Verrouiller les largeurs des colonnes sur TOUTES les sync-tables
+      const clonedCols = clonedCalendar.querySelectorAll<HTMLTableColElement>('.fc-scrollgrid-sync-table col');
+      clonedCols.forEach((col, i) => {
+        const w = colWidths[i] ?? null;
+        if (w && w > 0) {
+          col.style.width = `${w}px`;
+          col.setAttribute('width', `${w}`);
+        }
+      });
+
+      // S’assurer d’un layout fixe
+      clonedCalendar
+        .querySelectorAll<HTMLElement>('.fc-scrollgrid, .fc-scrollgrid-sync-table, .fc-col-header, .fc-daygrid-body')
+        .forEach(el => {
+          el.style.tableLayout = 'fixed';
+        });
+
+      // (B) Figer les scrollers pour conserver la place de la scrollbar
+      const clonedScrollers = clonedCalendar.querySelectorAll<HTMLElement>('.fc-scroller');
+      clonedScrollers.forEach((el, idx) => {
+        const dims = scrollerDims[idx];
+        if (dims) {
+          el.style.overflow = 'hidden';
+          el.style.width = `${dims.width}px`;
+          el.style.maxWidth = `${dims.width}px`;
+          el.style.height = `${dims.height}px`;
+          el.style.maxHeight = `${dims.height}px`;
+        }
+      });
+
+      // Box-sizing pour stabilité des hauteurs internes
+      clonedCalendar
+        .querySelectorAll<HTMLElement>('.fc-daygrid-day, .fc-daygrid-day-frame, .fc-daygrid-day-events')
+        .forEach(el => {
+          el.style.boxSizing = 'border-box';
+        });
     },
   });
 
+  // ——— ASSEMBLAGE PDF A4 paysage ———
   const imgData = canvas.toDataURL('image/png');
-
-  // Création du PDF au format A4 Paysage
   const pdf = new jsPDF('l', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -199,7 +235,6 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   const canvasHeight = canvas.height;
   const canvasAspectRatio = canvasWidth / canvasHeight;
 
-  // Calcul des dimensions de l'image pour qu'elle s'adapte à la page A4
   let imgWidth = pageWidth;
   let imgHeight = imgWidth / canvasAspectRatio;
 
@@ -208,7 +243,7 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     imgWidth = imgHeight * canvasAspectRatio;
   }
 
-  // Marges fines pour éviter que la bordure touche les bords
+  // Marges fines pour ne pas coller aux bords
   const margin = 5; // mm
   imgWidth = Math.max(0, imgWidth - margin * 2);
   imgHeight = Math.max(0, imgHeight - margin * 2);
@@ -218,4 +253,4 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
   pdf.save(`${fileName}.pdf`);
   return true;
-}; 
+};
