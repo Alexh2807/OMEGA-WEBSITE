@@ -17,6 +17,7 @@ Create a `.env` file at the project root (or configure your deployment platform)
 VITE_SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
 VITE_SUPABASE_ANON_KEY="public-anon-key"
 VITE_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+VITE_SITE_URL="https://your-domain.example" # used for email redirect URLs
 
 # Secrets for Edge Functions
 SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
@@ -37,5 +38,9 @@ Deployment usually consists of building the project and then serving the generat
 
 ## Legal Documents
 
-The site links to OMEGA's [Privacy Policy](./public/privacy-policy.pdf) and [Terms of Use](./public/terms-of-use.pdf) from the footer. Update those documents to match your organisation's legal requirements.
+The site exposes legal pages at the following routes:
+- `Privacy Policy`: `/privacy-policy`
+- `Terms of Use`: `/terms`
+
+If you prefer to serve static PDF files instead, place them in `public/` (e.g. `public/privacy-policy.pdf`, `public/terms-of-use.pdf`) and update footer links accordingly.
 

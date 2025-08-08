@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -10,23 +10,25 @@ import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import HomePage from './pages/HomePage';
-import HazerDetailPage from './pages/HazerDetailPage';
-import ProductsPage from './pages/ProductsPage';
-import ProductDetailPage from './pages/ProductDetailPage';
-import CartPage from './pages/CartPage';
-import AccountPage from './pages/AccountPage';
-import OrdersPage from './pages/OrdersPage';
-import ContactPage from './pages/ContactPage';
-import AuthPage from './pages/AuthPage';
-import AdminPage from './pages/AdminPage';
-import MessagesPage from './pages/MessagesPage';
-import EmailConfirmationPage from './pages/EmailConfirmationPage';
-import SpectaclesPage from './pages/SpectaclesPage';
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
-import TermsPage from './pages/TermsPage';
 import { supabase } from './lib/supabase';
 import toast from 'react-hot-toast';
+
+// Lazy-loaded pages
+const HomePage = lazy(() => import('./pages/HomePage'));
+const HazerDetailPage = lazy(() => import('./pages/HazerDetailPage'));
+const ProductsPage = lazy(() => import('./pages/ProductsPage'));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
+const CartPage = lazy(() => import('./pages/CartPage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const OrdersPage = lazy(() => import('./pages/OrdersPage'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const MessagesPage = lazy(() => import('./pages/MessagesPage'));
+const EmailConfirmationPage = lazy(() => import('./pages/EmailConfirmationPage'));
+const SpectaclesPage = lazy(() => import('./pages/SpectaclesPage'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
 
 // Composant pour gérer le scroll vers le haut
 const ScrollToTop = () => {
@@ -60,16 +62,18 @@ function App() {
         toast.success('🎉 Email confirmé avec succès ! Bienvenue chez OMEGA !');
 
         // Nettoyer l'URL
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname
-        );
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
     };
 
     handleAuthCallback();
   }, []);
+
+  const Fallback = (
+    <div className="pt-24 min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="animate-pulse text-gray-300">Chargement...</div>
+    </div>
+  );
 
   return (
     <AuthProvider>
@@ -78,41 +82,35 @@ function App() {
           <ScrollToTop />
           <div className="min-h-screen">
             <Header />
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/produits" element={<ProductsPage />} />
-              <Route path="/produit/:id" element={<ProductDetailPage />} />
-              <Route path="/machine-hazer" element={<HazerDetailPage />} />
-              <Route path="/panier" element={<CartPage />} />
-              <Route path="/compte" element={<AccountPage />} />
-              <Route path="/commandes" element={<OrdersPage />} />
-              <Route path="/contact" element={<ContactPage />} />
-              <Route path="/mes-messages" element={<MessagesPage />} />
-              <Route path="/connexion" element={<AuthPage mode="login" />} />
-              <Route
-                path="/inscription"
-                element={<AuthPage mode="register" />}
-              />
-              <Route
-                path="/email-confirmation"
-                element={<EmailConfirmationPage />}
-              />
-              <Route path="/admin" element={<AdminPage />} />
-              {/* Placeholder routes */}
-              <Route path="/spectacles" element={<SpectaclesPage />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-              <Route path="/terms" element={<TermsPage />} />
-              <Route
-                path="/machines"
-                element={
-                  <div className="pt-24 min-h-screen bg-black text-white flex items-center justify-center">
-                    <h1 className="text-4xl">
-                      Page Machines - En construction
-                    </h1>
-                  </div>
-                }
-              />
-            </Routes>
+            <Suspense fallback={Fallback}>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/produits" element={<ProductsPage />} />
+                <Route path="/produit/:id" element={<ProductDetailPage />} />
+                <Route path="/machine-hazer" element={<HazerDetailPage />} />
+                <Route path="/panier" element={<CartPage />} />
+                <Route path="/compte" element={<AccountPage />} />
+                <Route path="/commandes" element={<OrdersPage />} />
+                <Route path="/contact" element={<ContactPage />} />
+                <Route path="/mes-messages" element={<MessagesPage />} />
+                <Route path="/connexion" element={<AuthPage mode="login" />} />
+                <Route path="/inscription" element={<AuthPage mode="register" />} />
+                <Route path="/email-confirmation" element={<EmailConfirmationPage />} />
+                <Route path="/admin" element={<AdminPage />} />
+                {/* Placeholder routes */}
+                <Route path="/spectacles" element={<SpectaclesPage />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                <Route path="/terms" element={<TermsPage />} />
+                <Route
+                  path="/machines"
+                  element={
+                    <div className="pt-24 min-h-screen bg-black text-white flex items-center justify-center">
+                      <h1 className="text-4xl">Page Machines - En construction</h1>
+                    </div>
+                  }
+                />
+              </Routes>
+            </Suspense>
             <Footer />
             <Toaster
               position="top-right"
