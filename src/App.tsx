@@ -29,6 +29,7 @@ const EmailConfirmationPage = lazy(() => import('./pages/EmailConfirmationPage')
 const SpectaclesPage = lazy(() => import('./pages/SpectaclesPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 // Composant pour gérer le scroll vers le haut
 const ScrollToTop = () => {
@@ -109,6 +110,7 @@ function App() {
                     </div>
                   }
                 />
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </Suspense>
             <Footer />
