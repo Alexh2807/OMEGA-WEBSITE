@@ -134,6 +134,11 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   // Si c'est le planning, viser le calendrier interne pour éviter les paddings/outils superposés
   const target: HTMLElement = (container.querySelector('.fc') as HTMLElement) || container;
 
+  // S'assurer que les polices web sont chargées avant la capture pour éviter les décalages
+  if ((document as any).fonts && typeof (document as any).fonts.ready?.then === 'function') {
+    try { await (document as any).fonts.ready; } catch {}
+  }
+
   // Mémoriser les dimensions réelles pour un rendu 1:1
   const { scrollWidth, scrollHeight } = target;
 
@@ -163,6 +168,15 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
         style.textRendering = 'geometricPrecision';
         // Forcer la largeur naturelle pour limiter les reflows
         style.width = `${scrollWidth}px`;
+
+        // Éviter les scrollbars internes qui peuvent tronquer ou décaler
+        const scrollers = clonedCalendar.querySelectorAll('.fc-scroller');
+        scrollers.forEach((el: Element) => {
+          const s = (el as HTMLElement).style;
+          s.overflow = 'visible';
+          s.maxHeight = 'none';
+          s.height = 'auto';
+        });
       }
       // Désactiver les animations/transitions susceptibles de déplacer le contenu
       const all = clonedDoc.querySelectorAll('*');

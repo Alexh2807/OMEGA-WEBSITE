@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { exportElementAsPDF } from '../../utils/pdfGenerator';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -198,88 +197,8 @@ const AdminPlanningEditor: React.FC = () => {
   const getButtonClass = (monthValue: number) => `px-3 py-1 text-sm rounded-md ${numberOfMonths === monthValue ? 'bg-blue-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`;
 
   const exportPlanningScreenshot = async (fileName: string) => {
-    try {
-      // Trouver l'élément du calendrier FullCalendar
-      const calendarElement = document.querySelector('.fc') as HTMLElement;
-      if (!calendarElement) {
-        throw new Error('Calendrier non trouvé pour l\'export');
-      }
-
-      // Capturer uniquement le calendrier avec une haute qualité
-      const canvas = await html2canvas(calendarElement, {
-        scale: 2, // Haute résolution
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#111827', // Fond sombre cohérent
-        logging: false,
-        width: calendarElement.scrollWidth,
-        height: calendarElement.scrollHeight,
-        scrollX: 0,
-        scrollY: 0,
-        // Options spécifiques pour préserver le rendu exact
-        foreignObjectRendering: false,
-        removeContainer: false,
-        letterRendering: true,
-        onclone: (clonedDoc) => {
-          // S'assurer que le calendrier cloné garde son apparence
-          const clonedCalendar = clonedDoc.querySelector('.fc') as HTMLElement;
-          if (clonedCalendar) {
-            clonedCalendar.style.transform = 'none';
-            clonedCalendar.style.position = 'static';
-            clonedCalendar.style.overflow = 'visible';
-            
-            // Corriger tous les éléments de texte
-            const textElements = clonedCalendar.querySelectorAll('*');
-            textElements.forEach((el: any) => {
-              if (el.style) {
-                el.style.transform = 'none';
-                el.style.lineHeight = '1.2';
-                el.style.verticalAlign = 'baseline';
-              }
-            });
-          }
-        }
-      });
-
-      // Créer le PDF en format paysage pour mieux accommoder le calendrier
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      // Calculer les dimensions pour que l'image s'adapte à la page
-      const canvasAspectRatio = canvas.width / canvas.height;
-      let imgWidth = pageWidth - 20; // Marges de 10mm de chaque côté
-      let imgHeight = imgWidth / canvasAspectRatio;
-      
-      // Si l'image est trop haute, ajuster selon la hauteur
-      if (imgHeight > pageHeight - 20) {
-        imgHeight = pageHeight - 20;
-        imgWidth = imgHeight * canvasAspectRatio;
-      }
-      
-      // Centrer l'image sur la page
-      const xOffset = (pageWidth - imgWidth) / 2;
-      const yOffset = (pageHeight - imgHeight) / 2;
-      
-      // Ajouter l'image au PDF
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
-      
-      // Ajouter un titre en haut
-      pdf.setFontSize(16);
-      pdf.setTextColor(0, 0, 0);
-      pdf.text('Planning OMEGA - Export', pageWidth / 2, 10, { align: 'center' });
-      
-      // Ajouter la date d'export en bas
-      pdf.setFontSize(10);
-      pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, pageHeight - 5, { align: 'center' });
-      
-      pdf.save(`${fileName}.pdf`);
-      return true;
-    } catch (error) {
-      console.error('Erreur lors de la génération du PDF du planning:', error);
-      throw error;
-    }
+    // Utilise l'utilitaire commun qui normalise les styles et gère l'échelle correctement
+    return exportElementAsPDF('planning-export', fileName);
   };
 
   const tabsConfig = [
