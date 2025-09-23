@@ -26,6 +26,13 @@ import {
   CheckCircle,
   AlertTriangle,
   RefreshCw,
+  Search,
+  Filter,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  Settings,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
@@ -69,72 +76,72 @@ const EnhancedEventContent = ({ eventInfo }: { eventInfo: any }) => {
   const cost = eventInfo.event.extendedProps.cost;
   
   return (
-    <div className="p-1.5 overflow-hidden text-white text-[10px] h-full cursor-pointer group hover:scale-105 transition-transform duration-200">
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className="p-2 overflow-hidden text-white text-xs h-full cursor-pointer group hover:scale-105 transition-transform duration-200 shadow-lg rounded-md">
+      <div className="flex items-center gap-2 mb-1">
         <div
-          className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm"
+          className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
           style={{ backgroundColor: eventInfo.event.backgroundColor }}
         />
-        <b className="truncate block font-semibold">{eventInfo.event.title}</b>
+        <b className="truncate block font-semibold text-sm">{eventInfo.event.title}</b>
       </div>
       
-      <div className="space-y-0.5 pl-4">
+      <div className="space-y-1 pl-5">
         <div className="flex items-center gap-1">
-          <Tag size={8} className="opacity-70" />
-          <span className="truncate italic opacity-90 text-[9px]">{eventType}</span>
+          <Tag size={10} className="opacity-80" />
+          <span className="truncate opacity-90 text-xs">{eventType}</span>
         </div>
         
         <div className="flex items-center gap-1">
-          <Users size={8} className="opacity-70" />
-          <span className="truncate italic opacity-80 text-[9px]">{providers}</span>
+          <Users size={10} className="opacity-80" />
+          <span className="truncate opacity-80 text-xs">{providers}</span>
         </div>
         
         {cost > 0 && (
           <div className="flex items-center gap-1">
-            <Euro size={8} className="opacity-70" />
-            <span className="truncate font-medium text-green-300 text-[9px]">{cost}€</span>
+            <Euro size={10} className="opacity-80" />
+            <span className="truncate font-medium text-green-300 text-xs">{cost}€</span>
           </div>
         )}
       </div>
       
       {/* Indicateur hover */}
-      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded pointer-events-none" />
+      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-md pointer-events-none" />
     </div>
   );
 };
 
 // --- Composant pour les statistiques en temps réel ---
 const LiveStats = ({ stats }: { stats: any }) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
-    <div className="bg-white/5 p-4 rounded-lg border border-white/10 hover:border-blue-400/30 transition-all duration-300">
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
+    <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all duration-300 shadow-lg">
       <div className="flex justify-between items-center">
-        <span className="text-gray-400 text-sm flex items-center gap-2">
-          <CalendarIcon size={16} />
+        <span className="text-blue-300 text-sm flex items-center gap-2">
+          <CalendarDays size={18} />
           Événements affichés
         </span>
-        <span className="text-2xl font-bold text-white">{stats.totalEvents}</span>
+        <span className="text-3xl font-bold text-white">{stats.totalEvents}</span>
       </div>
     </div>
     
-    <div className="bg-white/5 p-4 rounded-lg border border-white/10 hover:border-green-400/30 transition-all duration-300">
+    <div className="bg-gradient-to-br from-green-900/30 to-green-800/20 p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all duration-300 shadow-lg">
       <div className="flex justify-between items-center">
-        <span className="text-gray-400 text-sm flex items-center gap-2">
-          <Euro size={16} />
+        <span className="text-green-300 text-sm flex items-center gap-2">
+          <Euro size={18} />
           Coût Total
         </span>
-        <span className="text-2xl font-bold text-green-400">
+        <span className="text-3xl font-bold text-green-400">
           {stats.totalCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
         </span>
       </div>
     </div>
     
-    <div className="bg-white/5 p-4 rounded-lg border border-white/10 hover:border-purple-400/30 transition-all duration-300">
+    <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all duration-300 shadow-lg">
       <div className="flex justify-between items-center">
-        <span className="text-gray-400 text-sm flex items-center gap-2">
-          <Users size={16} />
+        <span className="text-purple-300 text-sm flex items-center gap-2">
+          <Users size={18} />
           Prestataires actifs
         </span>
-        <span className="text-2xl font-bold text-purple-400">
+        <span className="text-3xl font-bold text-purple-400">
           {stats.activeProviders}
         </span>
       </div>
@@ -155,13 +162,15 @@ const AdminPlanningEditor: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [selectedEventType, setSelectedEventType] = useState('all');
   const [viewRange, setViewRange] = useState<{ start: Date; end: Date } | null>(null);
-  const [numberOfMonths, setNumberOfMonths] = useState(3);
+  const [numberOfMonths, setNumberOfMonths] = useState(2); // Réduit à 2 mois par défaut
   const [multiSelectedDates, setMultiSelectedDates] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; event?: any; date?: string } | null>(null);
   const [optimisticUpdates, setOptimisticUpdates] = useState<Set<string>>(new Set());
   const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const calendarRef = useRef<FullCalendar>(null);
   
   // États des modales
@@ -711,9 +720,15 @@ const AdminPlanningEditor: React.FC = () => {
         event =>
           (selectedProvider === 'all' || event.provider_ids.includes(selectedProvider)) &&
           (selectedLocation === 'all' || event.location_id === selectedLocation) &&
-          (selectedEventType === 'all' || event.location?.event_type_id === selectedEventType)
+          (selectedEventType === 'all' || event.location?.event_type_id === selectedEventType) &&
+          (searchTerm === '' || 
+            event.location?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            event.provider_ids.some(id => 
+              providers.find(p => p.id === id)?.name.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+          )
       ),
-    [events, selectedProvider, selectedLocation, selectedEventType]
+    [events, selectedProvider, selectedLocation, selectedEventType, providers, searchTerm]
   );
 
   const detailedStats = useMemo(() => {
@@ -817,7 +832,7 @@ const AdminPlanningEditor: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
             <CalendarIcon className="text-blue-400" size={32} />
@@ -875,6 +890,120 @@ const AdminPlanningEditor: React.FC = () => {
 
       {activeTab === 'calendar' && (
         <div className="space-y-6">
+          {/* Barre de recherche et filtres */}
+          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Rechercher un événement, un lieu ou un prestataire..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white/5 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all duration-200"
+                />
+              </div>
+              
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white transition-all duration-200"
+              >
+                <Filter size={18} />
+                Filtres
+                <ChevronDown size={16} className={`transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            
+            {showFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/10">
+                <div className="flex items-center gap-2">
+                  <Users className="text-gray-400" size={20} />
+                  <select 
+                    value={selectedProvider} 
+                    onChange={e => setSelectedProvider(e.target.value)} 
+                    className="dark-select w-full transition-all duration-200 hover:border-blue-400/50"
+                  >
+                    <option value="all">Tous les prestataires</option>
+                    {providers.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <MapPin className="text-gray-400" size={20} />
+                  <select 
+                    value={selectedLocation} 
+                    onChange={e => setSelectedLocation(e.target.value)} 
+                    className="dark-select w-full transition-all duration-200 hover:border-green-400/50"
+                  >
+                    <option value="all">Tous les lieux</option>
+                    {locations.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Tag className="text-gray-400" size={20} />
+                  <select 
+                    value={selectedEventType} 
+                    onChange={e => setSelectedEventType(e.target.value)} 
+                    className="dark-select w-full transition-all duration-200 hover:border-purple-400/50"
+                  >
+                    <option value="all">Tous les types</option>
+                    {eventTypes.map(et => (
+                      <option key={et.id} value={et.id}>
+                        {et.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setIsMultiSelectMode(prev => !prev)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
+                    isMultiSelectMode 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' 
+                      : 'bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white'
+                  }`}
+                >
+                  <Layers size={16} />
+                  Sélection Multiple
+                  {isMultiSelectMode && <Zap size={14} className="animate-pulse" />}
+                </button>
+                
+                {multiSelectedDates.length > 0 && (
+                  <div className="flex items-center gap-2 text-blue-400 font-medium">
+                    <CheckCircle size={16} />
+                    {multiSelectedDates.length} date{multiSelectedDates.length > 1 ? 's' : ''} sélectionnée{multiSelectedDates.length > 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-300">Vue:</span>
+                <button onClick={() => setNumberOfMonths(1)} className={getButtonClass(1)}>
+                  1 Mois
+                </button>
+                <button onClick={() => setNumberOfMonths(2)} className={getButtonClass(2)}>
+                  2 Mois
+                </button>
+                <button onClick={() => setNumberOfMonths(3)} className={getButtonClass(3)}>
+                  3 Mois
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Statistiques en temps réel */}
           <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3">
@@ -932,96 +1061,6 @@ const AdminPlanningEditor: React.FC = () => {
                     <p className="text-gray-500 text-xs text-center py-4">Aucun coût enregistré.</p>
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Filtres améliorés */}
-          <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <Users className="text-gray-400" size={20} />
-                <select 
-                  value={selectedProvider} 
-                  onChange={e => setSelectedProvider(e.target.value)} 
-                  className="dark-select w-full transition-all duration-200 hover:border-blue-400/50"
-                >
-                  <option value="all">Tous les prestataires</option>
-                  {providers.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <MapPin className="text-gray-400" size={20} />
-                <select 
-                  value={selectedLocation} 
-                  onChange={e => setSelectedLocation(e.target.value)} 
-                  className="dark-select w-full transition-all duration-200 hover:border-green-400/50"
-                >
-                  <option value="all">Tous les lieux</option>
-                  {locations.map(l => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Tag className="text-gray-400" size={20} />
-                <select 
-                  value={selectedEventType} 
-                  onChange={e => setSelectedEventType(e.target.value)} 
-                  className="dark-select w-full transition-all duration-200 hover:border-purple-400/50"
-                >
-                  <option value="all">Tous les types</option>
-                  {eventTypes.map(et => (
-                    <option key={et.id} value={et.id}>
-                      {et.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div className="flex justify-between items-center mt-6">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setIsMultiSelectMode(prev => !prev)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200 ${
-                    isMultiSelectMode 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' 
-                      : 'bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white'
-                  }`}
-                >
-                  <Layers size={16} />
-                  Sélection Multiple
-                  {isMultiSelectMode && <Zap size={14} className="animate-pulse" />}
-                </button>
-                
-                {multiSelectedDates.length > 0 && (
-                  <div className="flex items-center gap-2 text-blue-400 font-medium">
-                    <CheckCircle size={16} />
-                    {multiSelectedDates.length} date{multiSelectedDates.length > 1 ? 's' : ''} sélectionnée{multiSelectedDates.length > 1 ? 's' : ''}
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-300">Vue:</span>
-                <button onClick={() => setNumberOfMonths(1)} className={getButtonClass(1)}>
-                  1 Mois
-                </button>
-                <button onClick={() => setNumberOfMonths(3)} className={getButtonClass(3)}>
-                  3 Mois
-                </button>
-                <button onClick={() => setNumberOfMonths(6)} className={getButtonClass(6)}>
-                  6 Mois
-                </button>
               </div>
             </div>
           </div>
@@ -1247,7 +1286,7 @@ const AdminPlanningEditor: React.FC = () => {
 
       {activeTab === 'providers' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <Users className="text-blue-400" size={24} />
               Gestion des Prestataires
@@ -1362,7 +1401,7 @@ const AdminPlanningEditor: React.FC = () => {
 
       {activeTab === 'locations' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <MapPin className="text-green-400" size={24} />
               Gestion des Lieux
