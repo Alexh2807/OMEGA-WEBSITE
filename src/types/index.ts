@@ -56,6 +56,15 @@ export interface OrderItem {
   product?: Product;
 }
 
+export interface RecentActivity {
+  type: 'order' | 'user' | 'message';
+  message: string;
+  time: string;
+  icon: any;
+  color: string;
+  timestamp: Date;
+}
+
 export interface Service {
   id: string;
   name: string;
