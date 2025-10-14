@@ -3,6 +3,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { exportElementAsPDF } from '../../utils/pdfGenerator';
+import html2canvas from 'html2canvas';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -317,6 +318,44 @@ const AdminPlanningEditor: React.FC = () => {
     return Object.keys(errors).length === 0;
   }, [eventForm]);
 
+  // --- Détection de conflits d'événements ---
+  const checkEventConflicts = useCallback(async (
+    date: string,
+    locationId: string,
+    providerIds: string[],
+    excludeEventId?: string
+  ): Promise<{ hasConflict: boolean; message?: string }> => {
+    // Vérifier si un événement existe déjà ce jour à ce lieu
+    const sameLocationEvents = events.filter(
+      e => e.event_date === date && e.location_id === locationId && e.id !== excludeEventId
+    );
+
+    if (sameLocationEvents.length > 0) {
+      const location = locations.find(l => l.id === locationId);
+      return {
+        hasConflict: true,
+        message: `⚠️ Un événement existe déjà le ${new Date(date + 'T00:00:00').toLocaleDateString('fr-FR')} à "${location?.name}"`,
+      };
+    }
+
+    // Vérifier si les prestataires sont déjà réservés ce jour
+    const sameDayEvents = events.filter(e => e.event_date === date && e.id !== excludeEventId);
+
+    for (const event of sameDayEvents) {
+      const commonProviders = event.provider_ids.filter(id => providerIds.includes(id));
+      if (commonProviders.length > 0) {
+        const provider = providers.find(p => p.id === commonProviders[0]);
+        const location = locations.find(l => l.id === event.location_id);
+        return {
+          hasConflict: true,
+          message: `⚠️ Le prestataire "${provider?.name}" est déjà réservé le ${new Date(date + 'T00:00:00').toLocaleDateString('fr-FR')} pour "${location?.name}"`,
+        };
+      }
+    }
+
+    return { hasConflict: false };
+  }, [events, locations, providers]);
+
   const validateProviderForm = useCallback(() => {
     const errors: { [key: string]: string } = {};
     if (!providerForm.name.trim()) errors.name = 'Nom requis';
@@ -402,11 +441,24 @@ const AdminPlanningEditor: React.FC = () => {
     if (!validateEventForm()) return;
 
     const eventData = { location_id: eventForm.location_id, provider_ids: eventForm.provider_ids };
-    
+
     await withOptimisticUpdate(
       editingEvent?.id || 'new-event',
       async () => {
         if (editingEvent) {
+          // Vérifier les conflits pour la mise à jour
+          const conflict = await checkEventConflicts(
+            editingEvent.event_date,
+            eventData.location_id,
+            eventData.provider_ids,
+            editingEvent.id
+          );
+
+          if (conflict.hasConflict) {
+            toast.error(conflict.message || 'Conflit détecté');
+            return;
+          }
+
           const success = await handleGenericSubmit(
             supabase.from('planning_events').update(eventData).eq('id', editingEvent.id),
             'Événement mis à jour !'
@@ -414,16 +466,41 @@ const AdminPlanningEditor: React.FC = () => {
           if (success) resetEventForm();
         } else {
           let eventsToInsert: any[] = [];
+          let datesToCheck: string[] = [];
+
           if (selectionInfo) {
             let currentDate = new Date(selectionInfo.start);
             while (currentDate < selectionInfo.end) {
-              eventsToInsert.push({ ...eventData, event_date: toYYYYMMDD(currentDate) });
+              const dateStr = toYYYYMMDD(currentDate);
+              datesToCheck.push(dateStr);
+              eventsToInsert.push({ ...eventData, event_date: dateStr });
               currentDate.setDate(currentDate.getDate() + 1);
             }
           } else if (multiSelectedDates.length > 0) {
+            datesToCheck = [...multiSelectedDates];
             eventsToInsert = multiSelectedDates.map(dateStr => ({ ...eventData, event_date: dateStr }));
           }
-          
+
+          // Vérifier les conflits pour chaque date
+          for (const dateStr of datesToCheck) {
+            const conflict = await checkEventConflicts(
+              dateStr,
+              eventData.location_id,
+              eventData.provider_ids
+            );
+
+            if (conflict.hasConflict) {
+              const confirm = window.confirm(
+                `${conflict.message}\n\nVoulez-vous continuer quand même ?`
+              );
+              if (!confirm) {
+                toast.info('Création annulée');
+                return;
+              }
+              break; // Ne demander qu'une fois
+            }
+          }
+
           if (eventsToInsert.length > 0) {
             const success = await handleGenericSubmit(
               supabase.from('planning_events').insert(eventsToInsert),
@@ -616,71 +693,28 @@ const AdminPlanningEditor: React.FC = () => {
     }
   };
 
-  // --- Export PDF amélioré ---
-  const exportPlanningScreenshot = async (fileName: string) => {
-    const calendarElement = document.querySelector('.fc') as HTMLElement;
-    if (!calendarElement) {
-      throw new Error('Calendrier non trouvé');
-    }
-
-    // Attendre que les polices soient chargées
-    if ((document as any).fonts?.ready) {
-      await (document as any).fonts.ready;
-    }
-
-    const canvas = await html2canvas(calendarElement, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#111827',
-      logging: false,
-      allowTaint: true,
-      onclone: (clonedDoc) => {
-        // Stabiliser les styles pour la capture
-        const clonedCalendar = clonedDoc.querySelector('.fc') as HTMLElement;
-        if (clonedCalendar) {
-          clonedCalendar.style.transform = 'none';
-          clonedCalendar.style.transition = 'none';
-          clonedCalendar.style.animation = 'none';
-        }
-      },
-    });
-
-    // Créer le PDF
-    const imgData = canvas.toDataURL('image/png');
-    const { jsPDF } = await import('jspdf');
-    const pdf = new jsPDF('l', 'mm', 'a4');
-    
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    
-    const availableWidth = pageWidth - (margin * 2);
-    const availableHeight = pageHeight - (margin * 2);
-    
-    const imgAspectRatio = canvas.width / canvas.height;
-    let imgWidth = availableWidth;
-    let imgHeight = imgWidth / imgAspectRatio;
-    
-    if (imgHeight > availableHeight) {
-      imgHeight = availableHeight;
-      imgWidth = imgHeight * imgAspectRatio;
-    }
-    
-    const x = (pageWidth - imgWidth) / 2;
-    const y = (pageHeight - imgHeight) / 2;
-    
-    pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-    pdf.save(`${fileName}.pdf`);
-    return true;
-  };
-
+  // --- Export PDF optimisé ---
   const handleExportPDF = async () => {
     if (isExporting) return;
     setIsExporting(true);
-    const toastId = toast.loading('📸 Capture du planning en cours...');
-    
+    const toastId = toast.loading('📸 Génération du PDF en cours...');
+
     try {
-      await exportPlanningScreenshot(`planning-${toYYYYMMDD(new Date())}`);
+      // Trouver le conteneur du calendrier
+      const calendarContainer = document.querySelector('.calendar-container-enhanced');
+      if (!calendarContainer) {
+        throw new Error('Conteneur du calendrier non trouvé');
+      }
+
+      // Ajouter un ID temporaire pour l'export
+      calendarContainer.id = 'planning-export-target';
+
+      // Utiliser la fonction optimisée de pdfGenerator
+      await exportElementAsPDF('planning-export-target', `planning-${toYYYYMMDD(new Date())}`);
+
+      // Retirer l'ID temporaire
+      calendarContainer.removeAttribute('id');
+
       toast.success('📄 PDF généré avec succès !', { id: toastId });
     } catch (error) {
       console.error(error);

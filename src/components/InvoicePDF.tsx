@@ -1,5 +1,6 @@
 import React from 'react';
 import { Invoice } from '../types/billing';
+import { COMPANY_INFO, getInvoiceLegalFooter } from '../config/legalInfo';
 
 interface InvoicePDFProps {
   invoice: Invoice;
@@ -61,7 +62,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
             className="h-16 mb-4"
           />
           <div className="font-bold text-xl">OMEGA</div>
-          <div className="text-sm text-gray-500">Fabricant français depuis 1996</div>
+          <div className="text-sm text-gray-500">SARL au capital de 1 000 €</div>
+          <div className="text-sm text-gray-500">Fabricant français depuis 2005</div>
         </div>
         <div className="text-right">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">FACTURE</h1>
@@ -85,10 +87,17 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
           <div className="text-sm">
             <div className="font-bold text-md">OMEGA</div>
             <div className="text-gray-600">Société à responsabilité limitée (SARL)</div>
+            <div className="text-gray-600">Capital social : 1 000 €</div>
             <div className="mt-2">
               LOT ARTISANAL COMMUNAL
               <br />
               34290 MONTBLANC
+            </div>
+            <div className="mt-2 text-gray-600">
+              <div><span className="font-semibold">SIRET :</span> 481 088 722 00014</div>
+              <div><span className="font-semibold">RCS :</span> Béziers B 481 088 722</div>
+              <div><span className="font-semibold">N° TVA :</span> FR74481088722</div>
+              <div><span className="font-semibold">APE :</span> 518J</div>
             </div>
           </div>
         </div>
@@ -228,14 +237,23 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
 
       {/* --- Pied de page légal --- */}
       <footer className="border-t border-gray-300 pt-5 text-xs text-gray-500">
+        <div className="mb-3 font-semibold text-gray-700">
+          OMEGA - SARL au capital de 1 000 € - SIRET : 481 088 722 00014 - RCS Béziers B 481 088 722 - N° TVA : FR74481088722
+        </div>
         <p className="mb-2">
-          En cas de vente à un professionnel, pénalités de retard applicables au taux de 3 fois le taux d'intérêt légal et indemnité forfaitaire pour frais de recouvrement de 40€.
+          <span className="font-semibold">Conditions de paiement :</span> Paiement à réception de facture. Escompte pour paiement anticipé : néant.
         </p>
-        <p>
-          Le vendeur reste propriétaire des biens vendus jusqu'au paiement complet de leur prix.
+        <p className="mb-2">
+          <span className="font-semibold">Pénalités de retard :</span> En cas de retard de paiement, seront exigibles, conformément à l'article L. 441-10 du Code de commerce, une indemnité calculée sur la base de trois fois le taux de l'intérêt légal en vigueur ainsi qu'une indemnité forfaitaire pour frais de recouvrement de 40 euros.
         </p>
-        <p className="mt-2">
-          Pour les biens vendus, le consommateur bénéficie de la garantie légale de conformité pour une durée de deux ans à compter de la délivrance du bien (articles L. 217-3 et suivants du code de la consommation).
+        <p className="mb-2">
+          <span className="font-semibold">Clause de réserve de propriété :</span> Le vendeur reste propriétaire des biens vendus jusqu'au paiement complet de leur prix.
+        </p>
+        <p className="mb-2">
+          <span className="font-semibold">Garanties légales :</span> Le consommateur bénéficie de la garantie légale de conformité (articles L. 217-4 à L. 217-14 du Code de la consommation) et de la garantie des vices cachés (articles 1641 à 1649 du Code civil).
+        </p>
+        <p className="text-xs text-gray-400 mt-3">
+          {getInvoiceLegalFooter()}
         </p>
       </footer>
     </div>

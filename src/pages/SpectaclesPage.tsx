@@ -17,6 +17,7 @@ import {
   CheckCircle,
   ArrowRight,
 } from 'lucide-react';
+import PublicPlanningCalendar from '../components/PublicPlanningCalendar';
 
 const SpectaclesPage = () => {
   const features = [
@@ -243,6 +244,11 @@ const SpectaclesPage = () => {
               et mémorable.
             </p>
           </div>
+        </div>
+
+        {/* Planning Public */}
+        <div className="mb-16">
+          <PublicPlanningCalendar />
         </div>
 
         {/* Contact Section */}

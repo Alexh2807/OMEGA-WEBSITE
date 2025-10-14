@@ -185,25 +185,41 @@ const Footer = () => {
                   to="/terms"
                   className="hover:text-blue-400 transition-colors"
                 >
-                  Conditions d'Utilisation
+                  CGV & Mentions Légales
                 </Link>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-gray-400 mb-4 md:mb-0 flex items-center gap-2">
-            © 2024 OMEGA. Créé avec{' '}
-            <Heart className="text-red-500 fill-current" size={16} /> depuis
-            1996
-          </p>
-          <button
-            onClick={scrollToTop}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 rounded-full hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 hover:-translate-y-1"
-          >
-            <ArrowUp size={20} />
-          </button>
+        <div className="border-t border-white/10 pt-8">
+          <div className="text-center text-gray-400 text-xs mb-4">
+            <p className="mb-1">
+              <strong>OMEGA</strong> - SARL au capital de 1 000 € - SIRET : 481 088 722 00014
+            </p>
+            <p className="mb-1">
+              RCS Béziers B 481 088 722 - N° TVA intracommunautaire : FR74481088722
+            </p>
+            <p className="mb-1">
+              Siège social : Lot Artisanal Communal, 34290 MONTBLANC, France
+            </p>
+            <p className="mb-3">
+              Directeur de la publication : Jose HIDALGO
+            </p>
+          </div>
+
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-400 mb-4 md:mb-0 flex items-center gap-2">
+              © 2005-2024 OMEGA. Créé avec{' '}
+              <Heart className="text-red-500 fill-current" size={16} /> depuis 2005
+            </p>
+            <button
+              onClick={scrollToTop}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 rounded-full hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 hover:-translate-y-1"
+            >
+              <ArrowUp size={20} />
+            </button>
+          </div>
         </div>
       </div>
     </footer>

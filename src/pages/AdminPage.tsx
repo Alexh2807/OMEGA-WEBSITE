@@ -9,6 +9,7 @@ import {
   Calendar,
   Settings,
   FileText,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('./admin/AdminDashboard'));
@@ -18,6 +19,7 @@ const AdminOrders = lazy(() => import('./admin/AdminOrders'));
 const AdminPlanningEditor = lazy(() => import('./admin/AdminPlanningEditor'));
 const AdminMessages = lazy(() => import('./admin/AdminMessages'));
 const AdminBilling = lazy(() => import('./admin/AdminBilling'));
+const AdminAccounting = lazy(() => import('./admin/AdminAccounting'));
 
 const AdminPage = () => {
   const { user, isAdmin } = useAuth();
@@ -67,6 +69,7 @@ const AdminPage = () => {
     { id: 'planning', label: 'Planning', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'billing', label: 'Facturation', icon: FileText },
+    { id: 'accounting', label: 'Comptabilité', icon: FileSpreadsheet },
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 
@@ -84,6 +87,8 @@ const AdminPage = () => {
         return <AdminMessages />;
       case 'billing':
         return <AdminBilling />;
+      case 'accounting':
+        return <AdminAccounting />;
       default:
         return <AdminDashboard />;
     }
