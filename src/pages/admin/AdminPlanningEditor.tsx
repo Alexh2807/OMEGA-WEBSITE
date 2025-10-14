@@ -3,7 +3,6 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { exportCalendarAsHTML, previewHTMLExport } from '../../utils/htmlExporter';
-import { printCalendar } from '../../utils/simpleExporter';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -726,34 +725,6 @@ const AdminPlanningEditor: React.FC = () => {
     }
   };
 
-  // --- Impression A4 Portrait (Calendrier complet sans scroll) ---
-  const handlePrint = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-
-    try {
-      const calendarContainer = document.querySelector('.calendar-container-enhanced');
-      if (!calendarContainer) {
-        throw new Error('Conteneur du calendrier non trouvé');
-      }
-
-      calendarContainer.id = 'planning-export-target';
-
-      // Impression native A4 Portrait - Calendrier complet sur une page
-      await printCalendar('planning-export-target');
-
-      calendarContainer.removeAttribute('id');
-
-      toast.success('💡 Choisissez "Enregistrer en PDF" dans la boîte de dialogue pour sauvegarder', {
-        duration: 5000
-      });
-    } catch (error) {
-      console.error(error);
-      toast.error('❌ Échec de l\'impression', { id: 'print-error' });
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   // --- Chargement initial ---
   useEffect(() => {
@@ -924,19 +895,10 @@ const AdminPlanningEditor: React.FC = () => {
             onClick={handleExportHTML}
             disabled={isExporting}
             className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Exporter le calendrier en fichier HTML"
+            title="Exporter le planning pour impression A4 (calendrier complet)"
           >
             {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-            {isExporting ? 'Export...' : 'Export HTML'}
-          </button>
-          <button
-            onClick={handlePrint}
-            disabled={isExporting}
-            className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Imprimer le calendrier (A4 Portrait, fond noir, calendrier complet sans scroll)"
-          >
-            {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-            Imprimer
+            {isExporting ? 'Export...' : 'Export Planning'}
           </button>
         </div>
       </div>
