@@ -2,8 +2,8 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { exportElementAsPDF } from '../../utils/pdfGenerator';
-import html2canvas from 'html2canvas';
+import { exportCalendarAsHTML, previewHTMLExport } from '../../utils/htmlExporter';
+import { printCalendar } from '../../utils/simpleExporter';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -693,32 +693,63 @@ const AdminPlanningEditor: React.FC = () => {
     }
   };
 
-  // --- Export PDF optimisé ---
-  const handleExportPDF = async () => {
+  // --- Export HTML direct (copie exacte sans décalage) ---
+  const handleExportHTML = async () => {
     if (isExporting) return;
     setIsExporting(true);
-    const toastId = toast.loading('📸 Génération du PDF en cours...');
+    const toastId = toast.loading('📄 Génération du fichier HTML...');
 
     try {
-      // Trouver le conteneur du calendrier
       const calendarContainer = document.querySelector('.calendar-container-enhanced');
       if (!calendarContainer) {
         throw new Error('Conteneur du calendrier non trouvé');
       }
 
-      // Ajouter un ID temporaire pour l'export
       calendarContainer.id = 'planning-export-target';
 
-      // Utiliser la fonction optimisée de pdfGenerator
-      await exportElementAsPDF('planning-export-target', `planning-${toYYYYMMDD(new Date())}`);
+      await exportCalendarAsHTML(
+        'planning-export-target',
+        `planning-${toYYYYMMDD(new Date())}`
+      );
 
-      // Retirer l'ID temporaire
       calendarContainer.removeAttribute('id');
 
-      toast.success('📄 PDF généré avec succès !', { id: toastId });
+      toast.success('✅ Fichier HTML exporté ! Ouvrez-le dans votre navigateur.', {
+        id: toastId,
+        duration: 4000
+      });
     } catch (error) {
       console.error(error);
-      toast.error('❌ Échec de la génération PDF', { id: toastId });
+      toast.error('❌ Échec de l\'export HTML', { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // --- Impression A4 Portrait (Calendrier complet sans scroll) ---
+  const handlePrint = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+
+    try {
+      const calendarContainer = document.querySelector('.calendar-container-enhanced');
+      if (!calendarContainer) {
+        throw new Error('Conteneur du calendrier non trouvé');
+      }
+
+      calendarContainer.id = 'planning-export-target';
+
+      // Impression native A4 Portrait - Calendrier complet sur une page
+      await printCalendar('planning-export-target');
+
+      calendarContainer.removeAttribute('id');
+
+      toast.success('💡 Choisissez "Enregistrer en PDF" dans la boîte de dialogue pour sauvegarder', {
+        duration: 5000
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error('❌ Échec de l\'impression', { id: 'print-error' });
     } finally {
       setIsExporting(false);
     }
@@ -890,12 +921,22 @@ const AdminPlanningEditor: React.FC = () => {
             Actualiser
           </button>
           <button
-            onClick={handleExportPDF}
+            onClick={handleExportHTML}
             disabled={isExporting}
-            className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Exporter le calendrier en fichier HTML"
           >
             {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-            {isExporting ? 'Génération...' : 'Export PDF'}
+            {isExporting ? 'Export...' : 'Export HTML'}
+          </button>
+          <button
+            onClick={handlePrint}
+            disabled={isExporting}
+            className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Imprimer le calendrier (A4 Portrait, fond noir, calendrier complet sans scroll)"
+          >
+            {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+            Imprimer
           </button>
         </div>
       </div>
@@ -1166,6 +1207,83 @@ const AdminPlanningEditor: React.FC = () => {
                 box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
               }
               
+              /* Correction complète pour l'alignement des colonnes */
+              .calendar-container-enhanced .fc-scrollgrid {
+                table-layout: fixed !important;
+                width: 100% !important;
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+              }
+              
+              .calendar-container-enhanced .fc-scrollgrid-sync-table {
+                table-layout: fixed !important;
+                width: 100% !important;
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+              }
+              
+              .calendar-container-enhanced .fc-scrollgrid table {
+                table-layout: fixed !important;
+                width: 100% !important;
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+              }
+              
+              .calendar-container-enhanced .fc-col-header {
+                table-layout: fixed !important;
+                width: 100% !important;
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+              }
+              
+              .calendar-container-enhanced .fc-daygrid-body {
+                table-layout: fixed !important;
+                width: 100% !important;
+                border-collapse: separate !important;
+                border-spacing: 0 !important;
+              }
+              
+              /* Forcer les largeurs de colonnes égales */
+              .calendar-container-enhanced .fc-scrollgrid-sync-table col {
+                width: 14.2857% !important;
+              }
+              
+              .calendar-container-enhanced .fc-col-header-cell {
+                width: 14.2857% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                text-align: center !important;
+                vertical-align: middle !important;
+                box-sizing: border-box !important;
+              }
+              
+              .calendar-container-enhanced .fc-daygrid-day {
+                width: 14.2857% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                vertical-align: top !important;
+                box-sizing: border-box !important;
+                position: relative !important;
+              }
+              
+              .calendar-container-enhanced .fc-daygrid-day-frame {
+                min-height: 100px !important;
+                position: relative !important;
+                box-sizing: border-box !important;
+                padding: 8px !important;
+              }
+              
+              /* Correction pour les événements */
+              .calendar-container-enhanced .fc-daygrid-event-harness {
+                position: relative !important;
+                margin-bottom: 2px !important;
+              }
+              
+              .calendar-container-enhanced .fc-daygrid-event {
+                position: relative !important;
+                box-sizing: border-box !important;
+              }
+              
               .fc .fc-toolbar-title {
                 color: #FFFFFF;
                 font-weight: 700;
@@ -1247,6 +1365,18 @@ const AdminPlanningEditor: React.FC = () => {
               
               .fc-h-event .fc-event-main {
                 padding: 3px 6px;
+              }
+              
+              /* Styles pour l'export PDF */
+              @media print {
+                .calendar-container-enhanced .fc-scrollgrid,
+                .calendar-container-enhanced .fc-scrollgrid-sync-table,
+                .calendar-container-enhanced .fc-scrollgrid table,
+                .calendar-container-enhanced .fc-col-header,
+                .calendar-container-enhanced .fc-daygrid-body {
+                  table-layout: fixed !important;
+                  width: 100% !important;
+                }
               }
               
               @keyframes fade-in {
