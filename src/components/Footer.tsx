@@ -37,12 +37,13 @@ const Footer = () => {
             <div className="flex space-x-4">
               {[Facebook, Twitter, Instagram, Linkedin, Github].map(
                 (Icon, index) => (
-                  <a
+                                    <a
                     key={index}
                     href="#"
                     aria-label="Réseau social"
+                    onClick={(e) => e.preventDefault()}
                     className="bg-white/10 hover:bg-gradient-to-r hover:from-blue-500 hover:to-purple-600 hover:text-white p-2 rounded-lg transition-all duration-300 group"
-                 >
+                  >
                     <Icon
                       size={20}
                       className="text-gray-400 group-hover:text-white"
@@ -90,7 +91,7 @@ const Footer = () => {
               </li>
               <li>
                 <Link
-                  to="/machines"
+                  to="/machine-hazer"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Machines Hazer
@@ -112,7 +113,7 @@ const Footer = () => {
               </li>
               <li>
                 <Link
-                  to="/machines"
+                  to="/machine-hazer"
                   className="hover:text-blue-400 transition-colors"
                 >
                   Machines CO²

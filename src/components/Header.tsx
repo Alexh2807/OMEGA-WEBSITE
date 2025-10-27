@@ -142,7 +142,7 @@ const Header = () => {
               Spectacles
             </Link>
             <Link
-              to="/machines"
+              to="/machine-hazer"
               className="text-white hover:text-blue-400 transition-colors duration-300"
             >
               Machines
@@ -321,7 +321,7 @@ const Header = () => {
               Spectacles
             </Link>
             <Link
-              to="/machines"
+              to="/machine-hazer"
               className="text-white hover:text-blue-400 transition-colors duration-300"
             >
               Machines

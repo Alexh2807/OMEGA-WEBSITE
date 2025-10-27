@@ -17,6 +17,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 
 interface Order {
   id: string;
@@ -191,12 +192,12 @@ const OrdersPage = () => {
           <p className="text-gray-400 mb-6">
             Vous n'avez pas encore passé de commande
           </p>
-          <a
-            href="/produits"
+          <Link
+            to="/produits"
             className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
           >
             Découvrir nos produits
-          </a>
+          </Link>
         </div>
       </div>
     );
