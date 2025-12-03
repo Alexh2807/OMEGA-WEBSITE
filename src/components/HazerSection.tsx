@@ -68,8 +68,8 @@ const ProductContent = ({ isVisible, scrollY }: { isVisible: boolean; scrollY: n
 
     {/* Appel à l'action */}
     <div className="space-y-4">
-      <Link to="/machine-hazer" className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-10 py-4 font-bold text-lg hover:shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 group">
-        <span>DÉCOUVRIR</span>
+      <Link to="/smoke-system" className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-10 py-4 font-bold text-lg hover:shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 group">
+        <span>DÉCOUVRIR LA GAMME</span>
         <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
       </Link>
       <p className="text-sm text-gray-500">Demandez une démonstration gratuite dès aujourd'hui.</p>
@@ -111,7 +111,7 @@ const ProductImage = ({ isVisible, scrollY }: { isVisible: boolean; scrollY: num
         }}
       >
         <img
-          src="/HazerCO2remake.png"
+          src="/products/HazerCO2remake.png"
           alt="Machine PRO HAZER CO² OMEGA, un appareil de technologie de brouillard avancé."
           className="w-full h-auto object-contain object-center"
           style={{

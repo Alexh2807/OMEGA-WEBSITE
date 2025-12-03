@@ -56,3 +56,17 @@ select option {
 .react-calendar button {
   padding: 0.5rem;
 }
+
+/* Fix pour les modales - Force le z-index et l'affichage */
+[role="dialog"],
+.modal-backdrop,
+.fixed.inset-0 {
+  position: fixed !important;
+  z-index: 9999 !important;
+  display: flex !important;
+}
+
+/* Assurer que le backdrop est visible */
+.bg-black\/80 {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}

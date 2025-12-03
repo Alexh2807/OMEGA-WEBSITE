@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle, XCircle, Mail, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -102,7 +102,7 @@ const EmailVerificationPage = () => {
 
               {status === 'error' && (
                 <>
-                  <div className="bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-full p-4 w-16 h-16 mx-auto mb-4">
+                  <div className="bg-gradient-to-r from-red-500/20 to-purple-600/20 rounded-full p-4 w-16 h-16 mx-auto mb-4">
                     <XCircle className="text-red-400 w-8 h-8" />
                   </div>
                   <h1 className="text-3xl font-bold text-white mb-2">

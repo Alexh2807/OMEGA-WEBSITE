@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, Scale, ShieldCheck, Info } from 'lucide-react';
 
@@ -18,7 +18,7 @@ const TermsPage = () => {
           {/* MENTIONS LÉGALES */}
           <section className="mb-12">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2 border-b border-white/20 pb-3">
-              <Info className="text-yellow-400" size={28} />
+              <Info className="text-blue-400" size={28} />
               Mentions Légales
             </h2>
             <div className="space-y-4 text-gray-300">
@@ -179,7 +179,7 @@ const TermsPage = () => {
                 <p className="text-sm leading-relaxed mt-2">
                   <strong>Escompte pour paiement anticipé :</strong> Néant.
                 </p>
-                <p className="text-sm leading-relaxed mt-2 text-orange-300">
+                <p className="text-sm leading-relaxed mt-2 text-purple-300">
                   <strong>Pénalités de retard (ventes professionnelles) :</strong>{' '}
                   Conformément à l'article L. 441-10 du Code de commerce, en cas de
                   retard de paiement, le professionnel s'expose à une pénalité calculée
@@ -230,7 +230,7 @@ const TermsPage = () => {
                   Le remboursement sera effectué dans un délai de 14 jours suivant la
                   réception du retour.
                 </p>
-                <p className="text-sm leading-relaxed mt-2 text-yellow-300">
+                <p className="text-sm leading-relaxed mt-2 text-blue-300">
                   <strong>Exception :</strong> Le droit de rétractation ne s'applique pas
                   aux professionnels ni aux produits personnalisés.
                 </p>

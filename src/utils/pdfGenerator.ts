@@ -110,8 +110,201 @@ export const printInvoice = () => {
 };
 
 /**
+ * Crée une version simplifiée du calendrier pour un export PDF parfait
+ */
+const createSimplifiedCalendarForExport = (originalCalendar: HTMLElement): HTMLElement => {
+  // Extraire les données du calendrier original
+  const title = originalCalendar.querySelector('.fc-toolbar-title')?.textContent || 'Planning';
+  const headerCells = Array.from(originalCalendar.querySelectorAll<HTMLTableCellElement>('.fc-col-header-cell'));
+  const dayCells = Array.from(originalCalendar.querySelectorAll<HTMLElement>('.fc-daygrid-day'));
+  const events = Array.from(originalCalendar.querySelectorAll<HTMLElement>('.fc-daygrid-event'));
+
+  // Créer un conteneur pour le calendrier simplifié
+  const container = document.createElement('div');
+  container.style.cssText = `
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+    background: #111827;
+    padding: 20px;
+    border-radius: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #E5E7EB;
+    width: 1200px;
+    box-sizing: border-box;
+  `;
+
+  // Créer l'en-tête
+  const header = document.createElement('div');
+  header.style.cssText = `
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 24px;
+    font-weight: 700;
+    color: #FFFFFF;
+  `;
+  header.textContent = title;
+  container.appendChild(header);
+
+  // Créer la table du calendrier avec une structure plus robuste
+  const table = document.createElement('table');
+  table.style.cssText = `
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: rgba(17, 24, 39, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  `;
+
+  // Créer l'en-tête des jours
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  
+  // Largeur égale pour chaque jour (7 jours)
+  const dayWidth = 100 / 7;
+  
+  headerCells.forEach((cell, index) => {
+    const th = document.createElement('th');
+    th.style.cssText = `
+      width: ${dayWidth}%;
+      padding: 12px 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #9CA3AF;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      text-align: center;
+      letter-spacing: 0.05em;
+    `;
+    th.textContent = cell.textContent?.trim() || '';
+    headerRow.appendChild(th);
+  });
+  
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  // Créer le corps du calendrier
+  const tbody = document.createElement('tbody');
+  
+  // Organiser les jours par semaine en s'assurant que toutes les semaines ont 7 jours
+  const organizedWeeks: HTMLElement[][] = [];
+  let currentWeek: HTMLElement[] = [];
+  
+  dayCells.forEach((dayCell, index) => {
+    currentWeek.push(dayCell);
+    
+    // Si on a 7 jours, créer une semaine
+    if (currentWeek.length === 7) {
+      organizedWeeks.push([...currentWeek]);
+      currentWeek = [];
+    }
+  });
+  
+  // Ajouter la dernière semaine si elle contient des jours
+  if (currentWeek.length > 0) {
+    // Compléter avec des cellules vides si nécessaire
+    while (currentWeek.length < 7) {
+      const emptyCell = document.createElement('div');
+      emptyCell.className = 'fc-daygrid-day empty-day';
+      currentWeek.push(emptyCell);
+    }
+    organizedWeeks.push(currentWeek);
+  }
+
+  // Créer les lignes pour chaque semaine
+  organizedWeeks.forEach(week => {
+    const row = document.createElement('tr');
+    
+    week.forEach(dayCell => {
+      const td = document.createElement('td');
+      const isEmpty = dayCell.classList.contains('empty-day');
+      
+      td.style.cssText = `
+        width: ${dayWidth}%;
+        height: 120px;
+        padding: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        vertical-align: top;
+        position: relative;
+        background: ${!isEmpty && dayCell.classList.contains('fc-day-today') ? 'rgba(59, 130, 246, 0.15)' : 'transparent'};
+      `;
+
+      if (!isEmpty) {
+        // Ajouter le numéro du jour
+        const dayNumber = dayCell.querySelector('.fc-daygrid-day-number');
+        if (dayNumber) {
+          const dayNumDiv = document.createElement('div');
+          dayNumDiv.style.cssText = `
+            font-size: 14px;
+            font-weight: 500;
+            color: #9CA3AF;
+            margin-bottom: 4px;
+          `;
+          dayNumDiv.textContent = dayNumber.textContent?.trim() || '';
+          td.appendChild(dayNumDiv);
+        }
+
+        // Ajouter les événements de ce jour
+        const dayEvents = events.filter(event => {
+          const eventDay = event.closest('.fc-daygrid-day');
+          return eventDay === dayCell;
+        });
+
+        // Limiter le nombre d'événements affichés pour éviter les débordements
+        const maxEvents = 3;
+        dayEvents.slice(0, maxEvents).forEach(event => {
+          const eventDiv = document.createElement('div');
+          const eventTitle = event.querySelector('.fc-event-title')?.textContent || event.textContent?.trim() || '';
+          const eventColor = getComputedStyle(event).backgroundColor || '#3B82F6';
+          
+          eventDiv.style.cssText = `
+            background: ${eventColor};
+            color: white;
+            padding: 2px 6px;
+            margin: 2px 0;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          `;
+          eventDiv.textContent = eventTitle;
+          td.appendChild(eventDiv);
+        });
+
+        // Ajouter un indicateur s'il y a plus d'événements
+        if (dayEvents.length > maxEvents) {
+          const moreDiv = document.createElement('div');
+          moreDiv.style.cssText = `
+            color: #9CA3AF;
+            font-size: 10px;
+            font-style: italic;
+            margin-top: 2px;
+          `;
+          moreDiv.textContent = `+${dayEvents.length - maxEvents} autre${dayEvents.length - maxEvents > 1 ? 's' : ''}`;
+          td.appendChild(moreDiv);
+        }
+      }
+
+      row.appendChild(td);
+    });
+    
+    tbody.appendChild(row);
+  });
+  
+  table.appendChild(tbody);
+  container.appendChild(table);
+
+  return container;
+};
+
+/**
  * Exporte un élément HTML en PDF sur une seule page A4 (paysage).
- * Correction définitive pour FullCalendar : colonnes & scrollers figés.
+ * Solution radicale pour les décalages FullCalendar : reconstruction complète du calendrier.
  */
 export const exportElementAsPDF = async (elementId: string, fileName: string = 'export') => {
   const container = document.getElementById(elementId);
@@ -122,6 +315,9 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   // Si c'est le planning, viser le calendrier interne pour éviter les paddings/outils superposés
   const target: HTMLElement = (container.querySelector('.fc') as HTMLElement) || container;
 
+  // Attendre que tous les éléments soient chargés et rendus
+  await new Promise(resolve => setTimeout(resolve, 800));
+
   // S'assurer que les polices web sont chargées avant la capture pour éviter les décalages
   if ((document as any).fonts && typeof (document as any).fonts.ready?.then === 'function') {
     try {
@@ -129,104 +325,44 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     } catch {}
   }
 
-  // ——— MESURES SUR LE VRAI CALENDRIER ———
-  const { scrollWidth, scrollHeight } = target;
+  // Créer une version simplifiée du calendrier pour l'export
+  const simplifiedCalendar = createSimplifiedCalendarForExport(target);
+  document.body.appendChild(simplifiedCalendar);
 
-  // a) Largeurs des colonnes (colgroup)
-  const colEls = target.querySelectorAll<HTMLTableColElement>('.fc-scrollgrid-sync-table col');
-  const colWidths: number[] = [];
-  colEls.forEach(col => {
-    const w =
-      (col.style.width && col.style.width.endsWith('px'))
-        ? parseFloat(col.style.width)
-        : (col.getBoundingClientRect().width || 0);
-    colWidths.push(Math.max(0, Math.round(w)));
-  });
+  // Attendre que le nouveau calendrier soit rendu et que les styles soient appliqués
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-  // b) Dimensions des scrollers (pour conserver la place de la scrollbar)
-  const scrollerDims: Array<{ idx: number; width: number; height: number }> = [];
-  const scrollers = target.querySelectorAll<HTMLElement>('.fc-scroller');
-  scrollers.forEach((el, idx) => {
-    const r = el.getBoundingClientRect();
-    scrollerDims.push({ idx, width: Math.round(r.width), height: Math.round(r.height) });
-  });
+  // Forcer un reflow pour s'assurer que tout est correctement positionné
+  simplifiedCalendar.style.display = 'none';
+  simplifiedCalendar.offsetHeight; // Trigger reflow
+  simplifiedCalendar.style.display = 'block';
+  await new Promise(resolve => setTimeout(resolve, 200));
 
-  // ——— CAPTURE AVEC INJECTION DANS LE CLONE ———
-  const canvas = await html2canvas(target, {
-    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
+  // ——— CAPTURE DU CALENDRIER SIMPLIFIÉ ———
+  const canvas = await html2canvas(simplifiedCalendar, {
+    scale: 2,
     useCORS: true,
-    backgroundColor: getComputedStyle(document.body).backgroundColor || '#111827',
-    width: scrollWidth,
-    height: scrollHeight,
-    scrollX: 0,
-    scrollY: -window.scrollY,
+    backgroundColor: '#111827',
     logging: false,
     allowTaint: true,
-    windowWidth: Math.max(scrollWidth, document.documentElement.clientWidth),
-    windowHeight: Math.max(scrollHeight, document.documentElement.clientHeight),
-    onclone: clonedDoc => {
-      const clonedContainer = clonedDoc.getElementById(elementId) as HTMLElement | null;
-      const clonedCalendar = (clonedContainer?.querySelector('.fc') as HTMLElement) || clonedContainer;
-      if (!clonedCalendar) return;
-
-      // Neutraliser styles instables
-      const style = clonedCalendar.style as CSSStyleDeclaration & { [key: string]: any };
-      style.transform = 'none';
-      style.boxShadow = 'none';
-      style.backdropFilter = 'none';
-      (style as any)['-webkit-backdrop-filter'] = 'none';
-      style.filter = 'none';
-      style.letterSpacing = 'normal';
-      style.textRendering = 'geometricPrecision';
-      style.width = `${scrollWidth}px`;
-
-      // Couper anim/transition pour éviter reflows
-      clonedDoc.querySelectorAll<HTMLElement>('*').forEach(s => {
-        s.style.animation = 'none';
-        s.style.transition = 'none';
-      });
-
-      // (A) Verrouiller les largeurs des colonnes sur TOUTES les sync-tables
-      const clonedCols = clonedCalendar.querySelectorAll<HTMLTableColElement>('.fc-scrollgrid-sync-table col');
-      clonedCols.forEach((col, i) => {
-        const w = colWidths[i] ?? null;
-        if (w && w > 0) {
-          col.style.width = `${w}px`;
-          col.setAttribute('width', `${w}`);
-        }
-      });
-
-      // S’assurer d’un layout fixe
-      clonedCalendar
-        .querySelectorAll<HTMLElement>('.fc-scrollgrid, .fc-scrollgrid-sync-table, .fc-col-header, .fc-daygrid-body')
-        .forEach(el => {
-          el.style.tableLayout = 'fixed';
-        });
-
-      // (B) Figer les scrollers pour conserver la place de la scrollbar
-      const clonedScrollers = clonedCalendar.querySelectorAll<HTMLElement>('.fc-scroller');
-      clonedScrollers.forEach((el, idx) => {
-        const dims = scrollerDims[idx];
-        if (dims) {
-          el.style.overflow = 'hidden';
-          el.style.width = `${dims.width}px`;
-          el.style.maxWidth = `${dims.width}px`;
-          el.style.height = `${dims.height}px`;
-          el.style.maxHeight = `${dims.height}px`;
-        }
-      });
-
-      // Box-sizing pour stabilité des hauteurs internes
-      clonedCalendar
-        .querySelectorAll<HTMLElement>('.fc-daygrid-day, .fc-daygrid-day-frame, .fc-daygrid-day-events')
-        .forEach(el => {
-          el.style.boxSizing = 'border-box';
-        });
-    },
+    windowWidth: simplifiedCalendar.scrollWidth,
+    windowHeight: simplifiedCalendar.scrollHeight,
+    onclone: (clonedDoc) => {
+      // S'assurer que les styles sont bien appliqués dans le document cloné
+      const clonedCalendar = clonedDoc.querySelector('[style*="position: absolute"]') as HTMLElement;
+      if (clonedCalendar) {
+        clonedCalendar.style.position = 'absolute';
+        clonedCalendar.style.top = '0';
+        clonedCalendar.style.left = '0';
+      }
+    }
   });
 
+  // Nettoyer le calendrier temporaire
+  document.body.removeChild(simplifiedCalendar);
+
   // ——— ASSEMBLAGE PDF A4 paysage ———
-  const imgData = canvas.toDataURL('image/png');
+  const imgData = canvas.toDataURL('image/png', 1.0); // Qualité maximale
   const pdf = new jsPDF('l', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -235,6 +371,7 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
   const canvasHeight = canvas.height;
   const canvasAspectRatio = canvasWidth / canvasHeight;
 
+  // Calculer les dimensions optimales pour préserver l'alignement
   let imgWidth = pageWidth;
   let imgHeight = imgWidth / canvasAspectRatio;
 
@@ -243,14 +380,32 @@ export const exportElementAsPDF = async (elementId: string, fileName: string = '
     imgWidth = imgHeight * canvasAspectRatio;
   }
 
-  // Marges fines pour ne pas coller aux bords
-  const margin = 5; // mm
+  // Marges équilibrées pour un rendu professionnel
+  const margin = 10; // mm
   imgWidth = Math.max(0, imgWidth - margin * 2);
   imgHeight = Math.max(0, imgHeight - margin * 2);
   const xOffset = (pageWidth - imgWidth) / 2;
-  const yOffset = (pageHeight - imgHeight) / 2;
+  const yOffset = (pageHeight - imgHeight) / 2 + 5; // Légèrement décalé vers le bas pour la date
 
-  pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight);
+  // Ajouter un fond léger pour améliorer le contraste
+  pdf.setFillColor(17, 24, 39); // Fond gris foncé correspondant au thème
+  pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  // Ajouter l'image avec une qualité optimale
+  pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight, undefined, 'FAST');
+  
+  // Ajouter un en-tête avec la date d'export
+  pdf.setFontSize(10);
+  pdf.setTextColor(156, 163, 175); // Couleur grise pour le texte secondaire
+  const exportDate = new Date().toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  pdf.text(`Planning exporté le ${exportDate}`, margin, pageHeight - margin);
+
   pdf.save(`${fileName}.pdf`);
   return true;
 };

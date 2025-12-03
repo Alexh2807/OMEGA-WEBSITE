@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Award, Users, TrendingUp, Shield } from 'lucide-react';
 
 const About = () => {
@@ -70,9 +70,9 @@ const About = () => {
             </div>
           </div>
           <div className="relative">
-            <div className="bg-gradient-to-br from-yellow-400/10 to-orange-500/10 backdrop-blur-md rounded-3xl p-8 border border-white/10">
+            <div className="bg-gradient-to-br from-blue-500/10 to-purple-600/10 backdrop-blur-md rounded-3xl p-8 border border-white/10">
               <div className="text-center">
-                <div className="text-6xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent mb-4"></div>
+                <div className="text-6xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent mb-4"></div>
                 <div className="text-6xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent mb-4">
                   25+
                 </div>

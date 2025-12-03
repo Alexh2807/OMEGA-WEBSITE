@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -107,7 +107,7 @@ const OrdersPage = () => {
       case 'cancelled':
         return <XCircle className="text-red-400" size={20} />;
       default:
-        return <Clock className="text-yellow-400" size={20} />;
+        return <Clock className="text-blue-400" size={20} />;
     }
   };
 
@@ -137,7 +137,7 @@ const OrdersPage = () => {
       case 'cancelled':
         return 'text-red-400';
       default:
-        return 'text-yellow-400';
+        return 'text-blue-400';
     }
   };
 
@@ -217,8 +217,8 @@ const OrdersPage = () => {
               <div className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-lg p-3">
-                      <Package className="text-yellow-400" size={24} />
+                    <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-lg p-3">
+                      <Package className="text-blue-400" size={24} />
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-white">
@@ -330,13 +330,13 @@ const OrdersPage = () => {
                   {/* Status Progress Bar */}
                   <div className="mb-6">
                     <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-                      <Truck className="text-yellow-400" size={20} />
+                      <Truck className="text-blue-400" size={20} />
                       Suivi de Commande
                     </h4>
                     <div className="relative">
                       <div className="w-full bg-gray-700 rounded-full h-3">
                         <div
-                          className="h-3 rounded-full transition-all duration-1000 ease-out bg-gradient-to-r from-yellow-400 to-green-500"
+                          className="h-3 rounded-full transition-all duration-1000 ease-out bg-gradient-to-r from-blue-400 to-green-500"
                           style={{
                             width: `${getStatusProgress(order.status)}%`,
                           }}
@@ -344,7 +344,7 @@ const OrdersPage = () => {
                       </div>
                       <div className="flex justify-between mt-3 text-sm">
                         <span
-                          className={`${order.status === 'confirmed' ? 'text-yellow-400 font-semibold' : 'text-gray-400'}`}
+                          className={`${order.status === 'confirmed' ? 'text-blue-400 font-semibold' : 'text-gray-400'}`}
                         >
                           Confirmée
                         </span>
@@ -376,7 +376,7 @@ const OrdersPage = () => {
                   {/* Order Items */}
                   <div className="mb-6">
                     <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-                      <Package className="text-yellow-400" size={20} />
+                      <Package className="text-blue-400" size={20} />
                       Articles Commandés
                     </h4>
                     <div className="space-y-3">

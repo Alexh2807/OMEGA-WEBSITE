@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -20,6 +20,8 @@ import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import ProductReviews from '../components/ProductReviews';
+import ReviewForm from '../components/ReviewForm';
 
 const ProductDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -120,7 +122,7 @@ const ProductDetailPage = () => {
           </h2>
           <Link
             to="/produits"
-            className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-full font-semibold"
+            className="bg-gradient-to-r from-blue-500 to-purple-600 text-black px-6 py-3 rounded-full font-semibold"
           >
             Retour aux produits
           </Link>
@@ -146,20 +148,20 @@ const ProductDetailPage = () => {
         {/* Breadcrumb */}
         <div className="mb-8">
           <div className="flex items-center gap-2 text-gray-400 text-sm">
-            <Link to="/" className="hover:text-yellow-400 transition-colors">
+            <Link to="/" className="hover:text-blue-400 transition-colors">
               Accueil
             </Link>
             <span>/</span>
             <Link
               to="/produits"
-              className="hover:text-yellow-400 transition-colors"
+              className="hover:text-blue-400 transition-colors"
             >
               Produits
             </Link>
             <span>/</span>
             <Link
               to={`/produits?category=${product.category_id}`}
-              className="hover:text-yellow-400 transition-colors"
+              className="hover:text-blue-400 transition-colors"
             >
               {product.category?.name}
             </Link>
@@ -168,7 +170,7 @@ const ProductDetailPage = () => {
           </div>
           <Link
             to="/produits"
-            className="flex items-center gap-2 text-gray-400 hover:text-yellow-400 transition-colors w-fit mt-2"
+            className="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition-colors w-fit mt-2"
           >
             <ArrowLeft size={20} />
             Retour aux produits
@@ -220,7 +222,7 @@ const ProductDetailPage = () => {
                     onClick={() => setSelectedImageIndex(index)}
                     className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
                       selectedImageIndex === index
-                        ? 'border-yellow-400'
+                        ? 'border-blue-400'
                         : 'border-white/20'
                     }`}
                   >
@@ -321,7 +323,7 @@ const ProductDetailPage = () => {
                             key={key}
                             className="bg-white/5 rounded-lg p-3 border border-white/10"
                           >
-                            <div className="text-yellow-400 font-semibold text-sm mb-1 capitalize">
+                            <div className="text-blue-400 font-semibold text-sm mb-1 capitalize">
                               {key.replace(/_/g, ' ')}
                             </div>
                             <div className="text-white font-medium">
@@ -459,6 +461,15 @@ const ProductDetailPage = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Reviews Section */}
+        <div className="container mx-auto px-6 pb-12 space-y-8">
+          <ProductReviews productId={product.id} />
+          <ReviewForm
+            productId={product.id}
+            onReviewSubmitted={() => window.location.reload()}
+          />
         </div>
       </div>
     </div>

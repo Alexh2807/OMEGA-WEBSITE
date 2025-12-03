@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { exportCalendarAsHTML, previewHTMLExport } from '../../utils/htmlExporter';
+import { exportCalendarAsGrid } from '../../utils/calendarExporter';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import Modal from '../../components/Modal';
 
 // --- Interfaces de types ---
 interface Provider {
@@ -309,6 +310,20 @@ const AdminPlanningEditor: React.FC = () => {
   }, [viewRange, loadEvents, loadProviders, loadLocations]);
 
   // --- Validation en temps réel ---
+  // Version qui valide SANS modifier l'état (pour disabled)
+  const isEventFormValid = useMemo(() => {
+    return eventForm.location_id !== '' && eventForm.provider_ids.length > 0;
+  }, [eventForm]);
+
+  const isProviderFormValid = useMemo(() => {
+    return providerForm.name.trim() !== '';
+  }, [providerForm]);
+
+  const isLocationFormValid = useMemo(() => {
+    return locationForm.name.trim() !== '' && locationForm.event_type_id !== '';
+  }, [locationForm]);
+
+  // Version qui valide ET modifie l'état (pour onChange)
   const validateEventForm = useCallback(() => {
     const errors: { [key: string]: string } = {};
     if (!eventForm.location_id) errors.location = 'Lieu requis';
@@ -584,19 +599,29 @@ const AdminPlanningEditor: React.FC = () => {
 
   // --- Fonctions d'édition ---
   const startEditProvider = (p: Provider) => {
-    const costs = eventTypes.reduce((acc, et) => {
-      acc[et.id] = p.costs?.[et.id]?.toString() || '';
-      return acc;
-    }, {} as { [key: string]: string });
-    setProviderForm({ name: p.name, costs });
-    setEditingProvider(p);
-    setShowProviderModal(true);
+    try {
+      const costs = eventTypes.reduce((acc, et) => {
+        acc[et.id] = p.costs?.[et.id]?.toString() || '';
+        return acc;
+      }, {} as { [key: string]: string });
+      setProviderForm({ name: p.name, costs });
+      setEditingProvider(p);
+      setShowProviderModal(true);
+    } catch (error) {
+      console.error('Erreur lors de l\'édition du prestataire:', error);
+      toast.error('Erreur lors de l\'ouverture du formulaire');
+    }
   };
 
   const startEditLocation = (l: Location) => {
-    setLocationForm({ name: l.name, color: l.color, event_type_id: l.event_type_id || '' });
-    setEditingLocation(l);
-    setShowLocationModal(true);
+    try {
+      setLocationForm({ name: l.name, color: l.color, event_type_id: l.event_type_id || '' });
+      setEditingLocation(l);
+      setShowLocationModal(true);
+    } catch (error) {
+      console.error('Erreur lors de l\'édition du lieu:', error);
+      toast.error('Erreur lors de l\'ouverture du formulaire');
+    }
   };
 
   // --- Gestion du menu contextuel ---
@@ -627,43 +652,58 @@ const AdminPlanningEditor: React.FC = () => {
   };
 
   const handleBulkCreate = () => {
-    if (multiSelectedDates.length > 0) {
-      setEditingEvent(null);
-      setSelectionInfo(null);
-      setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
-      setShowEventModal(true);
+    try {
+      if (multiSelectedDates.length > 0) {
+        setEditingEvent(null);
+        setSelectionInfo(null);
+        setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
+        setShowEventModal(true);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création groupée:', error);
+      toast.error('Erreur lors de l\'ouverture du formulaire');
     }
   };
 
   const handleDatesSet = (arg: any) => setViewRange({ start: arg.start, end: arg.end });
 
   const handleSelect = (selectInfo: any) => {
-    const calendarApi = calendarRef.current?.getApi();
-    if (!calendarApi) return;
-    calendarApi.unselect();
-    
-    if (isMultiSelectMode) {
-      const dateStr = selectInfo.startStr;
-      setMultiSelectedDates(prev => 
-        prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]
-      );
-      return;
+    try {
+      const calendarApi = calendarRef.current?.getApi();
+      if (!calendarApi) return;
+      calendarApi.unselect();
+
+      if (isMultiSelectMode) {
+        const dateStr = selectInfo.startStr;
+        setMultiSelectedDates(prev =>
+          prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]
+        );
+        return;
+      }
+
+      setMultiSelectedDates([]);
+      setEditingEvent(null);
+      setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
+      setSelectionInfo({ start: selectInfo.start, end: selectInfo.end });
+      setShowEventModal(true);
+    } catch (error) {
+      console.error('Erreur lors de la sélection:', error);
+      toast.error('Erreur lors de la sélection de la date');
     }
-    
-    setMultiSelectedDates([]);
-    setEditingEvent(null);
-    setEventForm({ location_id: locations[0]?.id || '', provider_ids: [] });
-    setSelectionInfo({ start: selectInfo.start, end: selectInfo.end });
-    setShowEventModal(true);
   };
 
   const handleEventClick = (clickInfo: any) => {
-    setMultiSelectedDates([]);
-    const event = events.find(e => e.id === clickInfo.event.id);
-    if (event) {
-      setEditingEvent(event);
-      setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids });
-      setShowEventModal(true);
+    try {
+      setMultiSelectedDates([]);
+      const event = events.find(e => e.id === clickInfo.event.id);
+      if (event) {
+        setEditingEvent(event);
+        setEventForm({ location_id: event.location_id, provider_ids: event.provider_ids });
+        setShowEventModal(true);
+      }
+    } catch (error) {
+      console.error('Erreur lors du clic sur l\'événement:', error);
+      toast.error('Erreur lors de l\'ouverture de l\'événement');
     }
   };
 
@@ -692,11 +732,11 @@ const AdminPlanningEditor: React.FC = () => {
     }
   };
 
-  // --- Export HTML direct (copie exacte sans décalage) ---
+  // --- Export HTML en Format Calendrier (optimisé A4 Portrait) ---
   const handleExportHTML = async () => {
     if (isExporting) return;
     setIsExporting(true);
-    const toastId = toast.loading('📄 Génération du fichier HTML...');
+    const toastId = toast.loading('📅 Génération du planning calendrier...');
 
     try {
       const calendarContainer = document.querySelector('.calendar-container-enhanced');
@@ -706,20 +746,20 @@ const AdminPlanningEditor: React.FC = () => {
 
       calendarContainer.id = 'planning-export-target';
 
-      await exportCalendarAsHTML(
+      await exportCalendarAsGrid(
         'planning-export-target',
         `planning-${toYYYYMMDD(new Date())}`
       );
 
       calendarContainer.removeAttribute('id');
 
-      toast.success('✅ Fichier HTML exporté ! Ouvrez-le dans votre navigateur.', {
+      toast.success('✅ Planning exporté ! Ouvrez le fichier HTML et cliquez sur "Imprimer"', {
         id: toastId,
-        duration: 4000
+        duration: 5000
       });
     } catch (error) {
       console.error(error);
-      toast.error('❌ Échec de l\'export HTML', { id: toastId });
+      toast.error('❌ Échec de l\'export', { id: toastId });
     } finally {
       setIsExporting(false);
     }
@@ -1534,9 +1574,18 @@ const AdminPlanningEditor: React.FC = () => {
             </h3>
             <button
               onClick={() => {
-                setEditingLocation(null);
-                setLocationForm({ name: '', color: '#3B82F6', event_type_id: '' });
-                setShowLocationModal(true);
+                try {
+                  console.log('Ouverture modal nouveau lieu...');
+                  console.log('EventTypes:', eventTypes);
+                  console.log('Locations:', locations);
+                  setEditingLocation(null);
+                  setLocationForm({ name: '', color: '#3B82F6', event_type_id: '' });
+                  setShowLocationModal(true);
+                  console.log('Modal lieu ouverte avec succès');
+                } catch (error) {
+                  console.error('ERREUR lors de l\'ouverture du modal lieu:', error);
+                  toast.error('Impossible d\'ouvrir le formulaire de lieu');
+                }
               }}
               className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 flex items-center gap-2"
             >
@@ -1682,27 +1731,18 @@ const AdminPlanningEditor: React.FC = () => {
       )}
 
       {/* Modal événement amélioré */}
-      {showEventModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full transform transition-all duration-300">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <CalendarIcon className="text-blue-400" size={28} />
-                {editingEvent 
-                  ? `Modifier: ${new Date(editingEvent.event_date + 'T00:00:00').toLocaleDateString('fr-FR')}` 
-                  : 'Nouvel événement'
-                }
-              </h3>
-              <button 
-                onClick={resetEventForm} 
-                className="text-gray-400 hover:text-white transition-colors text-2xl hover:rotate-90 duration-300"
-              >
-                ×
-              </button>
-            </div>
-            
-            {/* Informations de création */}
-            {!editingEvent && selectionInfo && (
+      <Modal
+        isOpen={showEventModal}
+        onClose={resetEventForm}
+        title={editingEvent
+          ? `Modifier: ${new Date(editingEvent.event_date + 'T00:00:00').toLocaleDateString('fr-FR')}`
+          : 'Nouvel événement'
+        }
+        icon={<CalendarIcon size={28} />}
+        maxWidth="2xl"
+      >
+        {/* Informations de création */}
+        {!editingEvent && selectionInfo && (
               <div className="text-center text-blue-300 mb-6 bg-gradient-to-r from-blue-500/10 to-purple-500/10 py-3 rounded-lg border border-blue-500/20">
                 <Clock className="inline mr-2" size={16} />
                 Création du {toYYYYMMDD(selectionInfo.start)} au {toYYYYMMDD(new Date(selectionInfo.end.getTime() - 864e5))}
@@ -1734,11 +1774,15 @@ const AdminPlanningEditor: React.FC = () => {
                   }`}
                 >
                   <option value="">Sélectionner un lieu</option>
-                  {locations.map(l => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} ({l.event_type?.name || 'N/A'})
-                    </option>
-                  ))}
+                  {locations && locations.length > 0 ? (
+                    locations.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} ({l.event_type?.name || 'N/A'})
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>Aucun lieu disponible</option>
+                  )}
                 </select>
                 {formErrors.location && (
                   <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
@@ -1756,35 +1800,39 @@ const AdminPlanningEditor: React.FC = () => {
                 <div className={`space-y-3 max-h-48 overflow-y-auto bg-white/5 rounded-lg p-4 border transition-all duration-200 ${
                   formErrors.providers ? 'border-red-400' : 'border-white/20'
                 }`}>
-                  {providers.map(p => (
-                    <label key={p.id} className="flex items-center gap-3 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={eventForm.provider_ids.includes(p.id)}
-                        onChange={e => {
-                          const newIds = e.target.checked
-                            ? [...eventForm.provider_ids, p.id]
-                            : eventForm.provider_ids.filter(id => id !== p.id);
-                          setEventForm({ ...eventForm, provider_ids: newIds });
-                          validateEventForm();
-                        }}
-                        className="w-4 h-4 text-blue-400 bg-white/5 border-white/20 rounded focus:ring-blue-400 transition-all duration-200"
-                      />
-                      <span className="text-white group-hover:text-blue-400 transition-colors">
-                        {p.name}
-                      </span>
-                      {/* Affichage du coût si disponible */}
-                      {eventForm.location_id && (() => {
-                        const location = locations.find(l => l.id === eventForm.location_id);
-                        const cost = location?.event_type_id ? p.costs?.[location.event_type_id] : null;
-                        return cost ? (
-                          <span className="text-green-400 text-sm ml-auto">
-                            {cost}€
-                          </span>
-                        ) : null;
-                      })()}
-                    </label>
-                  ))}
+                  {providers && providers.length > 0 ? (
+                    providers.map(p => (
+                      <label key={p.id} className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={eventForm.provider_ids.includes(p.id)}
+                          onChange={e => {
+                            const newIds = e.target.checked
+                              ? [...eventForm.provider_ids, p.id]
+                              : eventForm.provider_ids.filter(id => id !== p.id);
+                            setEventForm({ ...eventForm, provider_ids: newIds });
+                            validateEventForm();
+                          }}
+                          className="w-4 h-4 text-blue-400 bg-white/5 border-white/20 rounded focus:ring-blue-400 transition-all duration-200"
+                        />
+                        <span className="text-white group-hover:text-blue-400 transition-colors">
+                          {p.name}
+                        </span>
+                        {/* Affichage du coût si disponible */}
+                        {eventForm.location_id && (() => {
+                          const location = locations.find(l => l.id === eventForm.location_id);
+                          const cost = location?.event_type_id ? p.costs?.[location.event_type_id] : null;
+                          return cost ? (
+                            <span className="text-green-400 text-sm ml-auto">
+                              {cost}€
+                            </span>
+                          ) : null;
+                        })()}
+                      </label>
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-sm text-center py-4">Aucun prestataire disponible. Créez-en un d'abord.</p>
+                  )}
                 </div>
                 {formErrors.providers && (
                   <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
@@ -1797,7 +1845,7 @@ const AdminPlanningEditor: React.FC = () => {
               <div className="flex gap-4">
                 <button
                   type="submit"
-                  disabled={!validateEventForm()}
+                  disabled={!isEventFormValid}
                   className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save size={16} />
@@ -1815,28 +1863,17 @@ const AdminPlanningEditor: React.FC = () => {
                 )}
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal prestataire amélioré */}
-      {showProviderModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full max-h-[90vh] overflow-y-auto transform transition-all duration-300">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <Users className="text-blue-400" size={28} />
-                {editingProvider ? 'Modifier prestataire' : 'Nouveau prestataire'}
-              </h3>
-              <button 
-                onClick={resetProviderForm} 
-                className="text-gray-400 hover:text-white transition-colors text-2xl hover:rotate-90 duration-300"
-              >
-                ×
-              </button>
-            </div>
-            
-            <form onSubmit={handleProviderSubmit} className="space-y-6">
+      <Modal
+        isOpen={showProviderModal}
+        onClose={resetProviderForm}
+        title={editingProvider ? 'Modifier prestataire' : 'Nouveau prestataire'}
+        icon={<Users size={28} />}
+        maxWidth="md"
+      >
+        <form onSubmit={handleProviderSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   <User className="inline mr-2" size={16} />
@@ -1869,33 +1906,37 @@ const AdminPlanningEditor: React.FC = () => {
                   Tarifs par type d'événement (€)
                 </label>
                 <div className="space-y-3 bg-white/5 p-4 rounded-lg border border-white/20">
-                  {eventTypes.map(et => (
-                    <div key={et.id} className="grid grid-cols-3 items-center gap-3">
-                      <label htmlFor={`cost-${et.id}`} className="text-sm text-gray-300 col-span-2">
-                        {et.name}
-                      </label>
-                      <input
-                        id={`cost-${et.id}`}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={providerForm.costs[et.id] || ''}
-                        onChange={e => setProviderForm(f => ({ 
-                          ...f, 
-                          costs: { ...f.costs, [et.id]: e.target.value } 
-                        }))}
-                        className="col-span-1 w-full bg-white/10 border border-white/20 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:border-blue-400 text-right transition-all duration-200"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  ))}
+                  {eventTypes && eventTypes.length > 0 ? (
+                    eventTypes.map(et => (
+                      <div key={et.id} className="grid grid-cols-3 items-center gap-3">
+                        <label htmlFor={`cost-${et.id}`} className="text-sm text-gray-300 col-span-2">
+                          {et.name}
+                        </label>
+                        <input
+                          id={`cost-${et.id}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={providerForm.costs[et.id] || ''}
+                          onChange={e => setProviderForm(f => ({
+                            ...f,
+                            costs: { ...f.costs, [et.id]: e.target.value }
+                          }))}
+                          className="col-span-1 w-full bg-white/10 border border-white/20 rounded-md px-3 py-2 text-white placeholder-gray-400 focus:border-blue-400 text-right transition-all duration-200"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-400 text-sm text-center py-4">Aucun type d'événement disponible</p>
+                  )}
                 </div>
               </div>
               
               <div className="flex gap-4">
-                <button 
-                  type="submit" 
-                  disabled={!validateProviderForm()}
+                <button
+                  type="submit"
+                  disabled={!isProviderFormValid}
                   className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingProvider ? 'Mettre à jour' : 'Ajouter'}
@@ -1909,28 +1950,17 @@ const AdminPlanningEditor: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal lieu amélioré */}
-      {showLocationModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full transform transition-all duration-300">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <MapPin className="text-green-400" size={28} />
-                {editingLocation ? 'Modifier le lieu' : 'Nouveau lieu'}
-              </h3>
-              <button 
-                onClick={resetLocationForm} 
-                className="text-gray-400 hover:text-white transition-colors text-2xl hover:rotate-90 duration-300"
-              >
-                ×
-              </button>
-            </div>
-            
-            <form onSubmit={handleLocationSubmit} className="space-y-6">
+      <Modal
+        isOpen={showLocationModal}
+        onClose={resetLocationForm}
+        title={editingLocation ? 'Modifier le lieu' : 'Nouveau lieu'}
+        icon={<MapPin size={28} />}
+        maxWidth="md"
+      >
+        <form onSubmit={handleLocationSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   <MapPin className="inline mr-2" size={16} />
@@ -1974,11 +2004,15 @@ const AdminPlanningEditor: React.FC = () => {
                   }`}
                 >
                   <option value="">Sélectionner un type</option>
-                  {eventTypes.map(et => (
-                    <option key={et.id} value={et.id}>
-                      {et.name}
-                    </option>
-                  ))}
+                  {eventTypes && eventTypes.length > 0 ? (
+                    eventTypes.map(et => (
+                      <option key={et.id} value={et.id}>
+                        {et.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>Aucun type disponible</option>
+                  )}
                 </select>
                 {formErrors.eventType && (
                   <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
@@ -2016,7 +2050,7 @@ const AdminPlanningEditor: React.FC = () => {
               <div className="flex gap-4">
                 <button
                   type="submit"
-                  disabled={!validateLocationForm()}
+                  disabled={!isLocationFormValid}
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-green-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingLocation ? 'Mettre à jour' : 'Ajouter'}
@@ -2030,9 +2064,7 @@ const AdminPlanningEditor: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 };

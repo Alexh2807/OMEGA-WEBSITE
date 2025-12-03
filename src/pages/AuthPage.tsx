@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -206,8 +206,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                   </ol>
                 </div>
 
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
-                  <h4 className="text-yellow-400 font-semibold mb-2">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+                  <h4 className="text-blue-400 font-semibold mb-2">
                     ⚠️ Important
                   </h4>
                   <p className="text-gray-300 text-sm">
@@ -269,7 +269,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                         <input
                           {...register('firstName')}
                           type="text"
-                          className="w-full bg-white/5 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                          className="w-full bg-white/5 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                           placeholder="Votre prénom"
                         />
                       </div>
@@ -286,7 +286,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                       <input
                         {...register('lastName')}
                         type="text"
-                        className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                        className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                         placeholder="Votre nom"
                       />
                       {errors.lastName && (
@@ -355,7 +355,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                           {...register('phone')}
                           type="tel"
                           onChange={handlePhoneChange}
-                          className="w-full bg-white/5 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                          className="w-full bg-white/5 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                           placeholder="6 12 34 56 78"
                         />
                       </div>

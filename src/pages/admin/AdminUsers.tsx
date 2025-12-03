@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -340,7 +340,7 @@ const AdminUsers = () => {
                       </button>
                       <button
                         onClick={() => resetPassword(user.email)}
-                        className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
+                        className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
                         title="Réinitialiser mot de passe"
                       >
                         <Mail size={16} />
@@ -470,7 +470,7 @@ const AdminUsers = () => {
             <div className="flex gap-4 mt-6">
               <button
                 onClick={() => resetPassword(selectedUser.email)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
               >
                 <Mail size={16} />
                 Réinitialiser mot de passe

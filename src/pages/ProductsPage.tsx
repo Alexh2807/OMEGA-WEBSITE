@@ -219,7 +219,7 @@ const ProductsPage = () => {
               return (
                 <div
                   key={product.id}
-                  className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 hover:border-blue-400/30 transition-all duration-300 group"
+                  className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 hover:border-blue-400/30 transition-all duration-300 group flex flex-col h-full"
                 >
                   <div className="relative">
                     <Link to={`/produit/${product.id}`}>
@@ -253,7 +253,7 @@ const ProductsPage = () => {
                     )}
                   </div>
 
-                  <div className="p-6">
+                  <div className="p-6 flex flex-col flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <span className="bg-blue-400/20 text-blue-400 px-2 py-1 rounded-full text-xs font-medium">
                         {product.category?.name || 'Produit'}
@@ -270,16 +270,17 @@ const ProductsPage = () => {
                     </div>
 
                     <Link to={`/produit/${product.id}`}>
-                      <h3 className="text-white font-bold mb-2 hover:text-blue-400 transition-colors line-clamp-2">
+                      <h3 className="text-white font-bold mb-2 hover:text-blue-400 transition-colors line-clamp-2 h-12">
                         {product.name}
                       </h3>
                     </Link>
 
-                    <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+                    <p className="text-gray-400 text-sm mb-4 line-clamp-2 h-10">
                       {product.description}
                     </p>
 
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="mt-auto">
+                      <div className="flex items-center justify-between mb-4">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-blue-400 font-bold text-lg">
@@ -311,23 +312,24 @@ const ProductsPage = () => {
                           {product.stock_quantity} disponible
                           {product.stock_quantity > 1 ? 's' : ''}
                         </div>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex gap-2">
-                      <Link
-                        to={`/produit/${product.id}`}
-                        className="flex-1 bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-colors text-center"
-                      >
-                        Voir
-                      </Link>
-                      <button
-                        onClick={() => handleAddToCart(product)}
-                        disabled={!product.in_stock}
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <ShoppingCart size={16} />
-                      </button>
+                      <div className="flex gap-2">
+                        <Link
+                          to={`/produit/${product.id}`}
+                          className="flex-1 bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-colors text-center"
+                        >
+                          Voir
+                        </Link>
+                        <button
+                          onClick={() => handleAddToCart(product)}
+                          disabled={!product.in_stock}
+                          className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ShoppingCart size={16} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

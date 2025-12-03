@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   ShoppingCart,
@@ -127,7 +127,7 @@ const AdminDashboard = () => {
           message: `Nouveau message de ${m.name}: "${m.subject}"`,
           time: new Date(m.created_at).toLocaleString('fr-FR'),
           icon: MessageSquare,
-          color: 'text-yellow-400',
+          color: 'text-blue-400',
           timestamp: new Date(m.created_at),
         })
       );
@@ -164,7 +164,7 @@ const AdminDashboard = () => {
       value: formattedNetRevenue,
       change: `-${statsData.totalRefunded.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} remboursés`,
       icon: Euro,
-      color: 'from-yellow-500 to-yellow-600',
+      color: 'from-blue-500 to-blue-600',
       isBad: statsData.totalRefunded > 0,
     },
     {
@@ -308,7 +308,7 @@ const AdminDashboard = () => {
             </button>
             <button
               onClick={() => dispatchSwitchTab('messages')}
-              className="bg-yellow-500/20 text-yellow-400 py-3 px-4 rounded-lg shadow hover:bg-yellow-500/30 transition-colors w-full text-left font-semibold flex items-center gap-3"
+              className="bg-blue-500/20 text-blue-400 py-3 px-4 rounded-lg shadow hover:bg-blue-500/30 transition-colors w-full text-left font-semibold flex items-center gap-3"
             >
               <MessageSquare size={20} /> Consulter les Messages
             </button>

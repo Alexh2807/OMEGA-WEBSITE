@@ -36,35 +36,73 @@ const Hero = () => {
         <div className="max-w-4xl mx-auto text-center">
           <div className="flex justify-center mb-6"></div>
 
-          <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-white via-yellow-400 to-orange-500 bg-clip-text text-transparent leading-tight">
+          <div className="mb-6">
             <img
-              src="/Logo-omega-hq-transparent.png"
+              src="/products/Logo-omega-hq-transparent.png"
               alt="OMEGA"
-              className="h-20 mx-auto mb-4"
+              className="h-32 md:h-40 mx-auto"
             />
-          </h1>
+          </div>
 
           <p className="text-2xl text-gray-300 mb-2 font-semibold">
             Depuis 1996
           </p>
           <p className="text-lg text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-            Fabricant français de machines à fumée professionnelles et
-            spécialiste des spectacles événementiels
+            Fabricant français de systèmes professionnels pour spectacles et événements
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
-            <Link
-              to="/machine-hazer"
-              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full text-lg font-semibold hover:shadow-2xl hover:shadow-blue-500/25 transform hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
-            >
-              Découvrir nos Machines
-              <ArrowRight size={20} />
-            </Link>
+          {/* Nos 2 Gammes Phares */}
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-white mb-8">
+              Nos Gammes <span className="text-blue-400">OMEGA</span>
+            </h2>
+            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              {/* Smoke System */}
+              <Link
+                to="/smoke-system"
+                className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 hover:border-blue-400/50 transition-all duration-500 transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/25"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <Sparkles className="text-blue-400" size={32} />
+                  <h3 className="text-2xl font-bold text-white">Smoke System</h3>
+                </div>
+                <p className="text-gray-300 mb-6 leading-relaxed">
+                  Machines à fumée professionnelles de haute qualité. Fabrication française, fiabilité garantie 10 ans.
+                </p>
+                <div className="flex items-center gap-2 text-blue-400 font-semibold group-hover:gap-4 transition-all">
+                  Découvrir la gamme
+                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+
+              {/* Foam System */}
+              <Link
+                to="/fluid-system"
+                className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 hover:border-purple-400/50 transition-all duration-500 transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-purple-500/25"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <Star className="text-purple-400" size={32} />
+                  <h3 className="text-2xl font-bold text-white">Fluid System</h3>
+                </div>
+                <p className="text-gray-300 mb-6 leading-relaxed">
+                  Liquides pour mousse, neige, fumée et flammes, développés en france, alliant performance et qualité.
+                </p>
+                <div className="flex items-center gap-2 text-purple-400 font-semibold group-hover:gap-4 transition-all">
+                  Découvrir la gamme
+                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+            </div>
+          </div>
+
+          {/* CTA Spectacles */}
+          <div className="mt-12">
             <Link
               to="/spectacles"
-              className="border-2 border-blue-400/50 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-blue-500/10 hover:border-blue-400 transition-all duration-300"
+              className="inline-flex items-center gap-2 border-2 border-blue-400/50 text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-blue-500/10 hover:border-blue-400 transition-all duration-300"
             >
-              Nos Spectacles
+              Découvrir nos Spectacles
+              <ArrowRight size={20} />
             </Link>
           </div>
         </div>

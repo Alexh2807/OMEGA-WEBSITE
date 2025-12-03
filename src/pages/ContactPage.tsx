@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Mail,
   Phone,
@@ -99,7 +99,7 @@ const ContactPage = () => {
           <div className="space-y-8">
             <div>
               <h2 className="text-3xl font-bold text-white mb-6">
-                Parlons de Votre <span className="text-yellow-400">Projet</span>
+                Parlons de Votre <span className="text-blue-400">Projet</span>
               </h2>
               <p className="text-gray-400 mb-8 leading-relaxed">
                 Depuis 1996, OMEGA accompagne les professionnels de
@@ -117,7 +117,7 @@ const ContactPage = () => {
                   <div className="text-white font-semibold">Téléphone</div>
                   <a
                     href="tel:+33619918719"
-                    className="text-gray-400 hover:text-yellow-400 transition-colors"
+                    className="text-gray-400 hover:text-blue-400 transition-colors"
                   >
                     +33 6 19 91 87 19
                   </a>
@@ -132,7 +132,7 @@ const ContactPage = () => {
                   <div className="text-white font-semibold">Email</div>
                   <a
                     href="mailto:contact@captivision.fr"
-                    className="text-gray-400 hover:text-yellow-400 transition-colors"
+                    className="text-gray-400 hover:text-blue-400 transition-colors"
                   >
                     contact@captivision.fr
                   </a>
@@ -209,7 +209,7 @@ const ContactPage = () => {
                     name="type"
                     value={formData.type}
                     onChange={handleChange}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none transition-colors"
+                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none transition-colors"
                   >
                     <option value="general">Demande générale</option>
                     <option value="demo">Demande de démonstration</option>
@@ -228,7 +228,7 @@ const ContactPage = () => {
                       required
                       value={formData.name}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="Votre nom"
                     />
                   </div>
@@ -242,7 +242,7 @@ const ContactPage = () => {
                       required
                       value={formData.email}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="votre@email.com"
                     />
                   </div>
@@ -258,7 +258,7 @@ const ContactPage = () => {
                       name="phone"
                       value={formData.phone}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="Votre numéro"
                     />
                   </div>
@@ -271,7 +271,7 @@ const ContactPage = () => {
                       name="company"
                       value={formData.company}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="Nom de votre entreprise"
                     />
                   </div>
@@ -287,7 +287,7 @@ const ContactPage = () => {
                     required
                     value={formData.subject}
                     onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                     placeholder="Sujet de votre demande"
                   />
                 </div>
@@ -302,7 +302,7 @@ const ContactPage = () => {
                     rows={6}
                     value={formData.message}
                     onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors resize-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors resize-none"
                     placeholder="Décrivez votre projet ou votre demande en détail..."
                   ></textarea>
                 </div>

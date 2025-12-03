@@ -22,13 +22,10 @@ const Footer = () => {
           <div>
             <div className="flex items-center gap-3 mb-4">
               <img
-                src="/Logo-omega-hq-transparent.png"
+                src="/products/Logo-omega-hq-transparent.png"
                 alt="OMEGA"
-                className="h-8 w-auto"
+                className="h-12 w-auto"
               />
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
-                OMEGA
-              </span>
             </div>
             <p className="text-gray-400 mb-6 leading-relaxed">
               Spécialiste des spectacles et fabricant de machines à effets

@@ -26,6 +26,7 @@ const CartPage = () => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [showAddressManager, setShowAddressManager] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [checkoutKey, setCheckoutKey] = useState(0); // Pour forcer la re-création du composant
 
   const handleCheckoutClick = () => {
     if (!user) {
@@ -39,6 +40,8 @@ const CartPage = () => {
       return;
     }
 
+    // PROTECTION : Forcer une nouvelle instance du composant Stripe à chaque ouverture
+    setCheckoutKey(prev => prev + 1);
     setShowCheckout(true);
   };
 
@@ -47,6 +50,21 @@ const CartPage = () => {
     const toastId = toast.loading('Finalisation de votre commande...');
 
     try {
+      // Étape 0 : VÉRIFIER SI UNE COMMANDE EXISTE DÉJÀ AVEC CE PAYMENT INTENT
+      const { data: existingOrder } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('stripe_payment_intent_id', paymentIntentId)
+        .maybeSingle();
+
+      if (existingOrder) {
+        console.log('⚠️ Commande déjà créée pour ce paiement:', paymentIntentId);
+        toast.success('Votre commande a déjà été enregistrée !', { id: toastId });
+        await clearCart();
+        navigate('/commandes');
+        return;
+      }
+
       // Étape 1 : Récupérer le token d'authentification de l'utilisateur
       const {
         data: { session },
@@ -222,7 +240,7 @@ const CartPage = () => {
           </h2>
           <Link
             to="/connexion"
-            className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-full font-semibold"
+            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
           >
             Se connecter
           </Link>
@@ -244,7 +262,7 @@ const CartPage = () => {
           </p>
           <Link
             to="/produits"
-            className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-full font-semibold"
+            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
           >
             Voir nos produits
           </Link>
@@ -259,7 +277,7 @@ const CartPage = () => {
         <div className="mb-8">
           <Link
             to="/produits"
-            className="flex items-center gap-2 text-gray-400 hover:text-yellow-400 transition-colors w-fit mb-4"
+            className="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition-colors w-fit mb-4"
           >
             <ArrowLeft size={20} />
             Continuer mes achats
@@ -303,7 +321,7 @@ const CartPage = () => {
                     <p className="text-gray-400 text-sm mb-3">
                       {item.product?.description}
                     </p>
-                    <div className="text-yellow-400 font-bold text-lg">
+                    <div className="text-blue-400 font-bold text-lg">
                       {getItemPrice(item).toFixed(2)}€ {totals.label}
                     </div>
                   </div>
@@ -314,7 +332,7 @@ const CartPage = () => {
                         onClick={() =>
                           updateQuantity(item.product_id, item.quantity - 1)
                         }
-                        className="text-white hover:text-yellow-400 transition-colors"
+                        className="text-white hover:text-blue-400 transition-colors"
                       >
                         <Minus size={16} />
                       </button>
@@ -325,7 +343,7 @@ const CartPage = () => {
                         onClick={() =>
                           updateQuantity(item.product_id, item.quantity + 1)
                         }
-                        className="text-white hover:text-yellow-400 transition-colors"
+                        className="text-white hover:text-blue-400 transition-colors"
                       >
                         <Plus size={16} />
                       </button>
@@ -433,6 +451,7 @@ const CartPage = () => {
               </div>
 
               <StripeCheckout
+                key={checkoutKey}
                 amount={totals.total}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}

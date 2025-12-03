@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ExternalLink, Github, ArrowRight } from 'lucide-react';
 
 const Portfolio = () => {
@@ -95,7 +95,7 @@ const Portfolio = () => {
               onClick={() => setActiveCategory(category)}
               className={`px-6 py-3 rounded-full transition-all duration-300 ${
                 activeCategory === category
-                  ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-semibold'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-black font-semibold'
                   : 'bg-white/10 text-gray-300 hover:bg-white/20'
               }`}
             >
@@ -109,7 +109,7 @@ const Portfolio = () => {
           {filteredProjects.map(project => (
             <div
               key={project.id}
-              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md border border-white/10 hover:border-yellow-400/30 transition-all duration-500"
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md border border-white/10 hover:border-blue-400/30 transition-all duration-500"
             >
               <div className="relative overflow-hidden">
                 <img
@@ -130,7 +130,7 @@ const Portfolio = () => {
 
               <div className="p-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-yellow-400/20 text-yellow-400 px-3 py-1 rounded-full text-xs font-medium">
+                  <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-medium">
                     {project.category}
                   </span>
                 </div>
@@ -153,7 +153,7 @@ const Portfolio = () => {
                   ))}
                 </div>
 
-                <button className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 transition-colors group/btn">
+                <button className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors group/btn">
                   <span className="text-sm font-medium">Voir le projet</span>
                   <ArrowRight
                     size={16}

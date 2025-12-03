@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Package,
   Plus,
@@ -18,6 +18,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { Product, Category } from '../../types';
 import toast from 'react-hot-toast';
+import { getAllAvailableImages, getCategorizedImages } from '../../utils/imageManager';
 
 const AdminProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -97,14 +98,12 @@ const AdminProducts = () => {
   };
 
   const loadAvailableImages = async () => {
-    // Simuler la récupération des images du dossier public
-    // En production, vous pourriez avoir une API pour lister les fichiers
-    const publicImages = [
-      'Hazer-co2-generated.png',
-      'LiquideProHazer5L.png',
-      'Logo-omega-hq-transparent.png',
-    ];
-    setAvailableImages(publicImages);
+    // Récupération dynamique de toutes les images disponibles
+    // Le système liste automatiquement toutes les images dans /public et /public/products
+    const images = getAllAvailableImages();
+    setAvailableImages(images);
+
+    console.log('Images disponibles chargées:', images.length);
   };
 
   const calculateTTC = (priceHT: number) => {
@@ -389,7 +388,7 @@ const AdminProducts = () => {
                 className="w-full h-48 object-cover"
               />
               {product.is_featured && (
-                <div className="absolute top-2 left-2 bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                <div className="absolute top-2 left-2 bg-blue-500 text-black px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1">
                   <Star size={12} />
                   Vedette
                 </div>
@@ -780,16 +779,20 @@ const AdminProducts = () => {
                   onClick={() => addImageToProduct(image)}
                 >
                   <img
-                    src={`/${image}`}
+                    src={image.startsWith('/') ? image : `/${image}`}
                     alt={image}
                     className="w-full h-32 object-cover rounded-lg border border-white/20 hover:border-green-400 transition-colors"
+                    onError={(e) => {
+                      console.error(`Erreur chargement image: ${image}`);
+                      e.currentTarget.src = 'https://via.placeholder.com/150?text=Image+non+trouvée';
+                    }}
                   />
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                     <Plus className="text-white" size={24} />
                   </div>
                   <div className="absolute bottom-2 left-2 right-2">
                     <div className="bg-black/70 text-white text-xs p-1 rounded truncate">
-                      {image}
+                      {image.split('/').pop()}
                     </div>
                   </div>
                   {formData.images.includes(image) && (

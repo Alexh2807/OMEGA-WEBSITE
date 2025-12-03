@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -77,7 +77,7 @@ const SpectaclesPage = () => {
         <div className="mb-8">
           <Link
             to="/"
-            className="flex items-center gap-2 text-gray-400 hover:text-yellow-400 transition-colors w-fit"
+            className="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition-colors w-fit"
           >
             <ArrowLeft size={20} />
             Retour à l'accueil
@@ -86,7 +86,7 @@ const SpectaclesPage = () => {
 
         {/* Hero Section */}
         <div className="text-center mb-16">
-          <div className="inline-block bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-2 rounded-full mb-6">
+          <div className="inline-block bg-gradient-to-r from-blue-500/20 to-purple-600/20 px-6 py-2 rounded-full mb-6">
             <span className="text-blue-400 font-semibold tracking-wider uppercase text-sm">
               Notre Prestation Populaire
             </span>
@@ -143,7 +143,7 @@ const SpectaclesPage = () => {
                 {features.map((feature, index) => (
                   <div
                     key={index}
-                    className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-xl p-6 border border-white/10 hover:border-yellow-400/30 transition-all duration-300"
+                    className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-xl p-6 border border-white/10 hover:border-blue-400/30 transition-all duration-300"
                   >
                     <div className="flex items-start gap-4">
                       <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-lg p-3 flex-shrink-0">

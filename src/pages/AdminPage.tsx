@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+﻿import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   BarChart3,
@@ -10,6 +10,7 @@ import {
   Settings,
   FileText,
   FileSpreadsheet,
+  Star,
 } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('./admin/AdminDashboard'));
@@ -20,6 +21,8 @@ const AdminPlanningEditor = lazy(() => import('./admin/AdminPlanningEditor'));
 const AdminMessages = lazy(() => import('./admin/AdminMessages'));
 const AdminBilling = lazy(() => import('./admin/AdminBilling'));
 const AdminAccounting = lazy(() => import('./admin/AdminAccounting'));
+const AdminSettings = lazy(() => import('./admin/AdminSettings'));
+const AdminReviews = lazy(() => import('./admin/AdminReviews'));
 
 const AdminPage = () => {
   const { user, isAdmin } = useAuth();
@@ -66,6 +69,7 @@ const AdminPage = () => {
     { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'products', label: 'Produits', icon: Package },
     { id: 'orders', label: 'Commandes', icon: ShoppingCart },
+    { id: 'reviews', label: 'Avis Clients', icon: Star },
     { id: 'planning', label: 'Planning', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'billing', label: 'Facturation', icon: FileText },
@@ -81,6 +85,8 @@ const AdminPage = () => {
         return <AdminProducts />;
       case 'orders':
         return <AdminOrders />;
+      case 'reviews':
+        return <AdminReviews />;
       case 'planning':
         return <AdminPlanningEditor />;
       case 'messages':
@@ -89,6 +95,8 @@ const AdminPage = () => {
         return <AdminBilling />;
       case 'accounting':
         return <AdminAccounting />;
+      case 'settings':
+        return <AdminSettings />;
       default:
         return <AdminDashboard />;
     }
@@ -103,9 +111,9 @@ const AdminPage = () => {
       <div className="container mx-auto px-6 py-12">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-4xl font-bold text-white">Administration OMEGA</h1>
-          <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-4 py-2 rounded-full">
-            <Settings className="text-yellow-400" size={20} />
-            <span className="text-yellow-400 font-semibold">Admin</span>
+          <div className="flex items-center gap-2 bg-gradient-to-r from-blue-500/20 to-purple-600/20 px-4 py-2 rounded-full">
+            <Settings className="text-blue-400" size={20} />
+            <span className="text-blue-400 font-semibold">Admin</span>
           </div>
         </div>
 
@@ -117,7 +125,7 @@ const AdminPage = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${
                 activeTab === tab.id
-                  ? 'text-yellow-400 border-b-2 border-yellow-400'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-gray-400 hover:text-white'
               }`}
             >

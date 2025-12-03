@@ -121,7 +121,7 @@ const Header = () => {
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
             <img
-              src="/Logo-omega-hq-transparent.png"
+              src="/products/Logo-omega-hq-transparent.png"
               alt="OMEGA"
               className="h-12 w-auto"
             />
@@ -136,22 +136,28 @@ const Header = () => {
               Accueil
             </Link>
             <Link
-              to="/spectacles"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              to="/machine-hazer"
+              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
-              Spectacles
+              Smoke System
             </Link>
             <Link
-              to="/machines"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              to="/produit-mousse"
+              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
-              Machines
+              Foam System
             </Link>
             <Link
               to="/produits"
               className="text-white hover:text-blue-400 transition-colors duration-300"
             >
-              Produits
+              Tous les Produits
+            </Link>
+            <Link
+              to="/spectacles"
+              className="text-white hover:text-blue-400 transition-colors duration-300"
+            >
+              Spectacles
             </Link>
             <Link
               to="/contact"
@@ -300,7 +306,7 @@ const Header = () => {
                 onClick={toggleUserType}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   userType === 'pro'
-                    ? 'bg-yellow-400 text-black'
+                    ? 'bg-blue-500 text-white'
                     : 'bg-white/20 text-white'
                 }`}
               >
@@ -315,22 +321,28 @@ const Header = () => {
               Accueil
             </Link>
             <Link
-              to="/spectacles"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              to="/machine-hazer"
+              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
-              Spectacles
+              Smoke System
             </Link>
             <Link
-              to="/machines"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              to="/produit-mousse"
+              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
-              Machines
+              Foam System
             </Link>
             <Link
               to="/produits"
               className="text-white hover:text-blue-400 transition-colors duration-300"
             >
-              Produits
+              Tous les Produits
+            </Link>
+            <Link
+              to="/spectacles"
+              className="text-white hover:text-blue-400 transition-colors duration-300"
+            >
+              Spectacles
             </Link>
             <Link
               to="/contact"

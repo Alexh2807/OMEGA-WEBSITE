@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   ShoppingCart,
   Search,
@@ -212,7 +212,7 @@ const AdminOrders = () => {
       case 'cancelled':
         return <AlertCircle className="text-red-400" size={20} />;
       default:
-        return <Clock className="text-yellow-400" size={20} />;
+        return <Clock className="text-blue-400" size={20} />;
     }
   };
 
@@ -242,7 +242,7 @@ const AdminOrders = () => {
       case 'cancelled':
         return 'text-red-400 bg-red-500/20';
       default:
-        return 'text-yellow-400 bg-yellow-500/20';
+        return 'text-blue-400 bg-blue-500/20';
     }
   };
 
@@ -251,7 +251,7 @@ const AdminOrders = () => {
       case 'urgent':
         return 'text-red-400 bg-red-500/20';
       case 'high':
-        return 'text-orange-400 bg-orange-500/20';
+        return 'text-purple-400 bg-purple-600/20';
       case 'normal':
         return 'text-blue-400 bg-blue-500/20';
       case 'low':
@@ -641,7 +641,7 @@ const AdminOrders = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <ShoppingCart className="text-yellow-400" size={32} />
+            <ShoppingCart className="text-blue-400" size={32} />
             Gestion des Commandes
           </h1>
           <p className="text-gray-400">
@@ -649,7 +649,7 @@ const AdminOrders = () => {
           </p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-yellow-400">
+          <div className="text-2xl font-bold text-blue-400">
             {orders
               .filter(order => order.status !== 'cancelled')
               .reduce((sum, order) => sum + order.total, 0)
@@ -667,7 +667,7 @@ const AdminOrders = () => {
           <div className="text-gray-400 text-sm">Total commandes</div>
         </div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-yellow-400">
+          <div className="text-2xl font-bold text-blue-400">
             {orders.filter(o => o.status === 'pending').length}
           </div>
           <div className="text-gray-400 text-sm">En attente</div>
@@ -699,7 +699,7 @@ const AdminOrders = () => {
               placeholder="Rechercher par ID ou client..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+              className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -707,7 +707,7 @@ const AdminOrders = () => {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+              className="dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
             >
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
@@ -719,7 +719,7 @@ const AdminOrders = () => {
             <select
               value={priorityFilter}
               onChange={e => setPriorityFilter(e.target.value)}
-              className="dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+              className="dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
             >
               <option value="all">Toutes priorités</option>
               <option value="urgent">Urgent</option>
@@ -838,7 +838,7 @@ const AdminOrders = () => {
                           setEditingOrder(order);
                           setShowEditModal(true);
                         }}
-                        className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
+                        className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
                         title="Modifier"
                       >
                         <Edit3 size={16} />
@@ -847,7 +847,7 @@ const AdminOrders = () => {
                       {isRefundable(order) && (
                         <button
                           onClick={() => handleRefund(order)}
-                          className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors"
+                          className="p-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
                           title="Rembourser"
                         >
                           <RotateCcw size={16} />
@@ -1087,7 +1087,7 @@ const AdminOrders = () => {
                     </div>
                     <div className="flex justify-between border-t border-white/20 pt-2 font-semibold">
                       <span className="text-white">Total:</span>
-                      <span className="text-yellow-400 text-lg">
+                      <span className="text-blue-400 text-lg">
                         {selectedOrder.total.toFixed(2)}€
                       </span>
                     </div>
@@ -1105,7 +1105,7 @@ const AdminOrders = () => {
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <RotateCcw className="text-orange-400" size={28} />
+                <RotateCcw className="text-purple-400" size={28} />
                 Remboursement
               </h3>
               <button
@@ -1171,7 +1171,7 @@ const AdminOrders = () => {
                   onChange={e =>
                     setRefundData({ ...refundData, amount: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="0.00"
                 />
                 <p className="text-gray-400 text-xs mt-1">
@@ -1189,7 +1189,7 @@ const AdminOrders = () => {
                   onChange={e =>
                     setRefundData({ ...refundData, reason: e.target.value })
                   }
-                  className="w-full dark-select rounded-lg px-4 py-3 focus:border-orange-400 focus:outline-none"
+                  className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                 >
                   <option value="">Sélectionner une raison</option>
                   <option value="defaut_produit">Défaut produit</option>
@@ -1211,13 +1211,13 @@ const AdminOrders = () => {
                   onChange={e =>
                     setRefundData({ ...refundData, adminNotes: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none resize-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none resize-none"
                   placeholder="Notes internes sur ce remboursement..."
                 />
               </div>
 
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                <h4 className="text-orange-400 font-semibold mb-2">
+              <div className="bg-purple-600/10 border border-purple-600/20 rounded-lg p-4">
+                <h4 className="text-purple-400 font-semibold mb-2">
                   ⚠️ Attention
                 </h4>
                 <p className="text-gray-300 text-sm">
@@ -1230,7 +1230,7 @@ const AdminOrders = () => {
                 <button
                   type="submit"
                   disabled={refundLoading}
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {refundLoading ? (
                     <>
@@ -1354,7 +1354,7 @@ const AdminOrders = () => {
                   <select
                     name="status"
                     defaultValue={editingOrder.status}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                   >
                     <option value="pending">En attente</option>
                     <option value="confirmed">Confirmée</option>
@@ -1370,7 +1370,7 @@ const AdminOrders = () => {
                   <select
                     name="priority"
                     defaultValue={editingOrder.priority}
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                   >
                     <option value="low">Basse</option>
                     <option value="normal">Normale</option>
@@ -1388,7 +1388,7 @@ const AdminOrders = () => {
                   type="url"
                   name="tracking_link"
                   defaultValue={editingOrder.tracking_link || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="https://..."
                 />
               </div>
@@ -1401,7 +1401,7 @@ const AdminOrders = () => {
                   type="date"
                   name="estimated_delivery"
                   defaultValue={editingOrder.estimated_delivery || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none"
                 />
               </div>
 
@@ -1413,7 +1413,7 @@ const AdminOrders = () => {
                   name="admin_notes"
                   rows={4}
                   defaultValue={editingOrder.admin_notes || ''}
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none resize-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none resize-none"
                   placeholder="Notes internes sur cette commande..."
                 />
               </div>
@@ -1421,7 +1421,7 @@ const AdminOrders = () => {
               <div className="flex gap-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-400/25 transition-all duration-300"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
                 >
                   Mettre à jour avec le formulaire
                 </button>

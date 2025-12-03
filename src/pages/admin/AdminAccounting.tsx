@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Download,
   FileText,
@@ -303,9 +303,9 @@ const AdminAccounting = () => {
           <div className="text-gray-300 text-sm">Chiffre d'affaires TTC</div>
         </div>
 
-        <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 backdrop-blur-md rounded-xl p-6 border border-yellow-500/30">
+        <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 backdrop-blur-md rounded-xl p-6 border border-blue-500/30">
           <div className="flex items-center justify-between mb-2">
-            <Receipt className="text-yellow-400" size={28} />
+            <Receipt className="text-blue-400" size={28} />
             <span className="text-2xl font-bold text-white">
               {stats.totalVAT.toFixed(0)}€
             </span>
@@ -383,10 +383,10 @@ const AdminAccounting = () => {
           </div>
 
           {/* Export TVA */}
-          <div className="bg-white/5 rounded-lg p-6 border border-white/10 hover:border-yellow-400/50 transition-all">
+          <div className="bg-white/5 rounded-lg p-6 border border-white/10 hover:border-blue-400/50 transition-all">
             <div className="flex items-start gap-4">
-              <div className="bg-yellow-500/20 p-3 rounded-lg">
-                <Receipt className="text-yellow-400" size={24} />
+              <div className="bg-blue-500/20 p-3 rounded-lg">
+                <Receipt className="text-blue-400" size={24} />
               </div>
               <div className="flex-1">
                 <h3 className="text-white font-semibold mb-2">
@@ -398,7 +398,7 @@ const AdminAccounting = () => {
                 </p>
                 <button
                   onClick={handleExportVATReport}
-                  className="w-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-500/25 transition-all duration-300 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                 >
                   <Download size={18} />
                   Exporter (CSV)

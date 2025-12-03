@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   FileText,
   Plus,
@@ -176,7 +176,7 @@ const AdminBilling = () => {
       case 'cancelled':
         return <AlertCircle className="text-gray-400" size={16} />;
       default:
-        return <Clock className="text-yellow-400" size={16} />;
+        return <Clock className="text-blue-400" size={16} />;
     }
   };
 
@@ -206,7 +206,7 @@ const AdminBilling = () => {
       case 'cancelled':
         return 'text-gray-400 bg-gray-500/20';
       default:
-        return 'text-yellow-400 bg-yellow-500/20';
+        return 'text-blue-400 bg-blue-500/20';
     }
   };
 
@@ -599,7 +599,7 @@ const AdminBilling = () => {
           <div className="text-gray-400 text-sm">Envoyées</div>
         </div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-yellow-400">
+          <div className="text-2xl font-bold text-blue-400">
             {invoices.filter(i => i.status === 'draft').length}
           </div>
           <div className="text-gray-400 text-sm">Brouillons</div>
@@ -823,7 +823,7 @@ const AdminBilling = () => {
                         {isRefundable(invoice) && (
                           <button
                             onClick={() => handleRefund(invoice)}
-                            className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors"
+                            className="p-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
                             title="Rembourser"
                           >
                             <RotateCcw size={16} />
@@ -876,7 +876,7 @@ const AdminBilling = () => {
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                <RotateCcw className="text-orange-400" size={28} />
+                <RotateCcw className="text-purple-400" size={28} />
                 Remboursement
               </h3>
               <button
@@ -938,7 +938,7 @@ const AdminBilling = () => {
                   onChange={e =>
                     setRefundData({ ...refundData, amount: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="0.00"
                 />
                 <p className="text-gray-400 text-xs mt-1">
@@ -956,7 +956,7 @@ const AdminBilling = () => {
                   onChange={e =>
                     setRefundData({ ...refundData, reason: e.target.value })
                   }
-                  className="w-full dark-select rounded-lg px-4 py-3 focus:border-orange-400 focus:outline-none"
+                  className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                 >
                   <option value="">Sélectionner une raison</option>
                   <option value="defaut_produit">Défaut produit</option>
@@ -981,13 +981,13 @@ const AdminBilling = () => {
                       adminNotes: e.target.value,
                     })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none resize-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none resize-none"
                   placeholder="Notes internes sur ce remboursement..."
                 />
               </div>
 
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                <h4 className="text-orange-400 font-semibold mb-2">
+              <div className="bg-purple-600/10 border border-purple-600/20 rounded-lg p-4">
+                <h4 className="text-purple-400 font-semibold mb-2">
                   ⚠️ Attention
                 </h4>
                 <p className="text-gray-300 text-sm">
@@ -1001,7 +1001,7 @@ const AdminBilling = () => {
                 <button
                   type="submit"
                   disabled={refundLoading}
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {refundLoading ? (
                     <>

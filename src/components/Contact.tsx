@@ -1,21 +1,70 @@
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Send, CheckCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const Contact = () => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     company: '',
     budget: '',
+    subject: '',
     message: '',
   });
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate form submission
-    setIsSubmitted(true);
-    setTimeout(() => setIsSubmitted(false), 3000);
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase.from('contact_requests').insert({
+        user_id: user?.id || null,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || null,
+        company: formData.company || null,
+        subject: formData.subject || `Demande de contact - Budget: ${formData.budget || 'Non spécifié'}`,
+        message: formData.message,
+        type: 'quote',
+        status: 'pending',
+        read_by_user: false,
+        source: 'website',
+        priority: 'normal',
+      });
+
+      if (error) {
+        console.error('Erreur insertion contact:', error);
+        toast.error('Erreur lors de l\'envoi du message');
+      } else {
+        setIsSubmitted(true);
+        toast.success('Message envoyé avec succès !');
+
+        // Réinitialiser le formulaire après 3 secondes
+        setTimeout(() => {
+          setFormData({
+            name: '',
+            email: '',
+            phone: '',
+            company: '',
+            budget: '',
+            subject: '',
+            message: '',
+          });
+          setIsSubmitted(false);
+        }, 3000);
+      }
+    } catch (err) {
+      console.error('Erreur inattendue:', err);
+      toast.error('Une erreur est survenue');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (
@@ -47,7 +96,7 @@ const Contact = () => {
           <div className="space-y-8">
             <div>
               <h3 className="text-3xl font-bold text-white mb-6">
-                Parlons de Votre <span className="text-yellow-400">Vision</span>
+                Parlons de Votre <span className="text-blue-400">Vision</span>
               </h3>
               <p className="text-gray-400 mb-8 leading-relaxed">
                 Notre équipe d'experts est à votre disposition pour comprendre
@@ -58,35 +107,35 @@ const Contact = () => {
 
             <div className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-xl p-3">
-                  <Mail className="text-yellow-400" size={24} />
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-xl p-3">
+                  <Mail className="text-blue-400" size={24} />
                 </div>
                 <div>
                   <div className="text-white font-semibold">Email</div>
                   <div className="text-gray-400">
-                    contact@premium-agency.com
+                    contact@captivision.fr
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-xl p-3">
-                  <Phone className="text-yellow-400" size={24} />
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-xl p-3">
+                  <Phone className="text-blue-400" size={24} />
                 </div>
                 <div>
                   <div className="text-white font-semibold">Téléphone</div>
-                  <div className="text-gray-400">+33 1 23 45 67 89</div>
+                  <div className="text-gray-400">06 19 91 87 19</div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-xl p-3">
-                  <MapPin className="text-yellow-400" size={24} />
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-xl p-3">
+                  <MapPin className="text-blue-400" size={24} />
                 </div>
                 <div>
                   <div className="text-white font-semibold">Adresse</div>
                   <div className="text-gray-400">
-                    123 Avenue des Champs-Élysées, Paris
+                    Lot Artisanal Communal, 34290 MONTBLANC
                   </div>
                 </div>
               </div>
@@ -143,7 +192,7 @@ const Contact = () => {
                       required
                       value={formData.name}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="Votre nom"
                     />
                   </div>
@@ -157,13 +206,26 @@ const Contact = () => {
                       required
                       value={formData.email}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="votre@email.com"
                     />
                   </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Téléphone
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
+                      placeholder="06 12 34 56 78"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Entreprise
@@ -173,25 +235,42 @@ const Contact = () => {
                       name="company"
                       value={formData.company}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
                       placeholder="Nom de votre entreprise"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Sujet
+                    </label>
+                    <input
+                      type="text"
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleChange}
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors"
+                      placeholder="Sujet de votre demande"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Budget
+                      Budget estimé
                     </label>
                     <select
                       name="budget"
                       value={formData.budget}
                       onChange={handleChange}
-                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none transition-colors"
+                      className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-blue-400 focus:outline-none transition-colors"
                     >
                       <option value="">Sélectionner un budget</option>
+                      <option value="1k-3k">1 000€ - 3 000€</option>
+                      <option value="3k-5k">3 000€ - 5 000€</option>
                       <option value="5k-10k">5 000€ - 10 000€</option>
-                      <option value="10k-25k">10 000€ - 25 000€</option>
-                      <option value="25k-50k">25 000€ - 50 000€</option>
-                      <option value="50k+">50 000€+</option>
+                      <option value="10k-20k">10 000€ - 20 000€</option>
+                      <option value="20k+">20 000€+</option>
                     </select>
                   </div>
                 </div>
@@ -206,17 +285,18 @@ const Contact = () => {
                     rows={6}
                     value={formData.message}
                     onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-colors resize-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-colors resize-none"
                     placeholder="Décrivez votre projet en détail..."
                   ></textarea>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black py-4 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={20} />
-                  Envoyer le Message
+                  {isSubmitting ? 'Envoi en cours...' : 'Envoyer le Message'}
                 </button>
               </form>
             )}

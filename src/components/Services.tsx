@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
   Music,
   Zap,
@@ -85,9 +85,9 @@ const Services = () => {
               to={service.link}
               className="group relative block"
             >
-              <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-8 border border-white/10 hover:border-yellow-400/30 transition-all duration-500 hover:transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-yellow-400/10">
-                <div className="bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-xl p-4 w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
-                  <service.icon className="text-yellow-400" size={32} />
+              <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-8 border border-white/10 hover:border-blue-400/30 transition-all duration-500 hover:transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/10">
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-xl p-4 w-fit mb-6 group-hover:scale-110 transition-transform duration-300">
+                  <service.icon className="text-blue-400" size={32} />
                 </div>
 
                 <h3 className="text-2xl font-bold text-white mb-4">
@@ -100,13 +100,13 @@ const Services = () => {
                 <div className="space-y-2">
                   {service.features.map((feature, idx) => (
                     <div key={idx} className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full"></div>
+                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                       <span className="text-gray-300 text-sm">{feature}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="absolute inset-0 bg-gradient-to-br from-yellow-400/5 to-orange-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-600/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               </div>
             </Link>
           ))}

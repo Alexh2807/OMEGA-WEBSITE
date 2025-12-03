@@ -16,6 +16,13 @@ import toast from 'react-hot-toast';
 // Lazy-loaded pages
 const HomePage = lazy(() => import('./pages/HomePage'));
 const HazerDetailPage = lazy(() => import('./pages/HazerDetailPage'));
+const MousseDetailPage = lazy(() => import('./pages/MousseDetailPage'));
+const SmokeSystemPage = lazy(() => import('./pages/SmokeSystemPage'));
+const Smoke700DetailPage = lazy(() => import('./pages/Smoke700DetailPage'));
+const FluidSystemPage = lazy(() => import('./pages/FluidSystemPage'));
+const NeigeDetailPage = lazy(() => import('./pages/NeigeDetailPage'));
+const FumeeDetailPage = lazy(() => import('./pages/FumeeDetailPage'));
+const FlammeDetailPage = lazy(() => import('./pages/FlammeDetailPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
 const CartPage = lazy(() => import('./pages/CartPage'));
@@ -88,6 +95,13 @@ function App() {
                 <Route path="/produits" element={<ProductsPage />} />
                 <Route path="/produit/:id" element={<ProductDetailPage />} />
                 <Route path="/machine-hazer" element={<HazerDetailPage />} />
+                <Route path="/smoke-system" element={<SmokeSystemPage />} />
+                <Route path="/smoke-700-detail" element={<Smoke700DetailPage />} />
+                <Route path="/fluid-system" element={<FluidSystemPage />} />
+                <Route path="/neige-detail" element={<NeigeDetailPage />} />
+                <Route path="/fumee-detail" element={<FumeeDetailPage />} />
+                <Route path="/flamme-detail" element={<FlammeDetailPage />} />
+                <Route path="/produit-mousse" element={<MousseDetailPage />} />
                 <Route path="/panier" element={<CartPage />} />
                 <Route path="/compte" element={<AccountPage />} />
                 <Route path="/commandes" element={<OrdersPage />} />

@@ -333,7 +333,7 @@ export const exportElementAsHTML = async (
 
 /**
  * Export spécialisé pour les calendriers FullCalendar
- * Format A4 Portrait - Calendrier complet redimensionné pour impression
+ * Format A4 Portrait - Vue en LISTE optimisée pour impression
  */
 export const exportCalendarAsHTML = async (
   calendarContainerId: string,
@@ -353,12 +353,54 @@ export const exportCalendarAsHTML = async (
     const titleElement = targetElement.querySelector('.fc-toolbar-title');
     const calendarTitle = titleElement ? titleElement.textContent || 'Planning' : 'Planning';
 
-    // Récupérer TOUS les styles CSS
-    const allStyles = getAllStyles();
+    // Extraire tous les événements du calendrier
+    const events: Array<{
+      title: string;
+      date: string;
+      color: string;
+      extendedProps?: any;
+    }> = [];
 
-    // Cloner le calendrier avec son contenu
-    const clonedCalendar = targetElement.cloneNode(true) as HTMLElement;
-    const elementHTML = clonedCalendar.outerHTML;
+    // Récupérer les événements depuis le DOM
+    const eventElements = targetElement.querySelectorAll('.fc-daygrid-event');
+    const seenEvents = new Set<string>(); // Pour éviter les doublons
+
+    eventElements.forEach((eventEl) => {
+      const titleEl = eventEl.querySelector('.fc-event-title, .fc-event-title-container');
+      const title = titleEl?.textContent?.trim() || 'Sans titre';
+
+      // Récupérer la date depuis l'attribut ou le parent
+      const dateAttr = eventEl.getAttribute('data-date') ||
+                      eventEl.closest('.fc-daygrid-day')?.getAttribute('data-date') ||
+                      '';
+
+      // Récupérer la couleur de fond
+      const bgColor = (eventEl as HTMLElement).style.backgroundColor || '#3B82F6';
+
+      // Créer une clé unique pour éviter les doublons
+      const eventKey = `${dateAttr}-${title}`;
+
+      if (dateAttr && !seenEvents.has(eventKey)) {
+        seenEvents.add(eventKey);
+        events.push({
+          title,
+          date: dateAttr,
+          color: bgColor
+        });
+      }
+    });
+
+    // Trier les événements par date
+    events.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Grouper les événements par date
+    const eventsByDate = events.reduce((acc, event) => {
+      if (!acc[event.date]) {
+        acc[event.date] = [];
+      }
+      acc[event.date].push(event);
+      return acc;
+    }, {} as Record<string, typeof events>);
 
     // Date d'export
     const exportDate = new Date().toLocaleString('fr-FR', {
@@ -369,7 +411,38 @@ export const exportCalendarAsHTML = async (
       minute: '2-digit'
     });
 
-    // Construire le document HTML optimisé pour impression A4 Portrait
+    // Formater une date pour l'affichage
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr + 'T12:00:00');
+      return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    };
+
+    // Générer le HTML de la liste des événements
+    const eventsListHTML = Object.entries(eventsByDate).map(([date, dayEvents]) => {
+      const formattedDate = formatDate(date);
+      const eventsHTML = dayEvents.map(event => `
+        <div class="event-item">
+          <div class="event-dot" style="background-color: ${event.color};"></div>
+          <div class="event-title">${event.title}</div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="date-section">
+          <div class="date-header">${formattedDate}</div>
+          <div class="events-list">
+            ${eventsHTML}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Construire le document HTML optimisé pour impression A4 Portrait - VUE LISTE
     const htmlContent = `<!DOCTYPE html>
 <html lang="fr">
 <head>

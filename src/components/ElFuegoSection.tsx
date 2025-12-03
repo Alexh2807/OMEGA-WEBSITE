@@ -138,7 +138,7 @@ const ElFuegoSection = () => {
           <div className="relative">
             <div className="relative">
               <img
-                src="/El-Fuego-Sagrador.png"
+                src="/products/El-Fuego-Sagrador.png"
                 alt="El Fuego Sagrador - Spectacle de feu et lumière OMEGA"
                 className="w-full h-auto object-contain rounded-lg"
                 style={{

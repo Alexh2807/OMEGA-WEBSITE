@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Invoice } from '../types/billing';
 import { COMPANY_INFO, getInvoiceLegalFooter } from '../config/legalInfo';
 
@@ -191,7 +191,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
               </div>
             )}
             {paymentStatus.totalRefunded > 0 && (
-              <div className="flex justify-between mt-1 text-orange-600 font-semibold text-sm">
+              <div className="flex justify-between mt-1 text-purple-600 font-semibold text-sm">
                 <span>Montant Remboursé</span>
                 <span>+ {paymentStatus.totalRefunded.toFixed(2)} €</span>
               </div>
@@ -199,7 +199,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
             <div
               className={`flex justify-between mt-2 font-bold text-lg ${
                 paymentStatus.isRefunded
-                  ? 'text-orange-600'
+                  ? 'text-purple-600'
                   : paymentStatus.isFullyPaid
                     ? 'text-green-600'
                     : 'text-red-600'
@@ -213,8 +213,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
               </span>
             </div>
             {paymentStatus.isRefunded ? (
-              <div className="text-center mt-3 p-2 bg-orange-100 border border-orange-300 rounded">
-                <span className="text-orange-700 font-bold text-sm">
+              <div className="text-center mt-3 p-2 bg-blue-100 border border-blue-300 rounded">
+                <span className="text-purple-700 font-bold text-sm">
                   FACTURE REMBOURSÉE
                 </span>
               </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   MessageSquare,
   Search,
@@ -92,22 +92,48 @@ const AdminMessages = () => {
       if (priority) updateData.priority = priority;
       if (adminResponse) updateData.admin_response = adminResponse;
 
-      const { error } = await supabase
+      console.log('🔍 Tentative de mise à jour:', {
+        messageId,
+        updateData,
+      });
+
+      const { data, error } = await supabase
         .from('contact_requests')
         .update(updateData)
-        .eq('id', messageId);
+        .eq('id', messageId)
+        .select();
+
+      console.log('📊 Résultat de la mise à jour:', { data, error });
 
       if (error) {
-        console.error('Error updating message:', error);
-        toast.error('Erreur lors de la mise à jour');
-      } else {
-        toast.success('Message mis à jour avec succès');
-        loadMessages();
-        setShowReplyModal(false);
-        setReplyText('');
+        console.error('❌ Erreur de mise à jour:', error);
+        toast.error(`Erreur: ${error.message}`);
+        return;
       }
+
+      if (!data || data.length === 0) {
+        console.warn('⚠️ Aucune donnée retournée après la mise à jour');
+        toast.error('Mise à jour échouée - Permissions insuffisantes ?');
+        return;
+      }
+
+      // Mise à jour réussie
+      console.log('✅ Mise à jour réussie:', data[0]);
+      toast.success('Message mis à jour avec succès');
+
+      // Recharger les messages
+      await loadMessages();
+
+      // Si on a envoyé une réponse, mettre à jour le message sélectionné
+      if (adminResponse && data && data.length > 0) {
+        setSelectedMessage(data[0] as ContactRequest);
+      }
+
+      // Fermer la modale de réponse et réinitialiser le texte
+      setShowReplyModal(false);
+      setReplyText('');
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('💥 Erreur inattendue:', err);
       toast.error('Erreur inattendue');
     }
   };
@@ -119,7 +145,7 @@ const AdminMessages = () => {
       case 'in_progress':
         return <Clock className="text-blue-400" size={16} />;
       default:
-        return <AlertCircle className="text-yellow-400" size={16} />;
+        return <AlertCircle className="text-blue-400" size={16} />;
     }
   };
 
@@ -141,7 +167,7 @@ const AdminMessages = () => {
       case 'in_progress':
         return 'text-blue-400 bg-blue-500/20';
       default:
-        return 'text-yellow-400 bg-yellow-500/20';
+        return 'text-blue-400 bg-blue-500/20';
     }
   };
 
@@ -161,7 +187,7 @@ const AdminMessages = () => {
       case 'urgent':
         return 'text-red-400 bg-red-500/20';
       case 'high':
-        return 'text-orange-400 bg-orange-500/20';
+        return 'text-purple-400 bg-purple-600/20';
       case 'normal':
         return 'text-blue-400 bg-blue-500/20';
       case 'low':
@@ -213,7 +239,7 @@ const AdminMessages = () => {
           <div className="text-gray-400 text-sm">Total messages</div>
         </div>
         <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-white/10">
-          <div className="text-2xl font-bold text-yellow-400">
+          <div className="text-2xl font-bold text-blue-400">
             {messages.filter(m => m.status === 'pending').length}
           </div>
           <div className="text-gray-400 text-sm">En attente</div>
@@ -387,11 +413,11 @@ const AdminMessages = () => {
                       onChange={e =>
                         updateMessageStatus(message.id, e.target.value)
                       }
-                      className="dark-select rounded px-2 py-1 text-xs"
+                      className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-400 focus:outline-none transition-colors"
                     >
-                      <option value="pending">En attente</option>
-                      <option value="in_progress">En cours</option>
-                      <option value="resolved">Résolu</option>
+                      <option value="pending" className="bg-gray-800">En attente</option>
+                      <option value="in_progress" className="bg-gray-800">En cours</option>
+                      <option value="resolved" className="bg-gray-800">Résolu</option>
                     </select>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -364,7 +364,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   onChange={e =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="Ex: Domicile, Bureau..."
                 />
               </div>
@@ -381,7 +381,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     onChange={e =>
                       setFormData({ ...formData, first_name: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                     placeholder="Prénom"
                   />
                 </div>
@@ -396,7 +396,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     onChange={e =>
                       setFormData({ ...formData, last_name: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                     placeholder="Nom"
                   />
                 </div>
@@ -412,7 +412,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   onChange={e =>
                     setFormData({ ...formData, company: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="Nom de l'entreprise"
                 />
               </div>
@@ -428,7 +428,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   onChange={e =>
                     setFormData({ ...formData, address_line_1: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="Numéro et nom de rue"
                 />
               </div>
@@ -443,7 +443,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   onChange={e =>
                     setFormData({ ...formData, address_line_2: e.target.value })
                   }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                   placeholder="Appartement, étage, bâtiment..."
                 />
               </div>
@@ -460,7 +460,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     onChange={e =>
                       setFormData({ ...formData, postal_code: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                     placeholder="Code postal"
                   />
                 </div>
@@ -475,7 +475,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     onChange={e =>
                       setFormData({ ...formData, city: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                     placeholder="Ville"
                   />
                 </div>
@@ -492,7 +492,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     onChange={e =>
                       setFormData({ ...formData, country: e.target.value })
                     }
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                   >
                     <option value="France">France</option>
                     <option value="Belgique">Belgique</option>
@@ -510,7 +510,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     onChange={e =>
                       setFormData({ ...formData, phone: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                     placeholder="Numéro de téléphone"
                   />
                 </div>
@@ -524,7 +524,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   onChange={e =>
                     setFormData({ ...formData, is_default: e.target.checked })
                   }
-                  className="w-4 h-4 text-yellow-400 bg-white/5 border-white/20 rounded focus:ring-yellow-400"
+                  className="w-4 h-4 text-blue-400 bg-white/5 border-white/20 rounded focus:ring-blue-400"
                 />
                 <label htmlFor="is_default" className="text-gray-300">
                   Définir comme adresse par défaut

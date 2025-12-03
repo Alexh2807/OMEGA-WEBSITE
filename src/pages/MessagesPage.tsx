@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -135,7 +135,7 @@ const MessagesPage = () => {
       case 'in_progress':
         return <Clock className="text-blue-400" size={20} />;
       default:
-        return <AlertCircle className="text-yellow-400" size={20} />;
+        return <AlertCircle className="text-blue-400" size={20} />;
     }
   };
 
@@ -228,9 +228,9 @@ const MessagesPage = () => {
                       markAsRead(message.id);
                     }
                   }}
-                  className={`bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border cursor-pointer transition-all duration-300 hover:border-yellow-400/30 ${
+                  className={`bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-6 border cursor-pointer transition-all duration-300 hover:border-blue-400/30 ${
                     selectedMessage?.id === message.id
-                      ? 'border-yellow-400/50'
+                      ? 'border-blue-400/50'
                       : 'border-white/10'
                   } ${!message.read_by_user ? 'bg-blue-500/5 border-blue-500/20' : ''}`}
                 >
@@ -277,7 +277,7 @@ const MessagesPage = () => {
                             ? 'text-green-400'
                             : selectedMessage.status === 'in_progress'
                               ? 'text-blue-400'
-                              : 'text-yellow-400'
+                              : 'text-blue-400'
                         }`}
                       >
                         {getStatusText(selectedMessage.status)}
@@ -399,7 +399,7 @@ const MessagesPage = () => {
                     onChange={e =>
                       setNewMessage({ ...newMessage, type: e.target.value })
                     }
-                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-yellow-400 focus:outline-none"
+                    className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                   >
                     <option value="general">Demande générale</option>
                     <option value="demo">Demande de démonstration</option>
@@ -418,7 +418,7 @@ const MessagesPage = () => {
                     onChange={e =>
                       setNewMessage({ ...newMessage, subject: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
                     placeholder="Sujet de votre demande"
                   />
                 </div>
@@ -434,7 +434,7 @@ const MessagesPage = () => {
                     onChange={e =>
                       setNewMessage({ ...newMessage, message: e.target.value })
                     }
-                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none resize-none"
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none resize-none"
                     placeholder="Décrivez votre demande en détail..."
                   />
                 </div>
@@ -442,7 +442,7 @@ const MessagesPage = () => {
                 <div className="flex gap-4">
                   <button
                     type="submit"
-                    className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-black py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 flex items-center justify-center gap-2"
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                   >
                     <Send size={20} />
                     Envoyer le Message

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -38,16 +38,37 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
   const [clientSecret, setClientSecret] = useState('');
   const [cardholderName, setCardholderName] = useState('');
   const [paymentError, setPaymentError] = useState('');
+  const [isCreatingIntent, setIsCreatingIntent] = useState(false);
   const [cardErrors, setCardErrors] = useState({
     cardNumber: '',
     cardExpiry: '',
     cardCvc: '',
   });
 
+  // Génération d'une clé d'idempotence UNIQUE et PERSISTANTE pour cette instance
+  const idempotencyKeyRef = useRef<string>(
+    `pi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  );
+
   useEffect(() => {
-    // Créer le PaymentIntent côté serveur
+    // PROTECTION : Créer le PaymentIntent UNE SEULE FOIS avec clé d'idempotence
+    let isMounted = true;
+
     const createPaymentIntent = async () => {
+      // Si déjà en cours de création ou déjà créé, ne rien faire
+      if (isCreatingIntent || clientSecret) {
+        console.log('⚠️ PaymentIntent déjà en cours ou créé, skip');
+        return;
+      }
+
+      setIsCreatingIntent(true);
+
+      // Utiliser la clé d'idempotence persistante
+      const idempotencyKey = idempotencyKeyRef.current;
+
       try {
+        console.log('🔄 Création PaymentIntent pour', amount, '€', 'avec clé:', idempotencyKey);
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`,
           {
@@ -55,6 +76,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Idempotency-Key': idempotencyKey, // ← CLÉ STRIPE POUR ÉVITER DUPLICATIONS
             },
             body: JSON.stringify({
               amount: Math.round(amount * 100), // Convertir en centimes
@@ -68,17 +90,33 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         }
 
         const data = await response.json();
-        setClientSecret(data.client_secret);
+
+        // Ne mettre à jour que si le composant est toujours monté
+        if (isMounted) {
+          setClientSecret(data.client_secret);
+          console.log('✅ PaymentIntent créé avec succès:', data.payment_intent_id);
+        }
       } catch (error) {
-        console.error('Erreur PaymentIntent:', error);
-        onError("Erreur lors de l'initialisation du paiement");
+        console.error('❌ Erreur PaymentIntent:', error);
+        if (isMounted) {
+          onError("Erreur lors de l'initialisation du paiement");
+        }
+      } finally {
+        if (isMounted) {
+          setIsCreatingIntent(false);
+        }
       }
     };
 
-    if (amount > 0) {
+    if (amount > 0 && !clientSecret && !isCreatingIntent) {
       createPaymentIntent();
     }
-  }, [amount, onError]);
+
+    // Cleanup function pour éviter les mises à jour sur composant démonté
+    return () => {
+      isMounted = false;
+    };
+  }, [amount]); // ← ENLEVÉ onError des dépendances pour éviter re-render
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
