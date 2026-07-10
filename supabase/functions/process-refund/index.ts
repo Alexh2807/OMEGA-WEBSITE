@@ -72,10 +72,10 @@ Deno.serve(async req => {
       );
     }
 
-    // Récupérer eventuellement l'order_id associé à la facture pour un fallback
+    // Récupérer l'order_id (fallback) + les infos nécessaires à l'avoir Tiime
     const { data: invoiceData, error: invoiceError } = await supabaseAdmin
       .from('invoices')
-      .select('order_id')
+      .select('order_id, invoice_number, customer_name, customer_email')
       .eq('id', invoiceId)
       .single();
 
@@ -219,6 +219,40 @@ Deno.serve(async req => {
     }
 
     console.log('✅ Remboursement enregistré dans la base de données.');
+
+    // --- 6bis. Notification Make.com (création d'avoir dans Tiime) ---
+    // Non bloquant : un échec du webhook ne doit jamais faire échouer le
+    // remboursement (l'argent est déjà rendu au client via Stripe).
+    const makeWebhookUrl = Deno.env.get('MAKE_WEBHOOK_URL');
+    if (makeWebhookUrl) {
+      try {
+        await fetch(makeWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'omegasud.fr',
+            type: 'refund',
+            invoice_id: invoiceId,
+            invoice_number: invoiceData?.invoice_number ?? null,
+            order_id: orderId,
+            customer: {
+              name: invoiceData?.customer_name ?? null,
+              email: invoiceData?.customer_email ?? null,
+            },
+            refund: {
+              amount: amount,
+              currency: 'EUR',
+              reason: reason,
+              date: new Date().toISOString(),
+              stripe_refund_id: refund.id,
+            },
+          }),
+        });
+        console.log('✅ Événement refund envoyé à Make.');
+      } catch (webhookError) {
+        console.error('⚠️ Webhook Make (refund) en échec — sans impact sur le remboursement:', webhookError);
+      }
+    }
 
     // --- 7. Réponse de Succès ---
     return new Response(

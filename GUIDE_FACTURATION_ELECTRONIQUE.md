@@ -45,6 +45,23 @@
    ```
 5. **Utilisation** : Admin → Facturation → bouton **orange (Send)** sur la facture → elle est créée dans Tiime, qui gère la transmission légale. Astuce : lors du 1er envoi, Make affiche les données reçues, ce qui facilite le mapping de l'étape 3.
 
+## Avoirs automatiques sur remboursement (construit juillet 2026)
+
+La fonction `process-refund` envoie automatiquement un événement `type: "refund"` au même webhook Make après chaque remboursement Stripe réussi (non bloquant : un échec Make n'empêche jamais le remboursement). Le webhook reçoit donc 2 types d'événements : `invoice` (bouton orange) et `refund` (automatique).
+
+**Scénario Make recommandé (avec routeur) :**
+```
+Webhook → Routeur
+  ├─ Route « Facture »  [filtre : type = invoice]
+  │    └─ Tiime : Créer une facture
+  └─ Route « Avoir »    [filtre : type = refund]
+       ├─ Tiime : Récupérer ses factures (recherche par invoice_number)
+       ├─ [filtre : facture trouvée]  ← évite les avoirs pour les ventes B2C jamais poussées dans Tiime
+       └─ Tiime : créer l'avoir (facture négative ou module « Requête API Tiime »)
+```
+
+Champs de l'événement refund : `invoice_number`, `customer.name/email`, `refund.amount`, `refund.reason`, `refund.date`, `refund.stripe_refund_id`.
+
 ## Brancher une PA au site (quand tu auras le compte)
 
 1. Crée le compte PA et récupère dans leur espace développeur : URL du token OAuth2, URL de dépôt, client ID, client secret. **Demande d'abord les identifiants SANDBOX** pour tester sans rien émettre d'officiel.
