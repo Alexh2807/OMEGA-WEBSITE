@@ -113,7 +113,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Déterminer l'URL de base selon l'environnement
     const getBaseUrl = () => {
-      // Utiliser l'URL définie dans l'environnement
+      // L'origine réelle du site (localhost en dev, omegasud.netlify.app ou
+      // www.omegasud.fr en prod) ; VITE_SITE_URL en secours hors navigateur.
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        return window.location.origin;
+      }
       return import.meta.env.VITE_SITE_URL;
     };
 
