@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   CreditCard,
   MapPin,
+  Truck,
   Plus as PlusIcon,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -17,13 +18,14 @@ import AddressManager from '../components/AddressManager';
 import StripeCheckout from '../components/StripeCheckout';
 import VitrineCTA from '../components/VitrineCTA';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
+import { computeShipping } from '../utils/shipping';
 import toast from 'react-hot-toast';
 
 const CartPage = () => {
   const { items, updateQuantity, removeFromCart, totalItems, clearCart } =
     useCart();
   const { user, userType } = useAuth();
-  const { vitrineMode } = useSiteSettings();
+  const { vitrineMode, shippingConfig } = useSiteSettings();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -41,6 +43,19 @@ const CartPage = () => {
 
     if (items.length === 0) {
       toast.error('Votre panier est vide');
+      return;
+    }
+
+    // ADRESSE DE LIVRAISON OBLIGATOIRE (P1 audit : les commandes partaient
+    // avec shipping_address null — impossibles à expédier) + nécessaire au
+    // calcul des frais des gros produits (zone proche / longue distance).
+    if (!selectedAddress) {
+      toast.error('Sélectionnez votre adresse de livraison');
+      setShowAddressManager(true);
+      return;
+    }
+    if (shipping.cost === null) {
+      toast.error('Frais de livraison indéterminés — vérifiez votre adresse');
       return;
     }
 
@@ -112,6 +127,7 @@ const CartPage = () => {
       const totals = calculateTotals();
 
       // Étape 3 : Créer la commande dans la base de données
+      // (total = produits + LIVRAISON : doit correspondre au montant Stripe encaissé)
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -119,7 +135,9 @@ const CartPage = () => {
           stripe_payment_intent_id: paymentIntentId,
           sub_total: totals.subTotal,
           tax: totals.tax,
-          total: totals.total,
+          total: totals.total + (shipping.cost ?? 0),
+          shipping_cost: shipping.cost ?? 0,
+          shipping_method: shipping.method,
           status: 'confirmed',
           user_type: userType,
           shipping_address: selectedAddress
@@ -148,7 +166,7 @@ const CartPage = () => {
         .insert({
           invoice_id: null,
           order_id: order.id, // Lier à la commande
-          amount: totals.total,
+          amount: totals.total + (shipping.cost ?? 0),
           payment_date: new Date().toISOString(),
           payment_method: 'carte',
           status: 'succeeded', // Ajouter un statut clair
@@ -234,6 +252,20 @@ const CartPage = () => {
   };
 
   const totals = calculateTotals();
+
+  // FRAIS DE LIVRAISON : selon le gabarit des produits (petit colis / gros
+  // produit) et le code postal de livraison (zone proche ou longue distance).
+  // Tarifs configurables dans Admin → Paramètres → Livraison.
+  const shipping = computeShipping(
+    items.map(item => ({
+      shipping_class: (item.product as { shipping_class?: string } | undefined)?.shipping_class,
+      quantity: item.quantity,
+    })),
+    selectedAddress?.postal_code || null,
+    shippingConfig
+  );
+  // Total encaissé = produits TTC + livraison (tarifs livraison exprimés TTC).
+  const grandTotal = totals.total + (shipping.cost ?? 0);
 
   // MODE VITRINE : le panier n'existe plus — on oriente vers le devis / l'appel.
   // (AVANT le test de connexion : la vitrine s'applique à tout le monde.)
@@ -398,6 +430,36 @@ const CartPage = () => {
                 Récapitulatif
               </h3>
 
+              {/* Adresse de livraison — OBLIGATOIRE avant paiement */}
+              <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-white font-semibold">
+                    <MapPin size={18} className="text-blue-400" />
+                    Adresse de livraison
+                  </div>
+                  <button
+                    onClick={() => setShowAddressManager(true)}
+                    className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                  >
+                    {selectedAddress ? 'Modifier' : 'Choisir'}
+                  </button>
+                </div>
+                {selectedAddress ? (
+                  <div className="text-gray-300 text-sm leading-relaxed">
+                    {selectedAddress.first_name} {selectedAddress.last_name}
+                    <br />
+                    {selectedAddress.address_line_1}
+                    {selectedAddress.address_line_2 ? <><br />{selectedAddress.address_line_2}</> : null}
+                    <br />
+                    {selectedAddress.postal_code} {selectedAddress.city}
+                  </div>
+                ) : (
+                  <div className="text-orange-300 text-sm">
+                    Sélectionnez une adresse pour calculer la livraison.
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between text-gray-300">
                   <span>Sous-total</span>
@@ -408,13 +470,29 @@ const CartPage = () => {
                   <span>{totals.tax.toFixed(2)}€</span>
                 </div>
                 <div className="flex justify-between text-gray-300">
-                  <span>Livraison</span>
-                  <span className="text-green-400">Gratuite</span>
+                  <span className="flex items-center gap-2">
+                    <Truck size={16} className="text-blue-400" />
+                    Livraison
+                  </span>
+                  <span>
+                    {shipping.cost !== null
+                      ? `${shipping.cost.toFixed(2)}€`
+                      : 'Selon adresse'}
+                  </span>
                 </div>
+                {shipping.label && (
+                  <div className="text-xs text-gray-400 -mt-2">
+                    {shipping.label} · Expédition sous {shippingConfig.delay_days} jours
+                  </div>
+                )}
                 <div className="border-t border-white/20 pt-4">
                   <div className="flex justify-between text-xl font-bold text-white">
                     <span>Total TTC</span>
-                    <span>{totals.total.toFixed(2)}€</span>
+                    <span>
+                      {shipping.cost !== null
+                        ? `${grandTotal.toFixed(2)}€`
+                        : `${totals.total.toFixed(2)}€ + livraison`}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -425,11 +503,11 @@ const CartPage = () => {
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <CreditCard size={20} />
-                Passer la Commande
+                {selectedAddress ? 'Passer la Commande' : 'Choisir mon adresse'}
               </button>
 
               <p className="text-gray-400 text-sm text-center">
-                Paiement sécurisé • Livraison gratuite • Garantie OMEGA
+                Paiement sécurisé • Expédition sous {shippingConfig.delay_days} jours • Garantie OMEGA
               </p>
 
               <div className="mt-6 p-4 bg-gradient-to-r from-green-500/10 to-blue-500/10 rounded-lg border border-green-500/20">
@@ -438,7 +516,7 @@ const CartPage = () => {
                 </h4>
                 <ul className="text-gray-300 text-sm space-y-1">
                   <li>• Garantie 10 ans sur les machines</li>
-                  <li>• Livraison gratuite en France</li>
+                  <li>• Expédition sous {shippingConfig.delay_days} jours</li>
                   <li>• Support technique inclus</li>
                   <li>• Retour sous 30 jours</li>
                 </ul>
@@ -446,6 +524,34 @@ const CartPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Sélection de l'adresse de livraison (obligatoire avant paiement) */}
+        {showAddressManager && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-2xl w-full max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <MapPin size={22} className="text-blue-400" />
+                  Adresse de livraison
+                </h3>
+                <button
+                  onClick={() => setShowAddressManager(false)}
+                  className="text-gray-400 hover:text-white transition-colors text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              <AddressManager
+                showSelection
+                selectedAddressId={selectedAddress?.id}
+                onAddressSelect={address => {
+                  setSelectedAddress(address);
+                  setShowAddressManager(false);
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Stripe Checkout Modal */}
         {showCheckout && (
@@ -464,20 +570,28 @@ const CartPage = () => {
               </div>
 
               <div className="mb-6 p-4 bg-white/5 rounded-lg">
+                <div className="flex justify-between text-white mb-1">
+                  <span>Produits:</span>
+                  <span className="font-semibold">{totals.total.toFixed(2)}€</span>
+                </div>
                 <div className="flex justify-between text-white mb-2">
+                  <span>Livraison:</span>
+                  <span className="font-semibold">{(shipping.cost ?? 0).toFixed(2)}€</span>
+                </div>
+                <div className="flex justify-between text-white mb-2 border-t border-white/10 pt-2">
                   <span>Total à payer:</span>
                   <span className="font-bold text-xl">
-                    {totals.total.toFixed(2)}€
+                    {grandTotal.toFixed(2)}€
                   </span>
                 </div>
                 <div className="text-gray-400 text-sm">
-                  TVA incluse • Paiement sécurisé par Stripe
+                  TVA incluse • Expédition sous {shippingConfig.delay_days} jours • Paiement sécurisé par Stripe
                 </div>
               </div>
 
               <StripeCheckout
                 key={checkoutKey}
-                amount={totals.total}
+                amount={grandTotal}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
               />

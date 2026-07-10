@@ -25,7 +25,7 @@ const AdminSettings = lazy(() => import('./admin/AdminSettings'));
 const AdminReviews = lazy(() => import('./admin/AdminReviews'));
 
 const AdminPage = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
@@ -49,6 +49,16 @@ const AdminPage = () => {
       window.removeEventListener('switchAdminTab', handleSwitchTab);
     };
   }, []);
+
+  // ANTI-RACE (audit) : tant que le rôle n'est pas résolu, on affiche un
+  // écran d'attente au lieu d'un faux « Accès Refusé » à un vrai admin.
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-24 flex items-center justify-center">
+        <div className="text-gray-400">Vérification des permissions…</div>
+      </div>
+    );
+  }
 
   if (!user || !isAdmin) {
     return (

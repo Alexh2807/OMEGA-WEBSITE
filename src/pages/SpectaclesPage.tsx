@@ -270,11 +270,11 @@ const SpectaclesPage = () => {
               Formulaire de Contact
             </Link>
             <a
-              href="mailto:alexishidalgo34000@gmail.com"
+              href="mailto:sarl.omega@hotmail.fr"
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"
             >
               <Mail size={20} />
-              alexishidalgo34000@gmail.com
+              sarl.omega@hotmail.fr
             </a>
             <a
               href="tel:+33681239931"

@@ -18,6 +18,8 @@ export interface Product {
   images?: string[];
   stock_quantity: number;
   in_stock?: boolean;
+  /** Gabarit d'expédition : 'small' = petit colis (forfait), 'large' = gros produit (tarif à la distance) */
+  shipping_class?: 'small' | 'large';
   specifications?: any;
   sku?: string;
   created_at: string;

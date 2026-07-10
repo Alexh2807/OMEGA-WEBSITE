@@ -6,6 +6,11 @@ import React, {
   ReactNode,
 } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  ShippingConfig,
+  DEFAULT_SHIPPING_CONFIG,
+  normalizeShippingConfig,
+} from '../utils/shipping';
 
 /**
  * Réglages globaux du site, pilotés depuis l'admin (table `site_settings`).
@@ -22,6 +27,9 @@ interface SiteSettingsContextType {
   loading: boolean;
   /** Écrit le mode en base (admin uniquement — protégé par RLS côté Supabase). */
   setVitrineMode: (on: boolean) => Promise<{ error: string | null }>;
+  /** Tarifs et règles de livraison (Admin → Paramètres → Livraison). */
+  shippingConfig: ShippingConfig;
+  setShippingConfig: (cfg: ShippingConfig) => Promise<{ error: string | null }>;
   refresh: () => Promise<void>;
 }
 
@@ -30,27 +38,37 @@ const SiteSettingsContext = createContext<SiteSettingsContextType | undefined>(
 );
 
 const SITE_MODE_KEY = 'site_mode';
+const SHIPPING_KEY = 'shipping_config';
 
 export const SiteSettingsProvider = ({ children }: { children: ReactNode }) => {
   const [vitrineMode, setVitrine] = useState(true); // vitrine tant qu'on ne sait pas
+  const [shippingConfig, setShippingState] = useState<ShippingConfig>(DEFAULT_SHIPPING_CONFIG);
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
     try {
       const { data, error } = await supabase
         .from('site_settings')
-        .select('value')
-        .eq('key', SITE_MODE_KEY)
-        .maybeSingle();
+        .select('key, value')
+        .in('key', [SITE_MODE_KEY, SHIPPING_KEY]);
 
-      if (!error && data && data.value && typeof data.value.vitrine === 'boolean') {
-        setVitrine(data.value.vitrine);
+      if (!error && data) {
+        const mode = data.find(r => r.key === SITE_MODE_KEY);
+        if (mode && mode.value && typeof mode.value.vitrine === 'boolean') {
+          setVitrine(mode.value.vitrine);
+        } else {
+          setVitrine(true); // ligne absente → vitrine par défaut (sûr)
+        }
+        const ship = data.find(r => r.key === SHIPPING_KEY);
+        setShippingState(normalizeShippingConfig(ship ? ship.value : null));
       } else {
-        // Table absente / ligne absente / erreur → vitrine par défaut (sûr).
+        // Table absente / erreur → défauts sûrs.
         setVitrine(true);
+        setShippingState(DEFAULT_SHIPPING_CONFIG);
       }
     } catch {
       setVitrine(true);
+      setShippingState(DEFAULT_SHIPPING_CONFIG);
     } finally {
       setLoading(false);
     }
@@ -83,9 +101,26 @@ export const SiteSettingsProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const setShippingConfig = async (cfg: ShippingConfig): Promise<{ error: string | null }> => {
+    try {
+      const clean = normalizeShippingConfig(cfg);
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert(
+          { key: SHIPPING_KEY, value: clean, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+      if (error) return { error: error.message };
+      setShippingState(clean);
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Erreur inconnue' };
+    }
+  };
+
   return (
     <SiteSettingsContext.Provider
-      value={{ vitrineMode, loading, setVitrineMode, refresh }}
+      value={{ vitrineMode, loading, setVitrineMode, shippingConfig, setShippingConfig, refresh }}
     >
       {children}
     </SiteSettingsContext.Provider>

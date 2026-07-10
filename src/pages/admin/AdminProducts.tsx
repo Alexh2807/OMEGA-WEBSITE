@@ -40,6 +40,7 @@ const AdminProducts = () => {
     category_id: '',
     images: [] as string[],
     stock_quantity: '',
+    shipping_class: 'small' as 'small' | 'large',
     sku: '',
     specifications: {},
     tags: [] as string[],
@@ -185,6 +186,7 @@ const AdminProducts = () => {
         image: formData.images.length > 0 ? formData.images[0] : null,
         images: formData.images.length > 0 ? formData.images : null,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
+        shipping_class: formData.shipping_class,
         sku: formData.sku || null,
         specifications: formData.specifications,
         tags: formData.tags,
@@ -259,6 +261,7 @@ const AdminProducts = () => {
       category_id: '',
       images: [],
       stock_quantity: '',
+      shipping_class: 'small',
       sku: '',
       specifications: {},
       tags: [],
@@ -281,6 +284,7 @@ const AdminProducts = () => {
       category_id: product.category_id || '',
       images: product.images || (product.image ? [product.image] : []),
       stock_quantity: product.stock_quantity.toString(),
+      shipping_class: product.shipping_class === 'large' ? 'large' : 'small',
       sku: product.sku || '',
       specifications: product.specifications || {},
       tags: product.tags || [],
@@ -646,6 +650,33 @@ const AdminProducts = () => {
                     placeholder="SKU du produit"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Gabarit d'expédition *
+                </label>
+                <select
+                  value={formData.shipping_class}
+                  onChange={e =>
+                    setFormData({
+                      ...formData,
+                      shipping_class: e.target.value as 'small' | 'large',
+                    })
+                  }
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-green-400 focus:outline-none [&>option]:bg-gray-900"
+                >
+                  <option value="small">
+                    Petit colis — forfait (accessoires, liquides…)
+                  </option>
+                  <option value="large">
+                    Gros produit — livraison spécialisée (machines)
+                  </option>
+                </select>
+                <p className="text-gray-500 text-xs mt-1">
+                  Détermine les frais de livraison affichés au client (tarifs
+                  réglables dans Paramètres → Livraison).
+                </p>
               </div>
 
               <div>

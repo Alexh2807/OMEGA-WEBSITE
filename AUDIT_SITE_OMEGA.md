@@ -147,19 +147,33 @@ Légende de priorité : 🔴 **P1 critique** · 🟠 **P2 à corriger** · 🟡 
 3. **Branding** : téléphone unifié **06 81 23 99 31** partout (ancien 06 19 91 87 19 supprimé) ; email `contact@captivision.fr` remplacé (Capti'Vision ≠ OMEGA). Centralisés dans `src/config/legalInfo.ts` (`COMPANY_INFO.phone/phoneHref/email`).
 4. Corrections de l'audit du 20/06 : liens cassés `/produits/:id` → `/produit/:id` (Hazer + Mousse), `toast.warn` → `toast(…)`, **ErrorBoundary global** autour des routes, **page 404**, route `/machines` → redirection `/produits`.
 
+### ✅ Fait (2e passe du 11/07 — tout le rouge/orange restant)
+5. **🔴 P1 — Adresse de livraison OBLIGATOIRE** (`CartPage.tsx`) : bloc « Adresse de livraison » dans le récapitulatif + modal `AddressManager` (sélection/création), paiement IMPOSSIBLE sans adresse, adresse enregistrée avec la commande (`orders.shipping_address`). Plus aucune commande inexpédiable.
+6. **🟠 P2 — Stock décrémenté automatiquement** : trigger SQL `trg_decrement_stock` (AFTER INSERT sur `order_items`) — transactionnel, impossible à oublier côté front ; `in_stock` recalculé. Migration `20260711120000_shipping_and_stock.sql`.
+7. **🟠 Email admin en dur SUPPRIMÉ** (`AuthContext.tsx`) : le statut admin vient uniquement de `profiles.role` (protégé par RLS) — plus d'email dans le bundle public.
+8. **🟠 Race condition admin corrigée** : `loading` ne repasse à `false` qu'une fois le rôle résolu, et `AdminPage` affiche « Vérification des permissions… » pendant ce temps (plus de faux « Accès Refusé »).
+9. **🟠 Audit RLS outillé** : script `supabase/rls_audit.sql` à exécuter dans le SQL Editor — liste les tables sans RLS, les politiques table par table et les politiques permissives suspectes, avec grille de lecture OMEGA.
+10. **NOUVEAU — Livraison professionnelle** : chaque produit a un **gabarit d'expédition** (fiche produit admin) : *petit colis* (forfait **7,99 €**/commande) ou *gros produit* (par unité : **129 €** zone proche ≤ ~100 km du dépôt de Montblanc 34, **259 €** longue distance — zone décidée par le code postal de livraison, départements proches configurables : 34, 11, 30, 81, 12, 66). Les petits articles voyagent sans surcoût avec un gros produit. Tarifs + délai (« expédition sous 7 jours ») réglables dans **Admin → Paramètres → Livraison**. Le client voit le détail (produits / livraison / total) dans le panier ET la fenêtre de paiement ; le montant Stripe encaissé = produits + livraison ; `orders.shipping_cost` / `shipping_method` enregistrés. Logique testée (13 tests unitaires `src/utils/__tests__/shipping.test.ts`).
+
 ### 📌 À faire par l'admin (une fois)
-- **Appliquer la migration** `supabase/migrations/20260711100000_site_settings.sql` dans le SQL Editor Supabase. Sans elle, le site reste en Vitrine (voulu) mais le bouton admin ne peut pas persister le choix.
+- **Appliquer les migrations** dans le SQL Editor Supabase (ou `npx supabase login` puis `npx supabase db push`) :
+  1. `supabase/migrations/20260711100000_site_settings.sql` (mode Vitrine + réglages)
+  2. `supabase/migrations/20260711120000_shipping_and_stock.sql` (gabarits, frais, décrément de stock)
+  Sans elles : le site reste en Vitrine (voulu), les tarifs livraison utilisent les défauts ci-dessus mais ne sont pas modifiables, et le stock n'est pas décrémenté.
+- **Exécuter `supabase/rls_audit.sql`** dans le SQL Editor et corriger toute table listée sans RLS.
+- Dans **Admin → Produits**, passer les machines (gros produits) en gabarit « Gros produit » (défaut = petit colis).
 
 ### 🖼️ Photos produits manquantes (à fournir dans /public/products/)
 - **OMEGA NEIGE** : réutilise la photo de la Mousse (placeholder) — vraie photo du bidon à fournir.
 - **OMEGA FLAMME** : illustrée par la machine El Fuego, pas par le bidon de liquide.
 - Ménage possible : doublons « ChatGPT Image … copy.png » et « Logo OMEGA … copy.png » (3× chacun, ~2 Mo pièce).
 
-### ⏳ Avant de réactiver la Boutique en ligne (rappels de l'audit du 20/06, toujours valables)
-- 🔴 Adresse de livraison jamais collectée (CartPage) ; 🟠 stock non décrémenté ; 🟠 RLS à auditer table par table ; 🟠 race condition admin ; 🟡 EmailConfirmationPage ; 🟡 email admin en dur.
+### ⏳ Avant de réactiver la Boutique en ligne
+- ~~🔴 Adresse de livraison~~ ✅ · ~~🟠 stock non décrémenté~~ ✅ (migration à appliquer) · ~~🟠 race condition admin~~ ✅ · ~~🟡 email admin en dur~~ ✅ — corrigés le 11/07 (2e passe).
+- Restent : 🟠 exécuter `rls_audit.sql` en prod et corriger les manques ; 🟡 EmailConfirmationPage ; vérifier en prod les Edge Functions + clés Stripe live + un paiement de bout en bout.
 
 ### 📝 Notes
-- Email public provisoire = Gmail (changer dans `legalInfo.ts` dès qu'une adresse pro existe).
+- Email public : **sarl.omega@hotmail.fr** (centralisé dans `legalInfo.ts`).
 - Boutons « Favoris » / « Partager » de la fiche produit : sans action (décoratifs) — à câbler ou retirer.
 - `npx tsc --noEmit` remonte des erreurs PRÉEXISTANTES (AdminBilling, AdminDashboard, AuthContext…) qui n'empêchent pas le build Vite ; à assainir un jour.
 - Vérifié le 11/07 : build de production OK, 28/28 tests unitaires OK, parcours visuels (accueil, fluid-system, panier vitrine, contact pré-rempli, 404) OK en local.

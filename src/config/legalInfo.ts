@@ -19,7 +19,7 @@ export const COMPANY_INFO = {
   ape: '518J',
   phone: '06 81 23 99 31',
   phoneHref: 'tel:+33681239931',
-  email: 'alexishidalgo34000@gmail.com', // TODO : remplacer par une adresse pro (ex. contact@…) dès qu'elle existe
+  email: 'sarl.omega@hotmail.fr',
   manager: 'Jose HIDALGO',
   creationDate: '2005-03-08',
 };

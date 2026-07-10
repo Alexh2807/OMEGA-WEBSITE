@@ -40,60 +40,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // SÉCURITÉ (audit) : le statut admin vient UNIQUEMENT de profiles.role
+    // (protégé par RLS) — plus aucun email codé en dur dans le bundle public.
+    // ANTI-RACE (audit) : `loading` ne repasse à false qu'une fois le rôle
+    // résolu, sinon AdminPage voyait un instant isAdmin=false et éjectait
+    // un vrai admin vers l'accueil.
+    const resolveAdmin = async (u: User | null) => {
+      if (!u) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', u.id)
+          .single();
+        setIsAdmin(!error && data?.role === 'admin');
+      } catch (err) {
+        console.error('Error checking user role:', err);
+        setIsAdmin(false);
+      }
+    };
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      checkAdminStatus(session?.user);
-      setLoading(false);
+      resolveAdmin(session?.user ?? null).finally(() => setLoading(false));
     });
 
-    // Listen for auth changes
+    // Listen for auth changes — les appels Supabase sont déférés hors du
+    // callback (recommandation supabase-js : éviter les requêtes await
+    // directement dans onAuthStateChange).
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      checkAdminStatus(session?.user);
-      setLoading(false);
+      setTimeout(() => {
+        resolveAdmin(session?.user ?? null).finally(() => setLoading(false));
+      }, 0);
     });
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const checkAdminStatus = (user: User | null) => {
-    if (user) {
-      // Vérifier d'abord par email (pour la compatibilité)
-      const adminEmails = ['alexishidalgo34000@gmail.com'];
-      const isEmailAdmin = adminEmails.includes(user.email || '');
-
-      if (isEmailAdmin) {
-        setIsAdmin(true);
-      } else {
-        // Vérifier le rôle dans la base de données
-        checkUserRole(user.id);
-      }
-    } else {
-      setIsAdmin(false);
-    }
-  };
-
-  const checkUserRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (!error && data?.role === 'admin') {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
-    } catch (err) {
-      console.error('Error checking user role:', err);
-      setIsAdmin(false);
-    }
-  };
 
   const signUp = async (
     email: string,
