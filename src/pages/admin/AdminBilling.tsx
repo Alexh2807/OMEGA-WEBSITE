@@ -861,7 +861,15 @@ const AdminBilling = () => {
                                 await supabase.functions.invoke('send-to-make', {
                                   body: { invoiceId: invoice.id },
                                 });
-                              if (error) throw new Error(error.message);
+                              if (error) {
+                                // Extraire le vrai message renvoyé par la fonction
+                                const detail = await (error as any).context
+                                  ?.json?.()
+                                  .catch(() => null);
+                                throw new Error(
+                                  detail?.error || detail?.message || error.message
+                                );
+                              }
                               if (data?.sent) {
                                 toast.success(
                                   'Facture envoyée à Make — création dans Tiime en cours',
