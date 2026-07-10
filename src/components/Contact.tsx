@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { COMPANY_INFO } from '../config/legalInfo';
 import toast from 'react-hot-toast';
 
 const Contact = () => {
@@ -113,7 +114,7 @@ const Contact = () => {
                 <div>
                   <div className="text-white font-semibold">Email</div>
                   <div className="text-gray-400">
-                    contact@captivision.fr
+                    {COMPANY_INFO.email}
                   </div>
                 </div>
               </div>
@@ -124,7 +125,7 @@ const Contact = () => {
                 </div>
                 <div>
                   <div className="text-white font-semibold">Téléphone</div>
-                  <div className="text-gray-400">06 19 91 87 19</div>
+                  <div className="text-gray-400">{COMPANY_INFO.phone}</div>
                 </div>
               </div>
 

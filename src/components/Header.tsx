@@ -13,8 +13,11 @@ import {
   ToggleRight,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Phone } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
+import { COMPANY_INFO } from '../config/legalInfo';
 import { supabase } from '../lib/supabase';
 
 const Header = () => {
@@ -24,6 +27,7 @@ const Header = () => {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const { user, signOut, isAdmin, userType, setUserType } = useAuth();
   const { totalItems } = useCart();
+  const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -142,10 +146,10 @@ const Header = () => {
               Smoke System
             </Link>
             <Link
-              to="/produit-mousse"
+              to="/fluid-system"
               className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
-              Foam System
+              Fluid System
             </Link>
             <Link
               to="/omega-dmx-interface"
@@ -196,18 +200,29 @@ const Header = () => {
               </span>
             </div>
 
-            {/* Cart */}
-            <Link
-              to="/panier"
-              className="relative text-white hover:text-blue-400 transition-colors duration-300"
-            >
-              <ShoppingCart size={24} />
-              {totalItems > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                  {totalItems}
-                </span>
-              )}
-            </Link>
+            {/* Panier (vente en ligne) — ou téléphone en MODE VITRINE */}
+            {vitrineMode ? (
+              <a
+                href={COMPANY_INFO.phoneHref}
+                className="flex items-center gap-2 text-white hover:text-blue-400 transition-colors duration-300 font-medium"
+                title="Appelez-nous pour un devis"
+              >
+                <Phone size={20} />
+                <span className="hidden lg:inline">{COMPANY_INFO.phone}</span>
+              </a>
+            ) : (
+              <Link
+                to="/panier"
+                className="relative text-white hover:text-blue-400 transition-colors duration-300"
+              >
+                <ShoppingCart size={24} />
+                {totalItems > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {totalItems}
+                  </span>
+                )}
+              </Link>
+            )}
 
             {/* User Menu */}
             {user ? (
@@ -333,10 +348,10 @@ const Header = () => {
               Smoke System
             </Link>
             <Link
-              to="/produit-mousse"
+              to="/fluid-system"
               className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
-              Foam System
+              Fluid System
             </Link>
             <Link
               to="/omega-dmx-interface"
@@ -362,13 +377,23 @@ const Header = () => {
             >
               Contact
             </Link>
-            <Link
-              to="/panier"
-              className="text-white hover:text-blue-400 transition-colors duration-300 flex items-center gap-2"
-            >
-              <ShoppingCart size={20} />
-              Panier ({totalItems})
-            </Link>
+            {vitrineMode ? (
+              <a
+                href={COMPANY_INFO.phoneHref}
+                className="text-white hover:text-blue-400 transition-colors duration-300 flex items-center gap-2"
+              >
+                <Phone size={20} />
+                {COMPANY_INFO.phone}
+              </a>
+            ) : (
+              <Link
+                to="/panier"
+                className="text-white hover:text-blue-400 transition-colors duration-300 flex items-center gap-2"
+              >
+                <ShoppingCart size={20} />
+                Panier ({totalItems})
+              </Link>
+            )}
             {user ? (
               <>
                 <Link

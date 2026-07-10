@@ -9,11 +9,18 @@ import {
   Folder,
   FileImage,
   Terminal,
+  Store,
+  ShoppingCart,
+  Phone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getAllAvailableImages } from '../../utils/imageManager';
+import { useSiteSettings } from '../../contexts/SiteSettingsContext';
+import { COMPANY_INFO } from '../../config/legalInfo';
 
 const AdminSettings = () => {
+  const { vitrineMode, setVitrineMode } = useSiteSettings();
+  const [savingMode, setSavingMode] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<{
     success: boolean;
@@ -76,6 +83,22 @@ const AdminSettings = () => {
 
   const currentImageCount = getAllAvailableImages().length;
 
+  const handleModeChange = async (vitrine: boolean) => {
+    if (vitrine === vitrineMode) return;
+    setSavingMode(true);
+    const { error } = await setVitrineMode(vitrine);
+    setSavingMode(false);
+    if (error) {
+      toast.error(error, { duration: 8000 });
+      return;
+    }
+    toast.success(
+      vitrine
+        ? 'Mode Vitrine activé : la vente en ligne est désactivée (devis + téléphone).'
+        : 'Boutique en ligne activée : panier et paiement sont visibles.'
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -87,6 +110,69 @@ const AdminSettings = () => {
         <p className="text-gray-400">
           Configuration et maintenance du système OMEGA
         </p>
+      </div>
+
+      {/* Section Mode du site : Vitrine / Boutique en ligne */}
+      <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-8 border border-white/10">
+        <div className="flex items-center gap-3 mb-2">
+          <Store className="text-purple-400" size={24} />
+          <h2 className="text-2xl font-bold text-white">Mode du site</h2>
+        </div>
+        <p className="text-gray-400 text-sm mb-6">
+          En mode <b>Vitrine</b>, le site présente les produits sans vente en
+          ligne : panier et paiement sont masqués partout, remplacés par
+          « Demander un devis » et l'appel direct au {COMPANY_INFO.phone}.
+        </p>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <button
+            onClick={() => handleModeChange(true)}
+            disabled={savingMode}
+            className={`text-left rounded-xl p-5 border transition-all duration-300 ${
+              vitrineMode
+                ? 'bg-purple-500/15 border-purple-400/60 ring-1 ring-purple-400/40'
+                : 'bg-white/5 border-white/10 hover:border-white/30'
+            } disabled:opacity-60`}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <Phone className={vitrineMode ? 'text-purple-300' : 'text-gray-400'} size={20} />
+              <span className="text-white font-semibold">Vitrine (devis / téléphone)</span>
+              {vitrineMode && (
+                <span className="ml-auto text-xs font-bold text-purple-300 bg-purple-500/20 px-2 py-1 rounded-full">
+                  ACTIF
+                </span>
+              )}
+            </div>
+            <p className="text-gray-400 text-sm">
+              Aucun achat en ligne possible. Les visiteurs demandent un devis ou
+              appellent le {COMPANY_INFO.phone}.
+            </p>
+          </button>
+
+          <button
+            onClick={() => handleModeChange(false)}
+            disabled={savingMode}
+            className={`text-left rounded-xl p-5 border transition-all duration-300 ${
+              !vitrineMode
+                ? 'bg-green-500/15 border-green-400/60 ring-1 ring-green-400/40'
+                : 'bg-white/5 border-white/10 hover:border-white/30'
+            } disabled:opacity-60`}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <ShoppingCart className={!vitrineMode ? 'text-green-300' : 'text-gray-400'} size={20} />
+              <span className="text-white font-semibold">Boutique en ligne</span>
+              {!vitrineMode && (
+                <span className="ml-auto text-xs font-bold text-green-300 bg-green-500/20 px-2 py-1 rounded-full">
+                  ACTIF
+                </span>
+              )}
+            </div>
+            <p className="text-gray-400 text-sm">
+              Panier, paiement Stripe et commandes actifs. À n'ouvrir que
+              lorsque la boutique est prête à vendre.
+            </p>
+          </button>
+        </div>
       </div>
 
       {/* Section Gestion des Images */}

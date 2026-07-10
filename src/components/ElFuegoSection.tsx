@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { COMPANY_INFO } from '../config/legalInfo';
 import {
   ArrowRight,
   Music,
@@ -124,11 +125,11 @@ const ElFuegoSection = () => {
                   Prendre contact
                 </Link>
                 <a
-                  href="mailto:contact@captivision.fr"
+                  href={COMPANY_INFO.phoneHref}
                   className="flex items-center gap-2 hover:text-white transition-colors"
                 >
                   <Phone size={16} />
-                  06 19 91 87 19
+                  {COMPANY_INFO.phone}
                 </a>
               </div>
             </div>

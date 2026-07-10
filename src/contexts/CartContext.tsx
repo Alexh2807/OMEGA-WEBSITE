@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { CartItem, Product } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { useSiteSettings } from './SiteSettingsContext';
+import { COMPANY_INFO } from '../config/legalInfo';
 import toast from 'react-hot-toast';
 import { calculateTotalItems, calculateTotalPrice } from '../utils/cartHelpers';
 
@@ -30,6 +32,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const { user } = useAuth();
+  const { vitrineMode } = useSiteSettings();
 
   useEffect(() => {
     if (user) {
@@ -61,6 +64,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const addToCart = async (product: Product, quantity = 1) => {
+    // VERROU MODE VITRINE : la vente en ligne est désactivée — aucun chemin
+    // d'ajout au panier ne doit passer, quelle que soit la page appelante.
+    if (vitrineMode) {
+      toast(
+        `Vente en ligne désactivée — demandez un devis via le formulaire de contact ou appelez le ${COMPANY_INFO.phone}.`,
+        { icon: '📞', duration: 5000 }
+      );
+      return;
+    }
     if (!user) {
       toast.error(
         'Veuillez vous connecter pour ajouter des produits au panier'

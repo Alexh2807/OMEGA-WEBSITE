@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -173,11 +173,11 @@ const SpectaclesPage = () => {
                 Prendre Contact
               </Link>
               <a
-                href="tel:+33619918719"
+                href="tel:+33681239931"
                 className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"
               >
                 <Phone size={20} />
-                06 19 91 87 19
+                06 81 23 99 31
               </a>
             </div>
           </div>
@@ -270,18 +270,18 @@ const SpectaclesPage = () => {
               Formulaire de Contact
             </Link>
             <a
-              href="mailto:contact@captivision.fr"
+              href="mailto:alexishidalgo34000@gmail.com"
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"
             >
               <Mail size={20} />
-              contact@captivision.fr
+              alexishidalgo34000@gmail.com
             </a>
             <a
-              href="tel:+33619918719"
+              href="tel:+33681239931"
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"
             >
               <Phone size={20} />
-              06 19 91 87 19
+              06 81 23 99 31
             </a>
           </div>
         </div>

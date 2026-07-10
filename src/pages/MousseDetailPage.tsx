@@ -23,6 +23,8 @@ import { supabase } from '../lib/supabase';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
+import VitrineCTA from '../components/VitrineCTA';
 import toast from 'react-hot-toast';
 
 const MousseDetailPage = () => {
@@ -34,6 +36,7 @@ const MousseDetailPage = () => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const { addToCart } = useCart();
   const { user, userType } = useAuth();
+  const { vitrineMode } = useSiteSettings();
 
   const heroRef = useRef<HTMLDivElement>(null);
   const specsRef = useRef<HTMLDivElement>(null);
@@ -241,12 +244,21 @@ const MousseDetailPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {vitrineMode ? (
+              <Link
+                to="/contact?sujet=devis&produit=OMEGA%20MOUSSE"
+                className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
+              >
+                Demander un devis
+              </Link>
+            ) : (
             <button
               onClick={handleAddToCart}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
             >
               Ajouter au Panier
             </button>
+            )}
             <Link
               to={`/produit/${mousseProduct.id}`}
               className="border-2 border-white/30 text-white px-6 py-3 rounded-full font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
@@ -324,6 +336,9 @@ const MousseDetailPage = () => {
               </div>
 
               {/* CTA Buttons */}
+              {vitrineMode ? (
+                <VitrineCTA productName="OMEGA MOUSSE" />
+              ) : (
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={handleAddToCart}
@@ -340,6 +355,7 @@ const MousseDetailPage = () => {
                   Voir la page du produit
                 </Link>
               </div>
+              )}
 
               {/* Scroll Indicator */}
               <div className="mt-12 text-center">
@@ -552,7 +568,7 @@ const MousseDetailPage = () => {
               {relatedProducts.map((product) => (
                 <Link
                   key={product.id}
-                  to={`/produits/${product.id}`}
+                  to={`/produit/${product.id}`}
                   className="group bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-cyan-500/30 transition-all duration-300"
                 >
                   <div className="relative mb-6 h-48 overflow-hidden rounded-xl bg-black/30">
@@ -607,6 +623,9 @@ const MousseDetailPage = () => {
             Rejoignez les milliers d'événements qui font confiance à OMEGA MOUSSE
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            {vitrineMode ? (
+              <VitrineCTA productName="OMEGA MOUSSE" />
+            ) : (
             <button
               onClick={handleAddToCart}
               className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-8 py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 flex items-center justify-center gap-2"
@@ -614,6 +633,7 @@ const MousseDetailPage = () => {
               <ShoppingCart size={20} />
               Ajouter au Panier
             </button>
+            )}
             <Link
               to={`/produit/${mousseProduct.id}`}
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"

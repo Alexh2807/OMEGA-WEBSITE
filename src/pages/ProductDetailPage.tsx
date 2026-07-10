@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -19,6 +19,8 @@ import { supabase } from '../lib/supabase';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
+import VitrineCTA from '../components/VitrineCTA';
 import toast from 'react-hot-toast';
 import ProductReviews from '../components/ProductReviews';
 import ReviewForm from '../components/ReviewForm';
@@ -32,6 +34,7 @@ const ProductDetailPage = () => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const { addToCart } = useCart();
   const { user, userType } = useAuth();
+  const { vitrineMode } = useSiteSettings();
 
   useEffect(() => {
     if (id) {
@@ -398,7 +401,10 @@ const ProductDetailPage = () => {
             )}
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            {vitrineMode && (
+              <VitrineCTA productName={product.name} className="mb-6" />
+            )}
+            <div className={`flex flex-col sm:flex-row gap-4 mb-6 ${vitrineMode ? 'hidden' : ''}`}>
               <button
                 onClick={handleAddToCart}
                 disabled={!isInStock}
@@ -452,7 +458,7 @@ const ProductDetailPage = () => {
                   Nous contacter
                 </Link>
                 <a
-                  href="tel:+33619918719"
+                  href="tel:+33681239931"
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors"
                 >
                   <Phone size={16} />

@@ -17,8 +17,9 @@ export const COMPANY_INFO = {
   rcs: 'Béziers B 481 088 722',
   vat: 'FR74481088722',
   ape: '518J',
-  phone: '', // À compléter
-  email: '', // À compléter
+  phone: '06 81 23 99 31',
+  phoneHref: 'tel:+33681239931',
+  email: 'alexishidalgo34000@gmail.com', // TODO : remplacer par une adresse pro (ex. contact@…) dès qu'elle existe
   manager: 'Jose HIDALGO',
   creationDate: '2005-03-08',
 };

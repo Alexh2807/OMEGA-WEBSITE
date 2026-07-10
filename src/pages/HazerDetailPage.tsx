@@ -23,6 +23,8 @@ import { supabase } from '../lib/supabase';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
+import VitrineCTA from '../components/VitrineCTA';
 import toast from 'react-hot-toast';
 
 const HazerDetailPage = () => {
@@ -34,6 +36,7 @@ const HazerDetailPage = () => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const { addToCart } = useCart();
   const { user, userType } = useAuth();
+  const { vitrineMode } = useSiteSettings();
 
   const heroRef = useRef<HTMLDivElement>(null);
   const specsRef = useRef<HTMLDivElement>(null);
@@ -240,12 +243,21 @@ const HazerDetailPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {vitrineMode ? (
+              <Link
+                to="/contact?sujet=devis&produit=Machine%20Hazer%20CO2"
+                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+              >
+                Demander un devis
+              </Link>
+            ) : (
             <button
               onClick={handleAddToCart}
               className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
             >
               Ajouter au Panier
             </button>
+            )}
             <Link
               to={`/produit/${hazerProduct.id}`}
               className="border-2 border-white/30 text-white px-6 py-3 rounded-full font-semibold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
@@ -317,6 +329,9 @@ const HazerDetailPage = () => {
                 </div>
               </div>
 
+              {vitrineMode ? (
+                <VitrineCTA productName="Machine Hazer CO2" />
+              ) : (
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={handleAddToCart}
@@ -333,6 +348,7 @@ const HazerDetailPage = () => {
                   Voir la page du produit
                 </Link>
               </div>
+              )}
 
               <div className="mt-12 text-center">
                 <button
@@ -535,7 +551,7 @@ const HazerDetailPage = () => {
               {relatedProducts.map((product) => (
                 <Link
                   key={product.id}
-                  to={`/produits/${product.id}`}
+                  to={`/produit/${product.id}`}
                   className="group bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-blue-500/30 transition-all duration-300"
                 >
                   <div className="relative mb-6 h-48 overflow-hidden rounded-xl bg-black/30">
@@ -590,6 +606,9 @@ const HazerDetailPage = () => {
             Rejoignez les plus grands théâtres, studios TV et salles de concert qui font confiance à OMEGA
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            {vitrineMode ? (
+              <VitrineCTA productName="Machine Hazer CO2" />
+            ) : (
             <button
               onClick={handleAddToCart}
               className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
@@ -597,6 +616,7 @@ const HazerDetailPage = () => {
               <ShoppingCart size={20} />
               Ajouter au Panier
             </button>
+            )}
             <Link
               to={`/produit/${hazerProduct.id}`}
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"

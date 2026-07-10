@@ -29,6 +29,7 @@ import { supabase } from '../lib/supabase';
 import { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import toast from 'react-hot-toast';
 
 /* ================================================================== */
@@ -312,6 +313,7 @@ const OmegaDmxInterfacePage = () => {
   const [dbProduct, setDbProduct] = useState<Product | null>(null);
   const { addToCart } = useCart();
   const { user, userType } = useAuth();
+  const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
 
   const heroRef = useRef<HTMLDivElement>(null);
@@ -346,6 +348,11 @@ const OmegaDmxInterfacePage = () => {
     n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleBuy = () => {
+    // MODE VITRINE : pas de commande en ligne → demande de devis pré-remplie.
+    if (vitrineMode) {
+      navigate('/contact?sujet=devis&produit=OMEGA%20DMX%20Interface');
+      return;
+    }
     if (!user) {
       toast.error('Connectez-vous pour passer commande');
       navigate('/connexion');
@@ -402,7 +409,7 @@ const OmegaDmxInterfacePage = () => {
             className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all flex items-center gap-2"
           >
             <ShoppingCart size={18} />
-            Commander
+            {vitrineMode ? 'Demander un devis' : 'Commander'}
           </button>
         </div>
       </div>
@@ -460,7 +467,7 @@ const OmegaDmxInterfacePage = () => {
                   className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                 >
                   <ShoppingCart size={20} />
-                  Commander — {fmt(mainPrice)}€
+                  {vitrineMode ? 'Demander un devis' : `Commander — ${fmt(mainPrice)}€`}
                 </button>
                 <Link
                   to="/contact"
@@ -861,14 +868,14 @@ const OmegaDmxInterfacePage = () => {
               className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
             >
               <ShoppingCart size={20} />
-              Commander maintenant
+              {vitrineMode ? 'Demander un devis' : 'Commander maintenant'}
             </button>
             <a
-              href="tel:0619918719"
+              href="tel:+33681239931"
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"
             >
               <Phone size={20} />
-              06 19 91 87 19
+              06 81 23 99 31
             </a>
           </div>
         </div>

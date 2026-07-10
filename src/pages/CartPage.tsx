@@ -15,12 +15,15 @@ import {
 import { supabase } from '../lib/supabase';
 import AddressManager from '../components/AddressManager';
 import StripeCheckout from '../components/StripeCheckout';
+import VitrineCTA from '../components/VitrineCTA';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import toast from 'react-hot-toast';
 
 const CartPage = () => {
   const { items, updateQuantity, removeFromCart, totalItems, clearCart } =
     useCart();
   const { user, userType } = useAuth();
+  const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -29,6 +32,7 @@ const CartPage = () => {
   const [checkoutKey, setCheckoutKey] = useState(0); // Pour forcer la re-création du composant
 
   const handleCheckoutClick = () => {
+    if (vitrineMode) return; // vente en ligne désactivée
     if (!user) {
       toast.error('Veuillez vous connecter pour passer commande');
       navigate('/connexion');
@@ -98,7 +102,8 @@ const CartPage = () => {
           const errorData = await chargeResponse.json();
           console.error('Erreur retournée par get-charge-id:', errorData);
           // On informe l'utilisateur mais on continue le processus pour ne pas bloquer la commande
-          toast.warn('Impossible de récupérer tous les détails du paiement.');
+          // toast.warn n'existe pas dans react-hot-toast (levait une exception silencieuse)
+          toast('Impossible de récupérer tous les détails du paiement.', { icon: '⚠️' });
         }
       } catch (e) {
         console.error("Erreur critique lors de l'appel à get-charge-id:", e);
@@ -229,6 +234,26 @@ const CartPage = () => {
   };
 
   const totals = calculateTotals();
+
+  // MODE VITRINE : le panier n'existe plus — on oriente vers le devis / l'appel.
+  // (AVANT le test de connexion : la vitrine s'applique à tout le monde.)
+  if (vitrineMode) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-24 flex items-center justify-center px-6">
+        <div className="text-center max-w-lg">
+          <ShoppingBag className="text-gray-400 mx-auto mb-4" size={64} />
+          <h2 className="text-2xl font-bold text-white mb-4">
+            La vente en ligne est momentanément désactivée
+          </h2>
+          <p className="text-gray-400 mb-8">
+            Tous nos produits restent disponibles : demandez un devis gratuit
+            via le formulaire de contact, ou appelez-nous directement.
+          </p>
+          <VitrineCTA />
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

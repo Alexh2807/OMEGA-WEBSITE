@@ -1,5 +1,7 @@
 # 🔍 Audit du site OMEGA — Rapport technique
 
+> ⚠️ **Mise à jour du 11 juillet 2026** — voir la section « Intervention du 11/07/2026 » en fin de document : mode Vitrine ajouté, branding corrigé, plusieurs bugs de cet audit corrigés.
+
 > **Date :** 20 juin 2026
 > **Périmètre :** site `OMEGA-WEBSITE` (React + TypeScript + Vite + Supabase + Stripe)
 > **Méthode :** analyse statique du code (auth, administration, e‑commerce, infrastructure).
@@ -134,3 +136,30 @@ Légende de priorité : 🔴 **P1 critique** · 🟠 **P2 à corriger** · 🟡 
 - Un **paiement de bout en bout** avec une vraie carte de test.
 
 > Si tu veux, je peux corriger directement les bugs 🔴/🟠 (adresse de livraison, `toast.warn`, liens cassés, ErrorBoundary, décrément de stock) dans une prochaine étape.
+
+---
+
+## Intervention du 11/07/2026 — Mode Vitrine, branding, corrections
+
+### ✅ Fait
+1. **MODE VITRINE** (nouveau) : option dans Admin → Paramètres → « Mode du site ». Vitrine = AUCUNE vente en ligne : panier/paiement masqués partout (verrou central dans `CartContext.addToCart` + UI par page), remplacés par « Demander un devis » (formulaire pré-rempli via `/contact?sujet=devis&produit=…`) et « Appeler » (06 81 23 99 31). Page `/panier` = écran d'orientation devis/appel. **Par défaut : Vitrine ACTIVE** (repli sûr tant que la table `site_settings` n'existe pas).
+2. **Navigation « Foam System » → « Fluid System »** (Header desktop + mobile) : pointe sur `/fluid-system` qui présente toute la gamme de liquides (Mousse, Neige, Fumée, Flamme).
+3. **Branding** : téléphone unifié **06 81 23 99 31** partout (ancien 06 19 91 87 19 supprimé) ; email `contact@captivision.fr` remplacé (Capti'Vision ≠ OMEGA). Centralisés dans `src/config/legalInfo.ts` (`COMPANY_INFO.phone/phoneHref/email`).
+4. Corrections de l'audit du 20/06 : liens cassés `/produits/:id` → `/produit/:id` (Hazer + Mousse), `toast.warn` → `toast(…)`, **ErrorBoundary global** autour des routes, **page 404**, route `/machines` → redirection `/produits`.
+
+### 📌 À faire par l'admin (une fois)
+- **Appliquer la migration** `supabase/migrations/20260711100000_site_settings.sql` dans le SQL Editor Supabase. Sans elle, le site reste en Vitrine (voulu) mais le bouton admin ne peut pas persister le choix.
+
+### 🖼️ Photos produits manquantes (à fournir dans /public/products/)
+- **OMEGA NEIGE** : réutilise la photo de la Mousse (placeholder) — vraie photo du bidon à fournir.
+- **OMEGA FLAMME** : illustrée par la machine El Fuego, pas par le bidon de liquide.
+- Ménage possible : doublons « ChatGPT Image … copy.png » et « Logo OMEGA … copy.png » (3× chacun, ~2 Mo pièce).
+
+### ⏳ Avant de réactiver la Boutique en ligne (rappels de l'audit du 20/06, toujours valables)
+- 🔴 Adresse de livraison jamais collectée (CartPage) ; 🟠 stock non décrémenté ; 🟠 RLS à auditer table par table ; 🟠 race condition admin ; 🟡 EmailConfirmationPage ; 🟡 email admin en dur.
+
+### 📝 Notes
+- Email public provisoire = Gmail (changer dans `legalInfo.ts` dès qu'une adresse pro existe).
+- Boutons « Favoris » / « Partager » de la fiche produit : sans action (décoratifs) — à câbler ou retirer.
+- `npx tsc --noEmit` remonte des erreurs PRÉEXISTANTES (AdminBilling, AdminDashboard, AuthContext…) qui n'empêchent pas le build Vite ; à assainir un jour.
+- Vérifié le 11/07 : build de production OK, 28/28 tests unitaires OK, parcours visuels (accueil, fluid-system, panier vitrine, contact pré-rempli, 404) OK en local.

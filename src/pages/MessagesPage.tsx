@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -345,7 +345,7 @@ const MessagesPage = () => {
                       Nouveau Message
                     </Link>
                     <a
-                      href="tel:+33619918719"
+                      href="tel:+33681239931"
                       className="border-2 border-white/30 text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center gap-2"
                     >
                       <Phone size={20} />

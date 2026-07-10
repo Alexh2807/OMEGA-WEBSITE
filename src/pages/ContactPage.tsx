@@ -1,4 +1,5 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Mail,
   Phone,
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { COMPANY_INFO } from '../config/legalInfo';
 import toast from 'react-hot-toast';
 
 const ContactPage = () => {
@@ -24,6 +26,25 @@ const ContactPage = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  // Pré-remplissage « Demander un devis » (mode Vitrine) :
+  // /contact?sujet=devis&produit=X → type devis + sujet/message prêts.
+  useEffect(() => {
+    const sujet = searchParams.get('sujet');
+    const produit = searchParams.get('produit');
+    if (sujet === 'devis') {
+      setFormData(prev => ({
+        ...prev,
+        type: 'quote',
+        subject: produit ? `Demande de devis — ${produit}` : 'Demande de devis',
+        message: produit
+          ? `Bonjour,\n\nJe souhaite recevoir un devis pour : ${produit}.\n\n(Précisez ici les quantités, dates et lieu de votre événement.)`
+          : prev.message,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,10 +137,10 @@ const ContactPage = () => {
                 <div>
                   <div className="text-white font-semibold">Téléphone</div>
                   <a
-                    href="tel:+33619918719"
+                    href={COMPANY_INFO.phoneHref}
                     className="text-gray-400 hover:text-blue-400 transition-colors"
                   >
-                    +33 6 19 91 87 19
+                    {COMPANY_INFO.phone}
                   </a>
                 </div>
               </div>
@@ -131,10 +152,10 @@ const ContactPage = () => {
                 <div>
                   <div className="text-white font-semibold">Email</div>
                   <a
-                    href="mailto:contact@captivision.fr"
+                    href={`mailto:${COMPANY_INFO.email}`}
                     className="text-gray-400 hover:text-blue-400 transition-colors"
                   >
-                    contact@captivision.fr
+                    {COMPANY_INFO.email}
                   </a>
                 </div>
               </div>

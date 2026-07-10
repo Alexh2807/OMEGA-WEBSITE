@@ -4,12 +4,16 @@ import {
   Routes,
   Route,
   useLocation,
+  Navigate,
+  Link,
 } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
+import { SiteSettingsProvider } from './contexts/SiteSettingsContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import ErrorBoundary from './components/ErrorBoundary';
 import { supabase } from './lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -84,12 +88,14 @@ function App() {
   );
 
   return (
+    <SiteSettingsProvider>
     <AuthProvider>
       <CartProvider>
         <Router>
           <ScrollToTop />
           <div className="min-h-screen">
             <Header />
+            <ErrorBoundary>
             <Suspense fallback={Fallback}>
               <Routes>
                 <Route path="/" element={<HomePage />} />
@@ -113,20 +119,35 @@ function App() {
                 <Route path="/inscription" element={<AuthPage mode="register" />} />
                 <Route path="/email-confirmation" element={<EmailConfirmationPage />} />
                 <Route path="/admin" element={<AdminPage />} />
-                {/* Placeholder routes */}
                 <Route path="/spectacles" element={<SpectaclesPage />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
+                {/* Anciennes URL : la page « Machines » n'a jamais existé → catalogue */}
+                <Route path="/machines" element={<Navigate to="/produits" replace />} />
+                {/* 404 : URL inconnue → page claire avec retours utiles */}
                 <Route
-                  path="/machines"
+                  path="*"
                   element={
-                    <div className="pt-24 min-h-screen bg-black text-white flex items-center justify-center">
-                      <h1 className="text-4xl">Page Machines - En construction</h1>
+                    <div className="pt-24 min-h-screen bg-black text-white flex flex-col items-center justify-center gap-6 px-6 text-center">
+                      <div className="text-7xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">404</div>
+                      <h1 className="text-3xl font-bold">Page introuvable</h1>
+                      <p className="text-gray-400 max-w-md">
+                        La page que vous cherchez n'existe pas ou a été déplacée.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <Link to="/" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300">
+                          Retour à l'accueil
+                        </Link>
+                        <Link to="/produits" className="border-2 border-white/30 text-white px-8 py-3 rounded-full font-semibold hover:bg-white/10 transition-all duration-300">
+                          Voir les produits
+                        </Link>
+                      </div>
                     </div>
                   }
                 />
               </Routes>
             </Suspense>
+            </ErrorBoundary>
             <Footer />
             <Toaster
               position="top-right"
@@ -142,6 +163,7 @@ function App() {
         </Router>
       </CartProvider>
     </AuthProvider>
+    </SiteSettingsProvider>
   );
 }
 

@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { Product, Category } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import toast from 'react-hot-toast';
 
 const ProductsPage = () => {
@@ -25,6 +26,7 @@ const ProductsPage = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { addToCart } = useCart();
   const { user, userType } = useAuth();
+  const { vitrineMode } = useSiteSettings();
 
   useEffect(() => {
     loadProducts();
@@ -322,6 +324,14 @@ const ProductsPage = () => {
                         >
                           Voir
                         </Link>
+                        {vitrineMode ? (
+                          <Link
+                            to={`/contact?sujet=devis&produit=${encodeURIComponent(product.name)}`}
+                            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
+                          >
+                            Devis
+                          </Link>
+                        ) : (
                         <button
                           onClick={() => handleAddToCart(product)}
                           disabled={!product.in_stock}
@@ -329,6 +339,7 @@ const ProductsPage = () => {
                         >
                           <ShoppingCart size={16} />
                         </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -437,6 +448,14 @@ const ProductsPage = () => {
                       >
                         Voir le produit
                       </Link>
+                      {vitrineMode ? (
+                        <Link
+                          to={`/contact?sujet=devis&produit=${encodeURIComponent(product.name)}`}
+                          className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
+                        >
+                          Demander un devis
+                        </Link>
+                      ) : (
                       <button
                         onClick={() => handleAddToCart(product)}
                         disabled={!product.in_stock}
@@ -445,6 +464,7 @@ const ProductsPage = () => {
                         <ShoppingCart size={16} />
                         Ajouter
                       </button>
+                      )}
                     </div>
                   </div>
                 </div>
