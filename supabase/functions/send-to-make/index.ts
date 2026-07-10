@@ -86,6 +86,10 @@ Deno.serve(async req => {
     }
 
     // --- 4. Payload lisible côté Make (mapping facile vers le module Tiime) ---
+    // Dates au format AAAA-MM-JJ attendu par Tiime (pas d'heure).
+    const toYmd = (d: string | null | undefined): string =>
+      (d ? new Date(d) : new Date()).toISOString().slice(0, 10);
+
     const payload = {
       source: 'omegasud.fr',
       type: 'invoice',
@@ -93,8 +97,8 @@ Deno.serve(async req => {
       invoice_number: invoice.invoice_number,
       order_id: invoice.order_id ?? null,
       status: invoice.status,
-      date: invoice.created_at,
-      due_date: invoice.due_date ?? null,
+      date: toYmd(invoice.created_at),
+      due_date: toYmd(invoice.due_date ?? invoice.created_at),
       customer: {
         name: invoice.customer_name,
         email: invoice.customer_email,
@@ -116,6 +120,23 @@ Deno.serve(async req => {
         total_ttc: it.total_ttc,
       })),
       notes: invoice.notes ?? null,
+      // Lignes déjà au format attendu par le module Make "Tiime — Créer une
+      // facture" (invoice_line[]) : mappées telles quelles dans le scénario.
+      tiime_lines: (invoice.invoice_items ?? []).map((it: any) => ({
+        invoice_quantity: it.quantity,
+        invoice_quantity_unit_of_measure_code: 'unit',
+        line_vat_information: {
+          invoiced_item_vat_rate: (it.tax_rate ?? 20) / 100,
+          invoiced_item_vat_category_code: (it.tax_rate ?? 20) === 0 ? 'E' : 'S',
+        },
+        price_details: { item_net_price: it.unit_price_ht },
+        item_information: {
+          item_name: it.description,
+          item_attributes: [
+            { item_attribute_name: 'type', item_attribute_value: 'sale' },
+          ],
+        },
+      })),
     };
 
     // --- 5. Envoi au webhook Make ---

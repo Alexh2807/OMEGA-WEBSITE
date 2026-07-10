@@ -243,9 +243,33 @@ Deno.serve(async req => {
               amount: amount,
               currency: 'EUR',
               reason: reason,
-              date: new Date().toISOString(),
+              // Format AAAA-MM-JJ attendu par Tiime
+              date: new Date().toISOString().slice(0, 10),
               stripe_refund_id: refund.id,
             },
+            // Ligne d'avoir déjà au format du module Make "Tiime — Créer une
+            // facture" (type Avoir 381). Montant HT (TTC / 1,20).
+            tiime_lines: [
+              {
+                invoice_quantity: 1,
+                invoice_quantity_unit_of_measure_code: 'unit',
+                line_vat_information: {
+                  invoiced_item_vat_rate: 0.2,
+                  invoiced_item_vat_category_code: 'S',
+                },
+                price_details: {
+                  item_net_price: Math.round((amount / 1.2) * 100) / 100,
+                },
+                item_information: {
+                  item_name: `Remboursement facture ${
+                    invoiceData?.invoice_number ?? ''
+                  } — ${reason}`.slice(0, 200),
+                  item_attributes: [
+                    { item_attribute_name: 'type', item_attribute_value: 'sale' },
+                  ],
+                },
+              },
+            ],
           }),
         });
         console.log('✅ Événement refund envoyé à Make.');

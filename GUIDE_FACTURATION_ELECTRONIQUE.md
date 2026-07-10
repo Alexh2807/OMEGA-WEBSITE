@@ -45,6 +45,20 @@
    ```
 5. **Utilisation** : Admin → Facturation → bouton **orange (Send)** sur la facture → elle est créée dans Tiime, qui gère la transmission légale. Astuce : lors du 1er envoi, Make affiche les données reçues, ce qui facilite le mapping de l'étape 3.
 
+## ✅ Scénario Make INSTALLÉ ET ACTIF (10 juillet 2026)
+
+Le scénario **« OMEGA — Factures & Avoirs vers Tiime »** (id 6518240, compte Make d'Alexis) est câblé et testé de bout en bout :
+
+```
+Webhook → Routeur
+  ├─ type=invoice → Créer client Tiime (si doublon : recherche + reprise) → FACTURE BROUILLON dans Tiime
+  └─ type=refund  → Créer client Tiime (idem) → brouillon « AVOIR À CRÉER — FAC-xxx » dans Tiime
+```
+
+- Les factures arrivent en **brouillon** dans Tiime (société id 194006) : tu vérifies puis tu valides/envoies depuis Tiime.
+- ⚠️ **Limitation API Tiime** : impossible de créer un vrai avoir (code 381) par l'API. En cas de remboursement, un brouillon-mémo « AVOIR À CRÉER » arrive avec toutes les infos ; crée le véritable avoir depuis la facture d'origine dans Tiime, puis supprime le mémo.
+- Détail technique : payload `tiime_lines` généré par les Edge Functions au format exact du module Make (TVA en décimal : 0.2 = 20 %).
+
 ## Avoirs automatiques sur remboursement (construit juillet 2026)
 
 La fonction `process-refund` envoie automatiquement un événement `type: "refund"` au même webhook Make après chaque remboursement Stripe réussi (non bloquant : un échec Make n'empêche jamais le remboursement). Le webhook reçoit donc 2 types d'événements : `invoice` (bouton orange) et `refund` (automatique).

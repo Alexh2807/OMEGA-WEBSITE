@@ -18,7 +18,10 @@
       "Bash(powershell -ExecutionPolicy Bypass -File fix-all-colors.ps1)",
       "Bash(powershell -ExecutionPolicy Bypass -File fix-remaining.ps1)",
       "WebFetch(domain:gopro.com)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(nslookup www.omegasud.fr 8.8.8.8)",
+      "Bash(nslookup omegasud.fr 8.8.8.8)",
+      "Bash(nslookup omegasud.netlify.app 8.8.8.8)"
     ],
     "deny": [],
     "ask": []
