@@ -21,6 +21,12 @@ import toast from 'react-hot-toast';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
+// MODE TEST Stripe : détecté par la clé publiable (pk_test_…). Affiché même en
+// production pour que personne ne croie payer réellement pendant les essais.
+const STRIPE_TEST_MODE = String(
+  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
+).startsWith('pk_test_');
+
 interface CheckoutFormProps {
   amount: number;
   onSuccess: (paymentIntentId: string) => void;
@@ -235,6 +241,24 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Bandeau MODE TEST : visible dès que la clé Stripe est une clé de test */}
+      {STRIPE_TEST_MODE && (
+        <div className="p-4 bg-orange-500/15 border border-orange-400/40 rounded-lg">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="text-orange-400 flex-shrink-0" size={20} />
+            <div>
+              <h4 className="text-orange-300 font-semibold">
+                Paiement en MODE TEST
+              </h4>
+              <p className="text-orange-200/80 text-sm mt-1">
+                Aucun débit réel ne sera effectué. Utilisez la carte de test
+                4242 4242 4242 4242 (date future, CVC 123).
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Nom du porteur */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-3">
@@ -333,12 +357,12 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         </span>
       </div>
 
-      {/* Cartes de test (en mode développement) */}
-      {import.meta.env.DEV && (
+      {/* Cartes de test : en dev local OU dès que la clé Stripe est en mode test */}
+      {(import.meta.env.DEV || STRIPE_TEST_MODE) && (
         <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
           <h4 className="text-blue-400 font-semibold mb-2 flex items-center gap-2">
             <CreditCard size={16} />
-            Cartes de test (développement)
+            Cartes de test Stripe
           </h4>
           <div className="text-blue-300 text-sm space-y-1">
             <p>
