@@ -28,7 +28,22 @@
 
 1. **Avant sept. 2026 (réception)** : compte **Tiime gratuit** ([tiime.fr](https://www.tiime.fr/facturation-electronique)) — la conformité réception est automatique dès l'inscription. 0 €.
 2. **Avant sept. 2027 (émission B2B)** : les factures aux clients professionnels se créent directement dans l'appli Tiime (illimité, gratuit) qui les transmet officiellement. Les ventes B2C ne sont pas concernées. Le site continue de générer ses Factur-X pour toutes les commandes (document commercial + archive).
-3. **Automatisation optionnelle plus tard** : intégration officielle Tiime ↔ Make.com (plan gratuit ~1 000 ops/mois) pour créer automatiquement les factures B2B dans Tiime ; ou brancher l'Edge Function `transmit-einvoice` (déjà déployée, compatible toute PA à API) si une PA gratuite avec API apparaît d'ici 2027.
+3. **Automatisation Make.com (construite, juillet 2026)** : bouton orange « Send » dans Admin → Facturation → Edge Function `send-to-make` (déployée) → webhook Make → module Tiime « Créer une facture ». Voir section suivante. L'Edge Function `transmit-einvoice` reste aussi déployée si une PA gratuite avec API apparaît d'ici 2027.
+
+## Configurer l'automatisation Make.com (une seule fois)
+
+1. **Compte Tiime** : [tiime.fr](https://www.tiime.fr/facturation-electronique) — plan gratuit, SIRET 481 088 722 00014.
+2. **Compte Make** : [make.com](https://www.make.com) — plan gratuit (~1 000 opérations/mois, largement assez).
+3. **Créer le scénario Make** :
+   - Nouveau scénario → 1er module : **Webhooks → Custom webhook** → « Add » → copier l'URL générée (`https://hook.eu2.make.com/…`).
+   - 2e module : chercher **Tiime → Create an invoice** → connecter ton compte Tiime.
+   - Mapper les champs depuis le webhook : `customer.name`, `customer.email`, `items[]` (description, quantity, unit_price_ht, tax_rate), `invoice_number`, `notes`…
+   - Activer le scénario (interrupteur « ON »).
+4. **Enregistrer l'URL du webhook côté serveur** (à faire par Claude ou en terminal) :
+   ```bash
+   npx supabase secrets set --project-ref ebkxdndfcwowevvtoxhr MAKE_WEBHOOK_URL=https://hook.eu2.make.com/…
+   ```
+5. **Utilisation** : Admin → Facturation → bouton **orange (Send)** sur la facture → elle est créée dans Tiime, qui gère la transmission légale. Astuce : lors du 1er envoi, Make affiche les données reçues, ce qui facilite le mapping de l'étape 3.
 
 ## Brancher une PA au site (quand tu auras le compte)
 

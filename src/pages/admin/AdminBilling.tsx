@@ -22,6 +22,7 @@ import {
   RotateCcw,
   X,
   FileCheck,
+  Send,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Invoice, Quote, BillingSettings, Refund } from '../../types/billing';
@@ -851,6 +852,40 @@ const AdminBilling = () => {
                           title="Générer la facture électronique (Factur-X)"
                         >
                           <FileCheck size={16} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const t = toast.loading('Envoi vers Tiime (via Make)…');
+                            try {
+                              const { data, error } =
+                                await supabase.functions.invoke('send-to-make', {
+                                  body: { invoiceId: invoice.id },
+                                });
+                              if (error) throw new Error(error.message);
+                              if (data?.sent) {
+                                toast.success(
+                                  'Facture envoyée à Make — création dans Tiime en cours',
+                                  { id: t }
+                                );
+                              } else {
+                                toast.error(
+                                  data?.message ||
+                                    data?.error ||
+                                    'Webhook Make non configuré',
+                                  { id: t }
+                                );
+                              }
+                            } catch (e: any) {
+                              toast.error(
+                                e?.message || 'Erreur envoi vers Make',
+                                { id: t }
+                              );
+                            }
+                          }}
+                          className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors"
+                          title="Créer cette facture dans Tiime (via Make.com)"
+                        >
+                          <Send size={16} />
                         </button>
                         {isRefundable(invoice) && (
                           <button
