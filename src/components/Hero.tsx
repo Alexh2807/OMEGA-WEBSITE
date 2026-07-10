@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Star, Sparkles, ArrowRight } from 'lucide-react';
+import { ChevronDown, Star, Sparkles, ArrowRight, Radio } from 'lucide-react';
 
 const Hero = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -51,12 +51,12 @@ const Hero = () => {
             Fabricant français de systèmes professionnels pour spectacles et événements
           </p>
 
-          {/* Nos 2 Gammes Phares */}
+          {/* Nos Gammes Phares */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-white mb-8">
               Nos Gammes <span className="text-blue-400">OMEGA</span>
             </h2>
-            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
               {/* Smoke System */}
               <Link
                 to="/smoke-system"
@@ -89,6 +89,24 @@ const Hero = () => {
                 </p>
                 <div className="flex items-center gap-2 text-purple-400 font-semibold group-hover:gap-4 transition-all">
                   Découvrir la gamme
+                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+
+              {/* DMX Interface */}
+              <Link
+                to="/omega-dmx-interface"
+                className="group bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 hover:border-cyan-400/50 transition-all duration-500 transform hover:-translate-y-2 hover:shadow-2xl hover:shadow-cyan-500/25"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <Radio className="text-cyan-400" size={32} />
+                  <h3 className="text-2xl font-bold text-white">DMX Interface</h3>
+                </div>
+                <p className="text-gray-300 mb-6 leading-relaxed">
+                  Boîtier DMX 2 univers (1024 canaux), sans abonnement. Sans fil jusqu'à 1 km avec les cartes OMEGA.
+                </p>
+                <div className="flex items-center gap-2 text-cyan-400 font-semibold group-hover:gap-4 transition-all">
+                  Découvrir le boîtier
                   <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>

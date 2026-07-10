@@ -24,6 +24,7 @@ const NeigeDetailPage = lazy(() => import('./pages/NeigeDetailPage'));
 const FumeeDetailPage = lazy(() => import('./pages/FumeeDetailPage'));
 const FlammeDetailPage = lazy(() => import('./pages/FlammeDetailPage'));
 const ProductsPage = lazy(() => import('./pages/ProductsPage'));
+const OmegaDmxInterfacePage = lazy(() => import('./pages/OmegaDmxInterfacePage'));
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
 const CartPage = lazy(() => import('./pages/CartPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
@@ -102,6 +103,7 @@ function App() {
                 <Route path="/fumee-detail" element={<FumeeDetailPage />} />
                 <Route path="/flamme-detail" element={<FlammeDetailPage />} />
                 <Route path="/produit-mousse" element={<MousseDetailPage />} />
+                <Route path="/omega-dmx-interface" element={<OmegaDmxInterfacePage />} />
                 <Route path="/panier" element={<CartPage />} />
                 <Route path="/compte" element={<AccountPage />} />
                 <Route path="/commandes" element={<OrdersPage />} />

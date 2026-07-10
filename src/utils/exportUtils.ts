@@ -96,9 +96,17 @@ export const exportSalesJournalFEC = (
 
   invoices.forEach(invoice => {
     const invoiceDate = new Date(invoice.created_at);
+    
+    // Filtres de sécurité : Date et Statut
+    // On exclut les brouillons et les factures annulées qui ne doivent pas apparaître en compta
     if (invoiceDate < startDate || invoiceDate > endDate) return;
+    if (invoice.status === 'draft' || invoice.status === 'cancelled') return;
 
     const dateStr = invoiceDate.toISOString().split('T')[0].replace(/-/g, '');
+
+    // Gestion des avoirs / remboursements (si applicable, sinon traité comme vente standard)
+    // Note : Idéalement, un avoir devrait avoir son propre document et numérotation.
+    // Ici, on suppose que c'est une facture de vente validée.
 
     // Ligne de vente (crédit)
     data.push({

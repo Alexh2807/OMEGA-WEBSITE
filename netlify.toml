@@ -1,0 +1,16 @@
+# Configuration Netlify — site OMEGA (Vite + React SPA)
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA : toutes les routes sont servies par index.html (React Router gère le reste)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

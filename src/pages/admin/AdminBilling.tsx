@@ -21,11 +21,16 @@ import {
   Package,
   RotateCcw,
   X,
+  FileCheck,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Invoice, Quote, BillingSettings, Refund } from '../../types/billing';
 import InvoicePDF from '../../components/InvoicePDF';
 import { generateInvoicePDF } from '../../utils/pdfGenerator';
+import {
+  emitEInvoice,
+  downloadFacturXPdf,
+} from '../../services/einvoice/einvoiceService';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
@@ -819,6 +824,33 @@ const AdminBilling = () => {
                           title="Télécharger PDF"
                         >
                           <Download size={16} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const t = toast.loading('Génération Factur-X…');
+                            try {
+                              const res = await emitEInvoice(invoice);
+                              downloadFacturXPdf(
+                                res.pdfBytes,
+                                invoice.invoice_number
+                              );
+                              toast.success(
+                                `Factur-X générée — mode ${res.mode.toUpperCase()} (${res.status})${
+                                  res.mode === 'test' ? ' · NON transmise' : ''
+                                }`,
+                                { id: t }
+                              );
+                            } catch (e: any) {
+                              toast.error(
+                                e?.message || 'Erreur génération Factur-X',
+                                { id: t }
+                              );
+                            }
+                          }}
+                          className="p-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+                          title="Générer la facture électronique (Factur-X)"
+                        >
+                          <FileCheck size={16} />
                         </button>
                         {isRefundable(invoice) && (
                           <button

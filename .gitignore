@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Sauvegardes base de données (données sensibles — ne JAMAIS pousser sur GitHub)
+*.backup.gz
+db_cluster*
+
+# Netlify
+.netlify

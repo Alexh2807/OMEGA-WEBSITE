@@ -148,6 +148,12 @@ const Header = () => {
               Foam System
             </Link>
             <Link
+              to="/omega-dmx-interface"
+              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
+            >
+              DMX Interface
+            </Link>
+            <Link
               to="/produits"
               className="text-white hover:text-blue-400 transition-colors duration-300"
             >
@@ -331,6 +337,12 @@ const Header = () => {
               className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
             >
               Foam System
+            </Link>
+            <Link
+              to="/omega-dmx-interface"
+              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
+            >
+              DMX Interface
             </Link>
             <Link
               to="/produits"
