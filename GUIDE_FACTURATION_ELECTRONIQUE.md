@@ -22,10 +22,13 @@
 - ✅ Bouton de génération dans **Admin → Facturation** (icône cyan FileCheck).
 - ✅ Edge Function **`transmit-einvoice`** : transmission serveur vers n'importe quelle PA (OAuth2 + dépôt), clés jamais exposées dans le navigateur. Tant qu'aucune PA n'est configurée, elle répond « PA non configurée » et la facture reste « à transmettre ».
 
-## Stratégie gratuite recommandée
+## Stratégie gratuite retenue : Tiime (décision juillet 2026)
 
-1. **Avant sept. 2026 (réception)** : ouvre un compte sur une PA gratuite — par ex. **Tiime** (gratuit illimité) ou **B2Brouter** (gratuit 24 factures B2B/an, avec API). C'est ce compte qui te rend conforme pour la réception. 0 €.
-2. **Avant sept. 2027 (émission B2B + e-reporting)** : si tu veux l'automatisation depuis le site, choisis une PA avec API (B2Brouter gratuit jusqu'à 24 factures B2B/an — tes ventes B2C ne comptent pas). Sinon, dépôt manuel des Factur-X générés par le site sur la PA gratuite.
+*B2Brouter écarté : ~110 €HT/an vérifié par Alexis. L'API Tiime est réservée aux éditeurs de logiciels (partenariat) — mais aucune API n'est nécessaire pour être conforme.*
+
+1. **Avant sept. 2026 (réception)** : compte **Tiime gratuit** ([tiime.fr](https://www.tiime.fr/facturation-electronique)) — la conformité réception est automatique dès l'inscription. 0 €.
+2. **Avant sept. 2027 (émission B2B)** : les factures aux clients professionnels se créent directement dans l'appli Tiime (illimité, gratuit) qui les transmet officiellement. Les ventes B2C ne sont pas concernées. Le site continue de générer ses Factur-X pour toutes les commandes (document commercial + archive).
+3. **Automatisation optionnelle plus tard** : intégration officielle Tiime ↔ Make.com (plan gratuit ~1 000 ops/mois) pour créer automatiquement les factures B2B dans Tiime ; ou brancher l'Edge Function `transmit-einvoice` (déjà déployée, compatible toute PA à API) si une PA gratuite avec API apparaît d'ici 2027.
 
 ## Brancher une PA au site (quand tu auras le compte)
 
