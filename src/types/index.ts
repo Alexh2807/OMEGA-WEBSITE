@@ -18,8 +18,10 @@ export interface Product {
   images?: string[];
   stock_quantity: number;
   in_stock?: boolean;
-  /** Gabarit d'expédition : 'small' = petit colis (forfait), 'large' = gros produit (tarif à la distance) */
+  /** Gabarit d'expédition : 'small' = colis (tarifé au poids), 'large' = palette/encombrant (tarifé à la zone) */
   shipping_class?: 'small' | 'large';
+  /** Poids unitaire en kg (barème colis) — null = poids par défaut de la config livraison */
+  weight_kg?: number | null;
   specifications?: any;
   sku?: string;
   created_at: string;

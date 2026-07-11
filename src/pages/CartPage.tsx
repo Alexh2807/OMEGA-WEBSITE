@@ -31,6 +31,7 @@ const CartPage = () => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [showAddressManager, setShowAddressManager] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [expressShipping, setExpressShipping] = useState(false);
   const [checkoutKey, setCheckoutKey] = useState(0); // Pour forcer la re-création du composant
 
   const handleCheckoutClick = () => {
@@ -52,6 +53,12 @@ const CartPage = () => {
     if (!selectedAddress) {
       toast.error('Sélectionnez votre adresse de livraison');
       setShowAddressManager(true);
+      return;
+    }
+    if (shipping.needsQuote) {
+      toast.error(
+        'Cette destination nécessite un devis de livraison — contactez-nous.'
+      );
       return;
     }
     if (shipping.cost === null) {
@@ -253,16 +260,29 @@ const CartPage = () => {
 
   const totals = calculateTotals();
 
-  // FRAIS DE LIVRAISON : selon le gabarit des produits (petit colis / gros
-  // produit) et le code postal de livraison (zone proche ou longue distance).
-  // Tarifs configurables dans Admin → Paramètres → Livraison.
+  // FRAIS DE LIVRAISON : colis = barème au poids total ; palette/encombrant =
+  // tarif par unité selon la zone (distance calculée depuis le code postal,
+  // Europe selon le pays, DOM/hors Europe = devis). Barèmes configurables
+  // dans Admin → Paramètres → Livraison.
   const shipping = computeShipping(
-    items.map(item => ({
-      shipping_class: (item.product as { shipping_class?: string } | undefined)?.shipping_class,
-      quantity: item.quantity,
-    })),
-    selectedAddress?.postal_code || null,
-    shippingConfig
+    items.map(item => {
+      const p = item.product as
+        | { shipping_class?: string; weight_kg?: number | null }
+        | undefined;
+      return {
+        shipping_class: p?.shipping_class,
+        weight_kg: p?.weight_kg,
+        quantity: item.quantity,
+      };
+    }),
+    selectedAddress
+      ? {
+          postal_code: selectedAddress.postal_code,
+          country: selectedAddress.country,
+        }
+      : null,
+    shippingConfig,
+    { express: expressShipping }
   );
   // Total encaissé = produits TTC + livraison (tarifs livraison exprimés TTC).
   const grandTotal = totals.total + (shipping.cost ?? 0);
@@ -475,14 +495,37 @@ const CartPage = () => {
                     Livraison
                   </span>
                   <span>
-                    {shipping.cost !== null
-                      ? `${shipping.cost.toFixed(2)}€`
-                      : 'Selon adresse'}
+                    {shipping.needsQuote
+                      ? 'Sur devis'
+                      : shipping.cost !== null
+                        ? `${shipping.cost.toFixed(2)}€`
+                        : 'Selon adresse'}
                   </span>
                 </div>
                 {shipping.label && (
                   <div className="text-xs text-gray-400 -mt-2">
-                    {shipping.label} · Expédition sous {shippingConfig.delay_days} jours
+                    {shipping.label}
+                    {!shipping.needsQuote &&
+                      ` · Expédition sous ${shippingConfig.delay_days} jours`}
+                  </div>
+                )}
+                {shipping.expressAvailable && (
+                  <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={expressShipping}
+                      onChange={e => setExpressShipping(e.target.checked)}
+                      className="accent-blue-500"
+                    />
+                    Livraison Express Europe (
+                    {(shippingConfig.pallet_zones.express_eu * shipping.palletUnits).toFixed(2)}
+                    €)
+                  </label>
+                )}
+                {shipping.needsQuote && (
+                  <div className="text-xs text-orange-300 -mt-1">
+                    Destination hors zones automatiques (DOM-TOM / hors
+                    Europe) : contactez-nous pour un devis de transport.
                   </div>
                 )}
                 <div className="border-t border-white/20 pt-4">
@@ -497,14 +540,24 @@ const CartPage = () => {
                 </div>
               </div>
 
-              <button
-                onClick={handleCheckoutClick}
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <CreditCard size={20} />
-                {selectedAddress ? 'Passer la Commande' : 'Choisir mon adresse'}
-              </button>
+              {shipping.needsQuote ? (
+                <Link
+                  to="/contact?sujet=devis"
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 mb-4 flex items-center justify-center gap-2"
+                >
+                  <Truck size={20} />
+                  Demander un devis livraison
+                </Link>
+              ) : (
+                <button
+                  onClick={handleCheckoutClick}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <CreditCard size={20} />
+                  {selectedAddress ? 'Passer la Commande' : 'Choisir mon adresse'}
+                </button>
+              )}
 
               <p className="text-gray-400 text-sm text-center">
                 Paiement sécurisé • Expédition sous {shippingConfig.delay_days} jours • Garantie OMEGA

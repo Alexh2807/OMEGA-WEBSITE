@@ -41,6 +41,7 @@ const AdminProducts = () => {
     images: [] as string[],
     stock_quantity: '',
     shipping_class: 'small' as 'small' | 'large',
+    weight_kg: '',
     sku: '',
     specifications: {},
     tags: [] as string[],
@@ -187,6 +188,9 @@ const AdminProducts = () => {
         images: formData.images.length > 0 ? formData.images : null,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
         shipping_class: formData.shipping_class,
+        weight_kg: formData.weight_kg
+          ? parseFloat(formData.weight_kg.replace(',', '.'))
+          : null,
         sku: formData.sku || null,
         specifications: formData.specifications,
         tags: formData.tags,
@@ -262,6 +266,7 @@ const AdminProducts = () => {
       images: [],
       stock_quantity: '',
       shipping_class: 'small',
+      weight_kg: '',
       sku: '',
       specifications: {},
       tags: [],
@@ -285,6 +290,10 @@ const AdminProducts = () => {
       images: product.images || (product.image ? [product.image] : []),
       stock_quantity: product.stock_quantity.toString(),
       shipping_class: product.shipping_class === 'large' ? 'large' : 'small',
+      weight_kg:
+        product.weight_kg !== null && product.weight_kg !== undefined
+          ? String(product.weight_kg)
+          : '',
       sku: product.sku || '',
       specifications: product.specifications || {},
       tags: product.tags || [],
@@ -652,31 +661,53 @@ const AdminProducts = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Gabarit d'expédition *
-                </label>
-                <select
-                  value={formData.shipping_class}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      shipping_class: e.target.value as 'small' | 'large',
-                    })
-                  }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-green-400 focus:outline-none [&>option]:bg-gray-900"
-                >
-                  <option value="small">
-                    Petit colis — forfait (accessoires, liquides…)
-                  </option>
-                  <option value="large">
-                    Gros produit — livraison spécialisée (machines)
-                  </option>
-                </select>
-                <p className="text-gray-500 text-xs mt-1">
-                  Détermine les frais de livraison affichés au client (tarifs
-                  réglables dans Paramètres → Livraison).
-                </p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Gabarit d'expédition *
+                  </label>
+                  <select
+                    value={formData.shipping_class}
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        shipping_class: e.target.value as 'small' | 'large',
+                      })
+                    }
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white focus:border-green-400 focus:outline-none [&>option]:bg-gray-900"
+                  >
+                    <option value="small">
+                      Colis — tarifé au poids (liquides, accessoires…)
+                    </option>
+                    <option value="large">
+                      Palette / encombrant — tarifé à la distance (machines,
+                      volumes)
+                    </option>
+                  </select>
+                  <p className="text-gray-500 text-xs mt-1">
+                    Un produit léger mais volumineux (bidon vide…) doit être en
+                    « Palette ». Barèmes dans Paramètres → Livraison.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Poids unitaire (kg)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.weight_kg}
+                    onChange={e =>
+                      setFormData({ ...formData, weight_kg: e.target.value })
+                    }
+                    className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-green-400 focus:outline-none"
+                    placeholder="ex : 5.5"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Sert au barème colis (tranches de poids). Vide = poids par
+                    défaut de la config livraison.
+                  </p>
+                </div>
               </div>
 
               <div>

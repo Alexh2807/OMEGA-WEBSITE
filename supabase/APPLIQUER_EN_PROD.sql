@@ -88,15 +88,47 @@ CREATE TRIGGER trg_decrement_stock
   FOR EACH ROW
   EXECUTE FUNCTION decrement_stock_on_order_item();
 
--- Tarifs par défaut (ne remplace pas une config déjà réglée dans l'admin)
+-- Livraison v2 : poids par produit (barème colis au poids)
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS weight_kg numeric;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'products_weight_kg_check'
+  ) THEN
+    ALTER TABLE products
+      ADD CONSTRAINT products_weight_kg_check
+      CHECK (weight_kg IS NULL OR weight_kg >= 0);
+  END IF;
+END $$;
+
+-- Tarifs par défaut (ne remplace pas une config déjà réglée dans l'admin ;
+-- une ancienne config v1 est migrée automatiquement par le front)
 INSERT INTO site_settings (key, value)
 VALUES (
   'shipping_config',
   '{
-    "small_flat": 7.99,
-    "large_near": 129,
-    "large_far": 259,
-    "near_departments": ["34", "11", "30", "81", "12", "66"],
+    "parcel_brackets": [
+      {"max_kg": 1, "price": 7.99},
+      {"max_kg": 2, "price": 15.90},
+      {"max_kg": 5, "price": 19.90},
+      {"max_kg": 10, "price": 29.90},
+      {"max_kg": 30, "price": 49.90}
+    ],
+    "parcel_over_price": 79.90,
+    "parcel_europe_surcharge": 12,
+    "default_weight_kg": 1,
+    "pallet_zones": {
+      "fr_0_200": 90,
+      "fr_200_500": 140,
+      "fr_far": 250,
+      "europe": 280,
+      "express_eu": 450
+    },
+    "near_km_max": 200,
+    "mid_km_max": 500,
+    "depot": {"lat": 43.43, "lng": 3.30, "label": "Montblanc (34290)"},
     "delay_days": 7
   }'::jsonb
 )

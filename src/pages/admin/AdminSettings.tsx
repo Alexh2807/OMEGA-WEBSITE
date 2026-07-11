@@ -25,54 +25,101 @@ const AdminSettings = () => {
   const [savingMode, setSavingMode] = useState(false);
   const [savingShipping, setSavingShipping] = useState(false);
   const [shipForm, setShipForm] = useState({
-    small_flat: '',
-    large_near: '',
-    large_far: '',
-    near_departments: '',
+    brackets: [] as { max_kg: string; price: string }[],
+    over_price: '',
+    europe_surcharge: '',
+    default_weight: '',
+    z_fr_0_200: '',
+    z_fr_200_500: '',
+    z_fr_far: '',
+    z_europe: '',
+    z_express: '',
+    near_km: '',
+    mid_km: '',
     delay_days: '',
   });
 
   // Recharge le formulaire quand la config arrive de la base.
   useEffect(() => {
     setShipForm({
-      small_flat: String(shippingConfig.small_flat),
-      large_near: String(shippingConfig.large_near),
-      large_far: String(shippingConfig.large_far),
-      near_departments: shippingConfig.near_departments.join(', '),
+      brackets: shippingConfig.parcel_brackets.map(b => ({
+        max_kg: String(b.max_kg),
+        price: String(b.price),
+      })),
+      over_price: String(shippingConfig.parcel_over_price),
+      europe_surcharge: String(shippingConfig.parcel_europe_surcharge),
+      default_weight: String(shippingConfig.default_weight_kg),
+      z_fr_0_200: String(shippingConfig.pallet_zones.fr_0_200),
+      z_fr_200_500: String(shippingConfig.pallet_zones.fr_200_500),
+      z_fr_far: String(shippingConfig.pallet_zones.fr_far),
+      z_europe: String(shippingConfig.pallet_zones.europe),
+      z_express: String(shippingConfig.pallet_zones.express_eu),
+      near_km: String(shippingConfig.near_km_max),
+      mid_km: String(shippingConfig.mid_km_max),
       delay_days: String(shippingConfig.delay_days),
     });
   }, [shippingConfig]);
 
-  const handleSaveShipping = async () => {
-    const small_flat = parseFloat(shipForm.small_flat.replace(',', '.'));
-    const large_near = parseFloat(shipForm.large_near.replace(',', '.'));
-    const large_far = parseFloat(shipForm.large_far.replace(',', '.'));
-    const delay_days = parseInt(shipForm.delay_days, 10);
-    const near_departments = shipForm.near_departments
-      .split(/[\s,;]+/)
-      .map(d => d.trim())
-      .filter(Boolean);
+  const num = (s: string) => parseFloat(String(s).replace(',', '.'));
 
+  const setBracket = (i: number, field: 'max_kg' | 'price', value: string) => {
+    const brackets = shipForm.brackets.map((b, j) =>
+      j === i ? { ...b, [field]: value } : b
+    );
+    setShipForm({ ...shipForm, brackets });
+  };
+
+  const handleSaveShipping = async () => {
+    const brackets = shipForm.brackets
+      .map(b => ({ max_kg: num(b.max_kg), price: num(b.price) }))
+      .filter(b => !isNaN(b.max_kg) && !isNaN(b.price));
     if (
-      [small_flat, large_near, large_far].some(v => isNaN(v) || v < 0) ||
-      isNaN(delay_days) ||
-      delay_days < 1
+      !brackets.length ||
+      brackets.some(b => b.max_kg <= 0 || b.price < 0)
     ) {
-      toast.error('Tarifs ou délai invalides : vérifiez les valeurs saisies.');
+      toast.error('Barème colis invalide : chaque tranche doit avoir un poids > 0 et un prix ≥ 0.');
       return;
     }
-    if (!near_departments.length) {
-      toast.error('Indiquez au moins un département « zone proche ».');
+
+    const values = {
+      over_price: num(shipForm.over_price),
+      europe_surcharge: num(shipForm.europe_surcharge),
+      default_weight: num(shipForm.default_weight),
+      z_fr_0_200: num(shipForm.z_fr_0_200),
+      z_fr_200_500: num(shipForm.z_fr_200_500),
+      z_fr_far: num(shipForm.z_fr_far),
+      z_europe: num(shipForm.z_europe),
+      z_express: num(shipForm.z_express),
+      near_km: num(shipForm.near_km),
+      mid_km: num(shipForm.mid_km),
+      delay_days: parseInt(shipForm.delay_days, 10),
+    };
+    if (Object.values(values).some(v => isNaN(v) || v < 0)) {
+      toast.error('Tarifs, seuils ou délai invalides : vérifiez les valeurs saisies.');
+      return;
+    }
+    if (values.near_km >= values.mid_km) {
+      toast.error('Le seuil « zone proche » doit être inférieur au seuil « zone intermédiaire ».');
       return;
     }
 
     setSavingShipping(true);
     const { error } = await setShippingConfig({
-      small_flat,
-      large_near,
-      large_far,
-      near_departments,
-      delay_days,
+      ...shippingConfig, // préserve depot & champs avancés
+      parcel_brackets: brackets.sort((a, b) => a.max_kg - b.max_kg),
+      parcel_over_price: values.over_price,
+      parcel_europe_surcharge: values.europe_surcharge,
+      default_weight_kg: values.default_weight || 1,
+      pallet_zones: {
+        fr_0_200: values.z_fr_0_200,
+        fr_200_500: values.z_fr_200_500,
+        fr_far: values.z_fr_far,
+        europe: values.z_europe,
+        express_eu: values.z_express,
+      },
+      near_km_max: values.near_km,
+      mid_km_max: values.mid_km,
+      delay_days: values.delay_days || 7,
     });
     setSavingShipping(false);
     if (error) {
@@ -235,89 +282,189 @@ const AdminSettings = () => {
         </div>
       </div>
 
-      {/* Section Livraison : tarifs par gabarit + zone */}
+      {/* Section Livraison : barème colis au poids + palette par zones */}
       <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-8 border border-white/10">
         <div className="flex items-center gap-3 mb-2">
           <Truck className="text-blue-400" size={24} />
           <h2 className="text-2xl font-bold text-white">Livraison</h2>
         </div>
         <p className="text-gray-400 text-sm mb-6">
-          Chaque produit a un <b>gabarit d'expédition</b> (réglé dans sa fiche) :
-          « petit colis » (forfait par commande) ou « gros produit » (tarif{' '}
-          <b>par unité</b>, selon la distance depuis le dépôt de Montblanc, 34).
-          Les petits articles voyagent sans surcoût avec un gros produit.
+          Chaque produit a un <b>gabarit</b> (fiche produit) : <b>Colis</b> =
+          tarifé au <b>poids total</b> du panier (barème ci-dessous) ;{' '}
+          <b>Palette / encombrant</b> = tarifé <b>par unité</b> selon la zone,
+          calculée automatiquement depuis le code postal (distance routière
+          estimée depuis le dépôt de {shippingConfig.depot.label}) ou le pays.
+          Les colis voyagent sans surcoût avec une palette. DOM-TOM et hors
+          Europe : devis.
         </p>
 
-        <div className="grid md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Petit colis — forfait (€)
-            </label>
+        {/* Barème colis au poids */}
+        <h3 className="text-white font-semibold mb-3">
+          Barème colis — tranches de poids
+        </h3>
+        <div className="space-y-2 mb-3">
+          {shipForm.brackets.map((b, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <span className="text-gray-400 text-sm w-16 text-right">
+                Jusqu'à
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={b.max_kg}
+                onChange={e => setBracket(i, 'max_kg', e.target.value)}
+                className="w-24 bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+              />
+              <span className="text-gray-400 text-sm">kg</span>
+              <span className="text-gray-500">→</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={b.price}
+                onChange={e => setBracket(i, 'price', e.target.value)}
+                className="w-28 bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+              />
+              <span className="text-gray-400 text-sm">€</span>
+              <button
+                onClick={() =>
+                  setShipForm({
+                    ...shipForm,
+                    brackets: shipForm.brackets.filter((_, j) => j !== i),
+                  })
+                }
+                className="text-red-400/70 hover:text-red-400 text-sm ml-2"
+                title="Supprimer cette tranche"
+              >
+                Supprimer
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-4 mb-6">
+          <button
+            onClick={() =>
+              setShipForm({
+                ...shipForm,
+                brackets: [...shipForm.brackets, { max_kg: '', price: '' }],
+              })
+            }
+            className="border border-white/20 text-gray-300 hover:text-white hover:border-white/40 px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            + Ajouter une tranche
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm">Au-delà :</span>
             <input
               type="text"
               inputMode="decimal"
-              value={shipForm.small_flat}
+              value={shipForm.over_price}
               onChange={e =>
-                setShipForm({ ...shipForm, small_flat: e.target.value })
+                setShipForm({ ...shipForm, over_price: e.target.value })
               }
-              className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-              placeholder="7.99"
+              className="w-28 bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Gros produit — zone proche (€ / unité)
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={shipForm.large_near}
-              onChange={e =>
-                setShipForm({ ...shipForm, large_near: e.target.value })
-              }
-              className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-              placeholder="129"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Gros produit — longue distance (€ / unité)
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={shipForm.large_far}
-              onChange={e =>
-                setShipForm({ ...shipForm, large_far: e.target.value })
-              }
-              className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-              placeholder="259"
-            />
+            <span className="text-gray-400 text-sm">€</span>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
+        {/* Palette par zones */}
+        <h3 className="text-white font-semibold mb-3">
+          Palette / encombrant — prix par unité et par zone
+        </h3>
+        <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+          {(
+            [
+              ['z_fr_0_200', `France 0–${shipForm.near_km || '200'} km`],
+              ['z_fr_200_500', `France ${shipForm.near_km || '200'}–${shipForm.mid_km || '500'} km`],
+              ['z_fr_far', 'France entière'],
+              ['z_europe', 'Europe'],
+              ['z_express', 'Express Europe'],
+            ] as const
+          ).map(([field, label]) => (
+            <div key={field}>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {label}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={shipForm[field]}
+                  onChange={e =>
+                    setShipForm({ ...shipForm, [field]: e.target.value })
+                  }
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+                />
+                <span className="text-gray-400 text-sm">€</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Réglages avancés */}
+        <div className="grid md:grid-cols-5 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Départements « zone proche » (~100 km)
+              Seuil zone proche (km)
             </label>
             <input
               type="text"
-              value={shipForm.near_departments}
+              inputMode="numeric"
+              value={shipForm.near_km}
               onChange={e =>
-                setShipForm({ ...shipForm, near_departments: e.target.value })
+                setShipForm({ ...shipForm, near_km: e.target.value })
               }
-              className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-              placeholder="34, 11, 30, 81, 12, 66"
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Seuil zone intermédiaire (km)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={shipForm.mid_km}
+              onChange={e =>
+                setShipForm({ ...shipForm, mid_km: e.target.value })
+              }
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Surcoût colis Europe (€)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={shipForm.europe_surcharge}
+              onChange={e =>
+                setShipForm({ ...shipForm, europe_surcharge: e.target.value })
+              }
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Poids par défaut (kg)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={shipForm.default_weight}
+              onChange={e =>
+                setShipForm({ ...shipForm, default_weight: e.target.value })
+              }
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
             />
             <p className="text-gray-500 text-xs mt-1">
-              Numéros de départements séparés par des virgules. Le code postal
-              de livraison du client décide de la zone.
+              Produit sans poids renseigné
             </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Délai d'expédition annoncé (jours)
+              Délai d'expédition (jours)
             </label>
             <input
               type="text"
@@ -326,8 +473,7 @@ const AdminSettings = () => {
               onChange={e =>
                 setShipForm({ ...shipForm, delay_days: e.target.value })
               }
-              className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-              placeholder="7"
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
             />
           </div>
         </div>
