@@ -427,9 +427,13 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
           titre: 'Réponse à votre signalement',
           sousTitre: `Suivi ${r.track_code ?? '—'} — ${r.title}`,
           corps: p('Bonjour,') + p('L’équipe OMEGA vous répond&nbsp;:') + citation(bloc(msg!.body)),
+          // Ne pas inviter à répondre à cet e-mail : la réponse arriverait dans la
+          // boîte OMEGA mais PAS dans le ticket, faute de traitement du courrier
+          // entrant. Le suivi se poursuit dans l'application.
           pied:
-            'Vous recevez ce message car un signalement a été déposé avec cette adresse depuis OMEGADMX. ' +
-            'Répondez directement à cet e-mail pour poursuivre l’échange.',
+            'Vous recevez ce message car un signalement a été déposé avec cette adresse ' +
+            'depuis OMEGADMX. Pour poursuivre l’échange, répondez depuis l’application, ' +
+            'rubrique Signalements.',
         }),
       };
     }
