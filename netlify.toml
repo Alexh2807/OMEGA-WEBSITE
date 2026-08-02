@@ -4,6 +4,16 @@
   command = "npm run build"
   publish = "dist"
 
+  [build.environment]
+    # Le scanner de secrets cherche la VALEUR de chaque variable d'environnement dans
+    # le dépôt. `SUPABASE_URL` y figure forcément : c'est l'adresse publique du projet,
+    # déjà servie à chaque visiteur via `VITE_SUPABASE_URL`, et elle est écrite en clair
+    # dans la migration qui déclare le point d'appel des notifications.
+    # On l'exclut donc du scan — et elle seule.
+    # ⚠ Ne JAMAIS ajouter ici SUPABASE_SERVICE_ROLE_KEY, MAIL_PASS ni STRIPE_SECRET_KEY :
+    # ce sont de vrais secrets, et c'est exactement ce que ce garde-fou protège.
+    SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
+
 # Messagerie du back-office : lecture IMAP et réponse SMTP de la boîte OMEGA.
 # Le regroupement par esbuild embarque imapflow/mailparser/nodemailer dans le paquet
 # déployé — sans quoi la fonction ne les trouverait pas à l'exécution.
