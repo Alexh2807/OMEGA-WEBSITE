@@ -19,9 +19,24 @@ interface Entete {
   uid: number;
   objet: string;
   de: { nom?: string; adresse?: string } | null;
+  a?: { nom?: string; adresse?: string } | null;
   date: string | null;
   lu: boolean;
 }
+
+interface LigneJournal {
+  id: string;
+  created_at: string;
+  evenement: string;
+  destinataire: string;
+  objet: string | null;
+  statut: 'envoye' | 'echec';
+  erreur: string | null;
+  origine: 'auto' | 'manuel';
+}
+
+/** Les trois vues. « Journal » n'est pas un dossier IMAP : voir plus bas. */
+type Vue = 'reception' | 'envoyes' | 'journal';
 
 interface Message extends Entete {
   texte: string;
@@ -44,6 +59,11 @@ const AdminMailbox = () => {
     objet: string;
     corps: string;
   } | null>(null);
+  const [vue, setVue] = useState<Vue>('reception');
+  // Chemin réel du dossier « Envoyés » : son nom varie selon l'hébergeur, on le lit
+  // au lieu de le deviner.
+  const [cheminEnvoyes, setCheminEnvoyes] = useState<string | null>(null);
+  const [journal, setJournal] = useState<LigneJournal[]>([]);
 
   const appeler = async (corps: Record<string, unknown>) => {
     const { data } = await supabase.auth.getSession();
@@ -66,7 +86,44 @@ const AdminMailbox = () => {
   const charger = async () => {
     setChargement(true);
     try {
-      const r = await appeler({ action: 'lister', limite: 30 });
+      // Le journal vit en base, pas dans la boîte : aucun appel IMAP ici.
+      if (vue === 'journal') {
+        const { data, error } = await supabase
+          .from('email_log')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        setJournal((data as LigneJournal[]) ?? []);
+        setNonConfigure(false);
+        return;
+      }
+
+      let dossier = 'INBOX';
+      if (vue === 'envoyes') {
+        // Résolu une fois, puis mémorisé.
+        let chemin = cheminEnvoyes;
+        if (!chemin) {
+          const d = await appeler({ action: 'dossiers' });
+          if (d.configured === false) {
+            setNonConfigure(true);
+            return;
+          }
+          const trouve =
+            d.dossiers?.find((x: any) => x.role === '\\Sent') ??
+            d.dossiers?.find((x: any) => /sent|envoy/i.test(x.nom || x.chemin));
+          chemin = trouve?.chemin ?? null;
+          setCheminEnvoyes(chemin);
+        }
+        if (!chemin) {
+          setMessages([]);
+          toast.error("Aucun dossier « Envoyés » sur ce serveur");
+          return;
+        }
+        dossier = chemin;
+      }
+
+      const r = await appeler({ action: 'lister', limite: 30, dossier });
       if (r.configured === false) {
         setNonConfigure(true);
         return;
@@ -82,13 +139,20 @@ const AdminMailbox = () => {
   };
 
   useEffect(() => {
+    setOuvert(null);
     charger();
-  }, []);
+  }, [vue]);
 
   const ouvrir = async (uid: number) => {
     setOuverture(true);
     try {
-      const m = await appeler({ action: 'ouvrir', uid });
+      const m = await appeler({
+        action: 'ouvrir',
+        uid,
+        // Sans le dossier, on relirait cet identifiant dans la boite de reception :
+        // les UID sont propres a chaque dossier.
+        dossier: vue === 'envoyes' ? cheminEnvoyes : 'INBOX',
+      });
       setOuvert(m);
       setReponse('');
       // Le serveur vient de marquer le message comme lu : on reflète l'état ici plutôt
@@ -259,8 +323,99 @@ const AdminMailbox = () => {
         </div>
       )}
 
-      {/* Liste */}
-      {!ouvert && (
+      {/* Vues. « Journal » n'est pas un dossier de la boîte : un envoi SMTP ne dépose
+          aucune copie dans « Envoyés » (c'est le logiciel de messagerie qui le fait),
+          les notifications du site y seraient donc invisibles. Le journal les retient
+          en base, échecs compris. */}
+      {!ouvert && !redaction && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {(
+            [
+              ['reception', 'Réception'],
+              ['envoyes', 'Envoyés'],
+              ['journal', 'Envois du site'],
+            ] as [Vue, string][]
+          ).map(([id, libelle]) => (
+            <button
+              key={id}
+              onClick={() => setVue(id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                vue === id
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10'
+              }`}
+            >
+              {libelle}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Journal des envois du site */}
+      {!ouvert && !redaction && vue === 'journal' && (
+        <>
+          {chargement ? (
+            <div className="text-gray-400 flex items-center gap-2 py-8 justify-center">
+              <Loader2 className="animate-spin" size={18} />
+              Lecture du journal…
+            </div>
+          ) : journal.length === 0 ? (
+            <div className="text-gray-400 text-center py-8">
+              Aucun envoi enregistré pour l'instant.
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {journal.map(l => (
+                  <div
+                    key={l.id}
+                    className={`flex items-start justify-between gap-4 rounded-lg p-4 border ${
+                      l.statut === 'echec'
+                        ? 'bg-red-500/10 border-red-500/30'
+                        : 'bg-white/5 border-white/10'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-white font-medium truncate">
+                        {l.objet || '(sans objet)'}
+                      </div>
+                      <div className="text-gray-400 text-sm truncate">
+                        {l.destinataire} · {l.evenement}
+                        {l.origine === 'manuel' ? ' · écrit à la main' : ''}
+                      </div>
+                      {l.erreur && (
+                        <div className="text-red-300 text-xs mt-1 break-all">
+                          {l.erreur}
+                        </div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-gray-500 text-xs whitespace-nowrap">
+                        {dateCourte(l.created_at)}
+                      </div>
+                      <div
+                        className={`text-xs font-semibold mt-1 ${
+                          l.statut === 'echec' ? 'text-red-400' : 'text-green-400'
+                        }`}
+                      >
+                        {l.statut === 'echec' ? 'échec' : 'accepté'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-gray-500 text-xs mt-4">
+                « Accepté » signifie que le serveur d'envoi a pris le message en charge.
+                Savoir s'il a été lu, ou s'il a atterri dans les indésirables, n'est pas
+                mesurable depuis le site.
+              </p>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Liste des messages de la boîte */}
+      {!ouvert && !redaction && vue !== 'journal' && (
         <>
           {chargement ? (
             <div className="text-gray-400 flex items-center gap-2 py-8 justify-center">
@@ -286,9 +441,13 @@ const AdminMailbox = () => {
                     <span className="block text-white font-medium truncate">
                       {m.objet}
                     </span>
+                    {/* Dans « Envoyés », l'expéditeur c'est nous : c'est le
+                        destinataire qui identifie le message. */}
                     <span className="block text-gray-400 text-sm truncate">
-                      {nomDe(m.de)}
-                      {m.de?.nom && m.de?.adresse ? ` — ${m.de.adresse}` : ''}
+                      {vue === 'envoyes'
+                        ? `À ${nomDe(m.a ?? null)}`
+                        : nomDe(m.de) +
+                          (m.de?.nom && m.de?.adresse ? ` — ${m.de.adresse}` : '')}
                     </span>
                   </span>
                   <span className="shrink-0 text-gray-500 text-xs whitespace-nowrap">

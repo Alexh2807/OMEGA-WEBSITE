@@ -287,7 +287,12 @@ async function adressesAdmin(): Promise<string[]> {
 // Envoi
 // ---------------------------------------------------------------------------
 
-async function envoyer(destinataires: string[], sujet: string, html: string) {
+async function envoyer(
+  destinataires: string[],
+  sujet: string,
+  html: string,
+  evenement: string
+) {
   if (destinataires.length === 0) return { envoyes: 0, motif: 'aucun destinataire' };
 
   const utilisateur = Deno.env.get('SMTP_USER');
@@ -327,6 +332,7 @@ async function envoyer(destinataires: string[], sujet: string, html: string) {
   // refus du serveur pour l'un n'emporte pas les autres.
   let envoyes = 0;
   const echecs: string[] = [];
+  const trace: Parameters<typeof journaliser>[0] = [];
   try {
     for (const destinataire of destinataires) {
       try {
@@ -341,16 +347,53 @@ async function envoyer(destinataires: string[], sujet: string, html: string) {
           attachments: pieces,
         });
         envoyes++;
+        trace.push({ evenement, destinataire, objet: sujet, statut: 'envoye' });
       } catch (err) {
         echecs.push(`${destinataire} : ${err}`);
+        trace.push({
+          evenement,
+          destinataire,
+          objet: sujet,
+          statut: 'echec',
+          erreur: String(err).slice(0, 500),
+        });
       }
     }
   } finally {
     await client.close();
+    await journaliser(trace);
   }
 
   if (envoyes === 0 && echecs.length > 0) throw new Error(echecs.join(' | '));
   return { envoyes, voie: 'smtp', ...(echecs.length ? { echecs } : {}) };
+}
+
+/**
+ * Trace de chaque tentative, une ligne par destinataire.
+ *
+ * Le dossier « Envoyés » de la boîte ne montrera jamais ces messages : un envoi SMTP
+ * n'y dépose rien, c'est le logiciel de messagerie qui range une copie. Ce journal est
+ * donc la seule vue possible sur ce que le site a expédié — et il retient en plus les
+ * ÉCHECS, qu'un dossier « Envoyés » ne contiendrait pas par définition.
+ *
+ * ⚠ Il n'échoue jamais bruyamment : ne pas réussir à journaliser un envoi ne doit pas
+ * faire échouer l'envoi lui-même.
+ */
+async function journaliser(
+  lignes: {
+    evenement: string;
+    destinataire: string;
+    objet: string;
+    statut: 'envoye' | 'echec';
+    erreur?: string;
+  }[]
+) {
+  if (lignes.length === 0) return;
+  try {
+    await supabaseAdmin.from('email_log').insert(lignes.map((l) => ({ ...l, origine: 'auto' })));
+  } catch (err) {
+    console.error('Journalisation impossible :', err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -749,7 +792,12 @@ Deno.serve(async (req) => {
     // adresse connue, événement sans destinataire.
     if (!message) return json({ event, envoyes: 0, motif: 'rien à envoyer' });
 
-    const bilan = await envoyer(message.destinataires, message.sujet, message.html);
+    const bilan = await envoyer(
+      message.destinataires,
+      message.sujet,
+      message.html,
+      event
+    );
     return json({ event, ...bilan });
   } catch (err) {
     console.error('send-notification', err);

@@ -81,11 +81,36 @@ async function connexionImap() {
   return client;
 }
 
-/** Les N derniers messages de la boîte de réception, du plus récent au plus ancien. */
-async function lister(limite: number) {
+/**
+ * Les dossiers de la boîte, avec leur rôle quand le serveur le déclare.
+ *
+ * Les noms varient d'un hébergeur à l'autre — « Sent », « INBOX.Sent », « Envoyés »… —
+ * d'où la lecture des attributs spéciaux (`\Sent`, `\Trash`…) plutôt qu'une liste
+ * devinée à l'avance.
+ */
+async function dossiers() {
   const client = await connexionImap();
   try {
-    const boite = await client.mailboxOpen('INBOX', { readOnly: true });
+    const liste = await client.list();
+    return {
+      dossiers: liste
+        .filter((d) => !d.flags?.has('\\Noselect'))
+        .map((d) => ({
+          chemin: d.path,
+          nom: d.name,
+          role: d.specialUse ?? null, // '\\Sent', '\\Trash', '\\Drafts', '\\Junk'…
+        })),
+    };
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
+/** Les N derniers messages d'un dossier, du plus récent au plus ancien. */
+async function lister(limite: number, dossier = 'INBOX') {
+  const client = await connexionImap();
+  try {
+    const boite = await client.mailboxOpen(dossier, { readOnly: true });
     const total = boite.exists;
     if (!total) return { messages: [], total: 0 };
 
@@ -102,6 +127,11 @@ async function lister(limite: number) {
         de: m.envelope?.from?.[0]
           ? { nom: m.envelope.from[0].name, adresse: m.envelope.from[0].address }
           : null,
+        // Dans « Envoyés », l'expéditeur c'est nous : c'est le destinataire qui
+        // identifie le message.
+        a: m.envelope?.to?.[0]
+          ? { nom: m.envelope.to[0].name, adresse: m.envelope.to[0].address }
+          : null,
         date: m.envelope?.date ?? null,
         lu: m.flags?.has('\\Seen') ?? false,
         taille: m.size ?? 0,
@@ -116,10 +146,10 @@ async function lister(limite: number) {
 }
 
 /** Le contenu d'un message, et son passage en « lu ». */
-async function ouvrir(uid: number) {
+async function ouvrir(uid: number, dossier = 'INBOX') {
   const client = await connexionImap();
   try {
-    await client.mailboxOpen('INBOX');
+    await client.mailboxOpen(dossier);
     const m = await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true });
     if (!m) return null;
 
@@ -197,6 +227,31 @@ async function envoyerMail(a: string, objet: string, corps: string, messageId?: 
     /* l'archivage est un confort : son échec ne doit pas faire échouer l'envoi */
   }
 
+  // Même journal que les notifications automatiques : la traçabilité n'aurait aucune
+  // valeur si elle ne couvrait que la moitié des envois.
+  // ⚠ Silencieux en cas d'échec : ne pas réussir à tracer un envoi ne doit pas faire
+  // croire que l'envoi a échoué.
+  try {
+    await fetch(`${conf.supabaseUrl}/rest/v1/email_log`, {
+      method: 'POST',
+      headers: {
+        apikey: conf.serviceKey,
+        Authorization: `Bearer ${conf.serviceKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        evenement: messageId ? 'reponse' : 'manuel',
+        destinataire: a,
+        objet,
+        statut: 'envoye',
+        origine: 'manuel',
+      }),
+    });
+  } catch (err) {
+    console.error('Journalisation impossible :', err);
+  }
+
   return { envoye: true };
 }
 
@@ -212,13 +267,18 @@ export default async (req: Request, _context: Context) => {
   }
 
   try {
-    const { action, uid, limite, a, objet, corps, messageId } = await req.json();
+    const { action, uid, limite, a, objet, corps, messageId, dossier } =
+      await req.json();
 
     switch (action) {
+      case 'dossiers':
+        return json(await dossiers());
       case 'lister':
-        return json(await lister(Math.min(Number(limite) || 25, 100)));
+        return json(
+          await lister(Math.min(Number(limite) || 25, 100), dossier || 'INBOX')
+        );
       case 'ouvrir': {
-        const message = await ouvrir(Number(uid));
+        const message = await ouvrir(Number(uid), dossier || 'INBOX');
         return message ? json(message) : json({ error: 'Message introuvable' }, 404);
       }
       case 'repondre':
