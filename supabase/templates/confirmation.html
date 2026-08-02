@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Empêche Gmail/Apple Mail d'INVERSER nos couleurs : on déclare un mail déjà sombre.
+     Sans ça, le mode sombre du client « corrige » notre fond noir en clair et le logo
+     blanc devient invisible. -->
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>Confirmez votre adresse — OMEGA</title>
+<!--[if mso]>
+<style>body,table,td,a{font-family:Arial,Helvetica,sans-serif !important}</style>
+<![endif]-->
+<style>
+  /* Certains clients (Apple Mail, iOS) appliquent quand même leur mode sombre :
+     on force nos teintes plutôt que de les subir. */
+  :root { color-scheme: dark; supported-color-schemes: dark; }
+  body { margin:0; padding:0; background-color:#07070d; }
+  a { text-decoration:none; }
+  @media (max-width:600px) {
+    .carte { padding-left:24px !important; padding-right:24px !important; }
+  }
+</style>
+</head>
+<!-- ⚠ bgcolor EN ATTRIBUT autant qu'en CSS : Outlook ignore volontiers le CSS des
+     éléments de structure, et laisse alors du BLANC derrière le contenu. -->
+<body bgcolor="#07070d" style="margin:0;padding:0;background-color:#07070d;">
+
+  <!-- Aperçu affiché dans la liste des messages, invisible à l'ouverture -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    Une derni&egrave;re &eacute;tape&nbsp;: confirmez votre adresse pour acc&eacute;der &agrave; votre espace OMEGA.
+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#07070d"
+         style="background-color:#07070d;margin:0;padding:0;">
+    <tr>
+      <td bgcolor="#07070d" align="center"
+          style="background-color:#07070d;padding:48px 16px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#07070d"
+               style="max-width:560px;background-color:#07070d;">
+
+          <!-- Logo : le fond sombre est posé SUR LA CELLULE. Le logo est blanc sur
+               transparent — sans ce bgcolor, un client qui n'hérite pas du fond
+               affiche du blanc sur blanc, donc rien du tout. -->
+          <tr>
+            <td bgcolor="#07070d" align="center" style="background-color:#07070d;padding:0 0 32px 0;">
+              <a href="https://omegasud.fr" style="text-decoration:none;">
+                <img src="https://omegasud.fr/email/logo-omega.png" alt="OMEGA" width="240"
+                     style="display:block;width:240px;max-width:240px;height:auto;border:0;outline:none;text-decoration:none;">
+              </a>
+            </td>
+          </tr>
+
+          <!-- Carte -->
+          <tr>
+            <td bgcolor="#101018"
+                style="background-color:#101018;border:1px solid #23233a;border-radius:14px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#101018"
+                     style="background-color:#101018;">
+
+                <!-- Liseré : dégradé pour ceux qui savent, aplat bleu pour Outlook -->
+                <tr>
+                  <td height="3" bgcolor="#2563eb"
+                      style="background-color:#2563eb;background:linear-gradient(90deg,#00c2ff,#2563eb,#a21caf);border-radius:14px 14px 0 0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+
+                <tr>
+                  <td class="carte" bgcolor="#101018" style="background-color:#101018;padding:40px 44px 12px 44px;">
+                    <h1 style="margin:0 0 6px 0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.3px;">
+                      Bienvenue&nbsp;!
+                    </h1>
+                    <p style="margin:0 0 22px 0;color:#8b8ba3;font-size:13px;">
+                      Votre compte vient d&rsquo;&ecirc;tre cr&eacute;&eacute; sur <strong style="color:#c9c9de;">omegasud.fr</strong>
+                    </p>
+                    <p style="margin:0 0 8px 0;color:#c9c9de;font-size:15px;line-height:1.7;">
+                      Bonjour,
+                    </p>
+                    <p style="margin:0 0 26px 0;color:#c9c9de;font-size:15px;line-height:1.7;">
+                      Il ne vous reste qu&rsquo;<strong style="color:#ffffff;">une seule &eacute;tape</strong> pour acc&eacute;der
+                      &agrave; votre espace client&nbsp;: confirmer que cette adresse email vous appartient.
+                      Cela ne prend qu&rsquo;un instant.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Bouton -->
+                <tr>
+                  <td class="carte" bgcolor="#101018" align="center"
+                      style="background-color:#101018;padding:0 44px 30px 44px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="#00c2ff" style="background-color:#00c2ff;border-radius:10px;">
+                          <a href="{{ .ConfirmationURL }}"
+                             style="display:inline-block;padding:15px 42px;color:#06060c;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">
+                            Confirmer mon adresse&nbsp;email
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:14px 0 0 0;color:#5c5c74;font-size:12px;">
+                      Ce lien est personnel &mdash; ne le partagez pas.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Séparateur -->
+                <tr>
+                  <td class="carte" bgcolor="#101018" style="background-color:#101018;padding:0 44px;">
+                    <div style="border-top:1px solid #23233a;font-size:0;line-height:0;">&nbsp;</div>
+                  </td>
+                </tr>
+
+                <!-- Lien de secours -->
+                <tr>
+                  <td class="carte" bgcolor="#101018" style="background-color:#101018;padding:18px 44px 34px 44px;">
+                    <p style="margin:0;color:#5c5c74;font-size:12px;line-height:1.7;">
+                      Le bouton ne fonctionne pas&nbsp;? Copiez ce lien dans votre navigateur&nbsp;:<br>
+                      <a href="{{ .ConfirmationURL }}" style="color:#00c2ff;word-break:break-all;text-decoration:none;">{{ .ConfirmationURL }}</a>
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Pied de page -->
+          <tr>
+            <td bgcolor="#07070d" align="center" style="background-color:#07070d;padding:28px 20px 0 20px;">
+              <p style="margin:0 0 6px 0;color:#5c5c74;font-size:12px;line-height:1.7;">
+                <strong style="color:#8b8ba3;">OMEGA</strong> &mdash; Spectacles &amp; machines &agrave; effets sp&eacute;ciaux<br>
+                <a href="https://omegasud.fr" style="color:#00c2ff;text-decoration:none;">omegasud.fr</a>
+              </p>
+              <p style="margin:14px 0 0 0;color:#42425a;font-size:11px;line-height:1.7;">
+                Vous recevez ce message car une inscription a &eacute;t&eacute; effectu&eacute;e avec cette adresse.<br>
+                Si vous n&rsquo;&ecirc;tes pas &agrave; l&rsquo;origine de cette demande, ignorez simplement cet email&nbsp;&mdash;
+                aucun compte ne sera activ&eacute;.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
