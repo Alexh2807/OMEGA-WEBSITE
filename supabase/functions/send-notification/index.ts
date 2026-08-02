@@ -434,6 +434,139 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
       };
     }
 
+    // ---- accusés de réception, vers le client ------------------------------
+    case 'order_ack': {
+      const { data: c } = await supabaseAdmin
+        .from('orders')
+        .select('id, total, sub_total, shipping_cost, user_id, shipping_address')
+        .eq('id', data.id)
+        .single();
+      if (!c) return null;
+      const adresse = await adresseDe(c.user_id);
+      if (!adresse) return null;
+
+      // `order_items` est inséré APRÈS `orders` (CartPage, étapes 3 puis 5) : au premier
+      // passage la commande peut n'avoir encore aucun article. On laisse le temps à
+      // l'écriture d'arriver plutôt que d'envoyer un récapitulatif vide.
+      let articles: any[] = [];
+      for (let essai = 0; essai < 4 && articles.length === 0; essai++) {
+        if (essai > 0) await new Promise((r) => setTimeout(r, 1000));
+        const { data: lignes } = await supabaseAdmin
+          .from('order_items')
+          .select('quantity, price, products(name)')
+          .eq('order_id', c.id);
+        articles = lignes ?? [];
+      }
+
+      const lignesHtml = articles
+        .map(
+          (a) =>
+            `<tr>
+               <td style="padding:6px 12px 6px 0;color:#c9c9de;font-size:14px;">${e(a.products?.name ?? 'Article')}</td>
+               <td style="padding:6px 12px 6px 0;color:#8b8ba3;font-size:14px;white-space:nowrap;">&times;&nbsp;${e(a.quantity)}</td>
+               <td style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:600;white-space:nowrap;" align="right">${euros(
+                 Number(a.price) * Number(a.quantity)
+               )}</td>
+             </tr>`
+        )
+        .join('');
+
+      const ad = c.shipping_address as Record<string, string> | null;
+      const livraison = ad
+        ? [
+            [ad.first_name, ad.last_name].filter(Boolean).join(' ') || ad.name,
+            ad.company,
+            ad.address_line_1,
+            ad.address_line_2,
+            [ad.postal_code, ad.city].filter(Boolean).join(' '),
+            ad.country,
+          ]
+            .filter(Boolean)
+            .map((l) => e(l))
+            .join('<br>')
+        : null;
+
+      return {
+        destinataires: [adresse],
+        sujet: `Votre commande OMEGA est confirmée — ${Number(c.total ?? 0).toFixed(2)} €`,
+        html: gabarit({
+          titre: 'Merci pour votre commande',
+          sousTitre: `Référence ${String(c.id).slice(0, 8)}`,
+          corps:
+            p('Votre paiement a bien été reçu et votre commande est confirmée.') +
+            (lignesHtml
+              ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px 0;">${lignesHtml}</table>
+                 <div style="border-top:1px solid #23233a;margin:8px 0 16px 0;"></div>`
+              : '') +
+            details([
+              ['Sous-total', euros(c.sub_total)],
+              ['Livraison', euros(c.shipping_cost)],
+              ['Total payé', euros(c.total)],
+            ]) +
+            (livraison
+              ? p(`<span style="color:#8b8ba3;font-size:13px;">Livraison à&nbsp;:</span><br>${livraison}`)
+              : ''),
+          bouton: { libelle: 'Suivre ma commande', url: `${SITE}/commandes` },
+          pied: 'Ce message confirme votre commande sur omegasud.fr. Conservez-le.',
+        }),
+      };
+    }
+
+    case 'contact_ack': {
+      const { data: m } = await supabaseAdmin
+        .from('contact_requests')
+        .select('id, name, email, subject, message')
+        .eq('id', data.id)
+        .single();
+      if (!m?.email) return null;
+      return {
+        destinataires: [m.email],
+        sujet: `Nous avons bien reçu votre message — ${m.subject || 'OMEGA'}`,
+        html: gabarit({
+          titre: 'Message bien reçu',
+          sousTitre: m.subject || 'Votre demande à OMEGA',
+          corps:
+            p(`Bonjour ${e(m.name || '')},`) +
+            p(
+              'Nous avons bien reçu votre message et nous vous répondrons dans les plus ' +
+                'brefs délais. Voici ce que vous nous avez écrit&nbsp;:'
+            ) +
+            citation(bloc(m.message)),
+          pied: 'Ce message accuse réception de votre demande envoyée depuis omegasud.fr. Inutile d’y répondre.',
+        }),
+      };
+    }
+
+    case 'bug_ack': {
+      const { data: s } = await supabaseAdmin
+        .from('bug_reports')
+        .select('id, title, body, track_code, contact_email, contact_name, user_id')
+        .eq('id', data.id)
+        .single();
+      if (!s) return null;
+      const adresse = s.contact_email || (await adresseDe(s.user_id));
+      if (!adresse) return null;
+      return {
+        destinataires: [adresse],
+        sujet: `Signalement enregistré — ${s.track_code ?? s.title}`,
+        html: gabarit({
+          titre: 'Votre signalement est enregistré',
+          sousTitre: s.title,
+          corps:
+            p(`Bonjour ${e(s.contact_name || '')},`) +
+            p('Merci de nous avoir signalé ce problème. Votre code de suivi&nbsp;:') +
+            `<div style="margin:0 0 22px 0;padding:14px 18px;background-color:#161622;border:1px solid #23233a;border-radius:10px;text-align:center;color:#00c2ff;font-size:20px;font-weight:700;letter-spacing:2px;">${e(
+              s.track_code ?? '—'
+            )}</div>` +
+            p('<span style="color:#8b8ba3;font-size:13px;">Ce que vous nous avez décrit&nbsp;:</span>') +
+            citation(bloc(s.body)),
+          pied:
+            'Conservez ce code : il identifie votre signalement. Vous serez prévenu par e-mail ' +
+            'dès que nous y répondrons.',
+        }),
+      };
+    }
+
     // ---- vérification de l'installation ------------------------------------
     case 'test':
       return {
