@@ -13,17 +13,91 @@ import {
   ShoppingCart,
   Phone,
   Truck,
+  Mail,
+  Send,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getAllAvailableImages } from '../../utils/imageManager';
 import { useSiteSettings } from '../../contexts/SiteSettingsContext';
 import { COMPANY_INFO } from '../../config/legalInfo';
+import { supabase } from '../../lib/supabase';
+
+/**
+ * Les types d'e-mails, dans l'ordre d'affichage.
+ * ⚠ Les clés correspondent EXACTEMENT à celles que lit `private.notify()` côté base :
+ * un type absent de `site_settings.email_notifications` vaut « désactivé ».
+ */
+const TYPES_NOTIFICATION: {
+  cle: string;
+  libelle: string;
+  detail: string;
+  pour: 'admin' | 'client';
+}[] = [
+  { cle: 'order_new', libelle: 'Nouvelle commande', detail: 'Un client vient de commander.', pour: 'admin' },
+  { cle: 'contact_new', libelle: 'Message du site', detail: 'Le formulaire de contact a été rempli.', pour: 'admin' },
+  { cle: 'bug_new', libelle: 'Signalement OMEGADMX', detail: 'Un utilisateur signale un problème.', pour: 'admin' },
+  { cle: 'bug_reply_client', libelle: 'Réponse du client', detail: 'Il répond sur un signalement en cours.', pour: 'admin' },
+  { cle: 'account_new', libelle: 'Nouveau compte', detail: 'Une inscription vient d’être enregistrée.', pour: 'admin' },
+  { cle: 'order_status', libelle: 'Suivi de commande', detail: 'Sa commande change d’état (expédiée, livrée…).', pour: 'client' },
+  { cle: 'contact_answered', libelle: 'Réponse à son message', detail: 'Vous lui répondez depuis le back-office.', pour: 'client' },
+  { cle: 'bug_reply_admin', libelle: 'Réponse à son signalement', detail: 'Vous répondez sur son ticket.', pour: 'client' },
+];
 
 const AdminSettings = () => {
   const { vitrineMode, setVitrineMode, shippingConfig, setShippingConfig } =
     useSiteSettings();
   const [savingMode, setSavingMode] = useState(false);
   const [savingShipping, setSavingShipping] = useState(false);
+
+  // --- Notifications e-mail --------------------------------------------------
+  // Lues et écrites ici plutôt que dans SiteSettingsContext : elles ne servent qu'à
+  // cet écran, alors que le contexte est chargé par toutes les pages du site public.
+  const [notifs, setNotifs] = useState<Record<string, boolean> | null>(null);
+  const [savingNotifs, setSavingNotifs] = useState(false);
+  const [testEnCours, setTestEnCours] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'email_notifications')
+        .maybeSingle();
+      if (error) {
+        console.error('Chargement des notifications :', error);
+        toast.error('Réglages de notification illisibles');
+      }
+      setNotifs((data?.value as Record<string, boolean>) || {});
+    })();
+  }, []);
+
+  const enregistrerNotifs = async (suivant: Record<string, boolean>) => {
+    const precedent = notifs;
+    setNotifs(suivant); // l'interrupteur bascule tout de suite…
+    setSavingNotifs(true);
+    const { error } = await supabase.from('site_settings').upsert({
+      key: 'email_notifications',
+      value: suivant,
+      updated_at: new Date().toISOString(),
+    });
+    setSavingNotifs(false);
+    if (error) {
+      setNotifs(precedent); // … et revient en arrière si la base a refusé.
+      console.error('Enregistrement des notifications :', error);
+      toast.error("Le réglage n'a pas pu être enregistré");
+    }
+  };
+
+  const envoyerTest = async () => {
+    setTestEnCours(true);
+    const { error } = await supabase.rpc('notify_send_test');
+    setTestEnCours(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('E-mail de test envoyé aux administrateurs');
+    }
+  };
   const [shipForm, setShipForm] = useState({
     brackets: [] as { max_kg: string; price: string }[],
     over_price: '',
@@ -485,6 +559,89 @@ const AdminSettings = () => {
         >
           {savingShipping ? 'Enregistrement…' : 'Enregistrer les tarifs'}
         </button>
+      </div>
+
+      {/* Section Notifications e-mail */}
+      <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl p-8 border border-white/10">
+        <div className="flex items-center gap-3 mb-2">
+          <Mail className="text-blue-400" size={24} />
+          <h2 className="text-2xl font-bold text-white">Notifications par e-mail</h2>
+        </div>
+        <p className="text-gray-400 text-sm mb-6">
+          Envoyées depuis votre messagerie{' '}
+          <span className="text-gray-300">omegasud.fr</span>. Chaque type se règle
+          séparément et prend effet immédiatement.
+        </p>
+
+        {notifs === null ? (
+          <div className="text-gray-400 text-sm">Chargement…</div>
+        ) : (
+          <div className="space-y-6">
+            {(['admin', 'client'] as const).map(pour => (
+              <div key={pour}>
+                <h3 className="text-white font-semibold mb-3">
+                  {pour === 'admin'
+                    ? 'Ce que les administrateurs reçoivent'
+                    : 'Ce que le client reçoit'}
+                </h3>
+                <div className="space-y-2">
+                  {TYPES_NOTIFICATION.filter(t => t.pour === pour).map(t => {
+                    const actif = notifs[t.cle] === true;
+                    return (
+                      <button
+                        key={t.cle}
+                        type="button"
+                        role="switch"
+                        aria-checked={actif}
+                        onClick={() =>
+                          enregistrerNotifs({ ...notifs, [t.cle]: !actif })
+                        }
+                        disabled={savingNotifs}
+                        className="w-full flex items-center justify-between gap-4 bg-white/5 hover:bg-white/10 rounded-lg p-4 border border-white/10 text-left transition-colors disabled:opacity-60"
+                      >
+                        <span>
+                          <span className="block text-white font-medium">
+                            {t.libelle}
+                          </span>
+                          <span className="block text-gray-400 text-sm">
+                            {t.detail}
+                          </span>
+                        </span>
+                        <span
+                          className={`shrink-0 w-11 h-6 rounded-full p-1 transition-colors ${
+                            actif ? 'bg-blue-500' : 'bg-white/15'
+                          }`}
+                        >
+                          <span
+                            className={`block w-4 h-4 rounded-full bg-white transition-transform ${
+                              actif ? 'translate-x-5' : ''
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-white/10">
+              <button
+                type="button"
+                onClick={envoyerTest}
+                disabled={testEnCours}
+                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg hover:shadow-blue-500/25 transition-all disabled:opacity-60"
+              >
+                <Send size={16} />
+                {testEnCours ? 'Envoi…' : 'Envoyer un e-mail de test'}
+              </button>
+              <span className="text-gray-500 text-sm">
+                Part vers tous les comptes administrateurs, quels que soient les types
+                cochés ci-dessus.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Section Gestion des Images */}

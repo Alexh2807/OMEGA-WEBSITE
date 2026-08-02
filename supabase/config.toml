@@ -332,3 +332,10 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# Appelée par la BASE (trigger -> pg_net), jamais par un utilisateur connecté : il n'y a
+# donc pas de JWT à vérifier. Elle se protège par le secret partagé `x-notify-secret`,
+# validé par public.notify_check_secret(). Sans cette ligne, un `functions deploy` sans
+# --no-verify-jwt réactiverait la vérification et la base se ferait refuser en 401.
+[functions.send-notification]
+verify_jwt = false
