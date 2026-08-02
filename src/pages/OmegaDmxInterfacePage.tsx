@@ -1,5 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import BoitierDmxSvg from '../components/BoitierDmxSvg';
+
+// Three.js pèse plus que tout le reste de la page réuni : il ne doit jamais partir
+// dans le paquet principal. L'illustration vectorielle, elle, est légère et sert de
+// substitut pendant le chargement.
+const BoitierDmx3D = lazy(() => import('../components/BoitierDmx3D'));
 import {
   ArrowLeft,
   Check,
@@ -481,12 +487,20 @@ const OmegaDmxInterfacePage = () => {
 
             <div className="order-1 lg:order-2 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-3xl blur-3xl" />
+              {/* Le boîtier en 3D, orientable. Three.js pèse plus lourd que tout le
+                  reste de la page : il n'est donc chargé qu'ici, en différé. En
+                  attendant — et si le navigateur ne sait pas faire de 3D —
+                  l'illustration vectorielle prend sa place : elle s'affiche
+                  instantanément et représente le même objet. */}
               <div className="relative bg-black/60 backdrop-blur-sm rounded-3xl p-8 border border-white/10">
-                <img
-                  src={PRODUCT_IMAGE}
-                  alt="OMEGA DMX Interface - boîtier de pilotage DMX"
-                  className="w-full h-[400px] object-contain odmx-float-img"
-                />
+                <Suspense
+                  fallback={<BoitierDmxSvg className="w-full h-[400px] odmx-float-img" />}
+                >
+                  <BoitierDmx3D className="w-full h-[400px]" />
+                </Suspense>
+                <p className="text-center text-gray-500 text-xs mt-3">
+                  Faites glisser pour orienter le boîtier
+                </p>
               </div>
               <div className="absolute -top-4 -right-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-bold text-sm shadow-lg">
                 FABRICATION OMEGA
