@@ -367,7 +367,10 @@ const AdminMessages = () => {
                   )}
                 </div>
 
-                <p className="text-gray-300 mb-4 line-clamp-2">
+                {/* Aperçu dans la liste : volontairement court, mais les retours à la
+                    ligne du client sont conservés — sans `whitespace-pre-line`, un
+                    message écrit en plusieurs paragraphes s'écrasait sur une seule ligne. */}
+                <p className="text-gray-300 mb-4 line-clamp-3 whitespace-pre-line">
                   {message.message}
                 </p>
 
@@ -633,7 +636,10 @@ const AdminMessages = () => {
               <div className="text-gray-400 text-sm mb-2">
                 Sujet: {selectedMessage.subject}
               </div>
-              <div className="text-gray-300 text-sm line-clamp-3">
+              {/* Message ENTIER : c'est ici qu'on rédige la réponse. Le tronquer à
+                  3 lignes obligeait à répondre sans avoir lu toute la demande.
+                  `whitespace-pre-line` conserve les retours à la ligne du client. */}
+              <div className="text-gray-300 text-sm whitespace-pre-line leading-relaxed max-h-64 overflow-auto">
                 {selectedMessage.message}
               </div>
             </div>
