@@ -111,7 +111,7 @@ const ProductImage = ({ isVisible, scrollY }: { isVisible: boolean; scrollY: num
         }}
       >
         <img
-          src="/products/HazerCO2remake.png"
+          src="/products/hazer-co2-remake.webp"
           alt="Machine PRO HAZER CO² OMEGA, un appareil de technologie de brouillard avancé."
           className="w-full h-auto object-contain object-center"
           style={{

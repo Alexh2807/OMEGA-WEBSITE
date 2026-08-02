@@ -304,7 +304,7 @@ const SignalMonitorSvg = () => {
 /* ================================================================== */
 /*  PAGE                                                              */
 /* ================================================================== */
-const PRODUCT_IMAGE = '/products/OMEGA-DMX-Interface.png';
+const PRODUCT_IMAGE = '/products/omega-dmx-interface.webp';
 const PRICE_TTC = 429;
 const PRICE_HT = PRICE_TTC / 1.2;
 
@@ -634,7 +634,7 @@ const OmegaDmxInterfacePage = () => {
           <Reveal>
             <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-black mb-8">
               <img
-                src="/products/omega-dmx-soft-3d.png"
+                src="/products/omega-dmx-soft-3d.webp"
                 alt="Visualisation 3D du show en temps réel"
                 className="w-full object-cover"
                 loading="lazy"
@@ -670,7 +670,7 @@ const OmegaDmxInterfacePage = () => {
                     Placez chaque projecteur sur un plateau 3D fidèle à votre scène.
                   </p>
                 </div>
-                <img src="/products/omega-dmx-soft-stage3d.png" alt="Plateau scénique 3D" className="w-full object-cover" loading="lazy" />
+                <img src="/products/omega-dmx-soft-stage3d.webp" alt="Plateau scénique 3D" className="w-full object-cover" loading="lazy" />
               </div>
               <div className="bg-gradient-to-br from-gray-900/60 to-gray-800/30 rounded-3xl border border-white/10 overflow-hidden flex flex-col">
                 <div className="p-6">
@@ -684,7 +684,7 @@ const OmegaDmxInterfacePage = () => {
                   </p>
                 </div>
                 <div className="mt-auto p-4">
-                  <img src="/products/omega-dmx-soft-plan2d.png" alt="Plan de scène 2D" className="w-full rounded-xl border border-white/5" loading="lazy" />
+                  <img src="/products/omega-dmx-soft-plan2d.webp" alt="Plan de scène 2D" className="w-full rounded-xl border border-white/5" loading="lazy" />
                 </div>
               </div>
             </div>
@@ -706,7 +706,7 @@ const OmegaDmxInterfacePage = () => {
                   </p>
                 </div>
                 <div className="mt-auto bg-black p-4">
-                  <img src="/products/omega-dmx-soft-color.png" alt="Mixage couleur et canaux" className="w-full rounded-xl" loading="lazy" />
+                  <img src="/products/omega-dmx-soft-color.webp" alt="Mixage couleur et canaux" className="w-full rounded-xl" loading="lazy" />
                 </div>
               </div>
             </Reveal>
@@ -734,7 +734,7 @@ const OmegaDmxInterfacePage = () => {
                     </div>
                   </div>
                   <div className="bg-black p-4 flex items-center">
-                    <img src="/products/omega-dmx-soft-move.png" alt="Contrôle des mouvements PAN/TILT" className="w-full rounded-xl" loading="lazy" />
+                    <img src="/products/omega-dmx-soft-move.webp" alt="Contrôle des mouvements PAN/TILT" className="w-full rounded-xl" loading="lazy" />
                   </div>
                 </div>
               </div>

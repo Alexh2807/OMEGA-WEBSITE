@@ -57,7 +57,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
         <div>
           <img
             id="invoice-logo"
-            src="/Logo-omega-hq-transparent.png"
+            src="/products/logo-omega-hq-transparent.webp"
             alt="OMEGA Logo"
             className="h-16 mb-4"
           />

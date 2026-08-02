@@ -122,7 +122,7 @@ const SpectaclesPage = () => {
           <div className="relative">
             <div className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-3xl p-8 border border-white/10">
               <img
-                src="/El-Fuego-Sagrador.png"
+                src="/products/el-fuego-sagrador.webp"
                 alt="El Fuego Sagrador - Spectacle de feu et lumière OMEGA"
                 className="w-full h-auto object-contain rounded-2xl"
                 style={{

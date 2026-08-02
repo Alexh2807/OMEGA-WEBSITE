@@ -19,7 +19,7 @@ const SmokeSystemPage = () => {
       name: 'PRO HAZER CO²',
       description: 'Technologie de brouillard révolutionnaire pour des effets atmosphériques inégalés',
       longDescription: 'Le générateur de brume professionnel le plus avancé du marché. Consommation de fluide réduite de 90%, particules ultra-fines de 0.2-0.3µ pour une brume homogène et persistante.',
-      image: '/products/HazerCO2remake.png',
+      image: '/products/hazer-co2-remake.webp',
       features: [
         '90% de consommation de fluide en moins',
         'Jusqu\'à 40 heures de fonctionnement continu par litre',
@@ -42,7 +42,7 @@ const SmokeSystemPage = () => {
       name: 'PRO SMOKE 700',
       description: 'Machine à fumée compacte et performante pour professionnels',
       longDescription: 'La solution idéale pour les petites et moyennes productions. Offre une densité de fumée exceptionnelle avec un encombrement réduit, parfait pour les scènes, les studios et les événements.',
-      image: '/products/HazerCO2test.png',
+      image: '/products/hazer-co2-test.webp',
       features: [
         'Densité de fumée exceptionnelle',
         'Format compact et portable',

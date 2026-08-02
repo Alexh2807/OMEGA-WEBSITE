@@ -38,7 +38,7 @@ const Hero = () => {
 
           <div className="mb-6">
             <img
-              src="/products/Logo-omega-hq-transparent.png"
+              src="/products/logo-omega-hq-transparent.webp"
               alt="OMEGA"
               className="h-32 md:h-40 mx-auto"
             />

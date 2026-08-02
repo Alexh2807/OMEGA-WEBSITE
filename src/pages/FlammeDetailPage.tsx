@@ -109,7 +109,7 @@ const FlammeDetailPage = () => {
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img
-              src="/products/El-Fuego-Sagrador.png"
+              src="/products/el-fuego-sagrador.webp"
               alt="OMEGA FLAMME"
               className="w-12 h-12 object-contain"
             />
@@ -228,7 +228,7 @@ const FlammeDetailPage = () => {
 
                 <div className="relative bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-sm rounded-3xl p-8 border border-white/10">
                   <img
-                    src="/products/El-Fuego-Sagrador.png"
+                    src="/products/el-fuego-sagrador.webp"
                     alt="OMEGA FLAMME"
                     className="w-full h-[500px] object-contain"
                     onLoad={() => setImageLoaded(true)}

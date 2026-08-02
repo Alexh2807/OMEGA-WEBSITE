@@ -125,7 +125,7 @@ const Header = () => {
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
             <img
-              src="/products/Logo-omega-hq-transparent.png"
+              src="/products/logo-omega-hq-transparent.webp"
               alt="OMEGA"
               className="h-12 w-auto"
             />

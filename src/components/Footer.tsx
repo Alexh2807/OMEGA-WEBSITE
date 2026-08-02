@@ -22,7 +22,7 @@ const Footer = () => {
           <div>
             <div className="flex items-center gap-3 mb-4">
               <img
-                src="/products/Logo-omega-hq-transparent.png"
+                src="/products/logo-omega-hq-transparent.webp"
                 alt="OMEGA"
                 className="h-12 w-auto"
               />

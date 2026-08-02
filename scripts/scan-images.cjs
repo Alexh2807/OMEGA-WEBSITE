@@ -164,25 +164,11 @@ function main() {
     console.log('⚠️  Dossier /public/products non trouvé');
   }
 
-  // Scanner aussi les images à la racine de /public (optionnel)
-  console.log('\n📁 Scan de /public/ (racine)');
-  const files = fs.readdirSync(PUBLIC_DIR);
-  let rootImages = 0;
+  // La racine de /public n'est volontairement PAS scannée : elle ne contient que des
+  // ressources techniques (favicons, apple-touch-icon, og-image). Les proposer dans le
+  // sélecteur d'images de l'admin permettait d'attribuer un favicon comme visuel de
+  // produit, et elles échappent au passage en WebP fait par optimize-images.cjs.
 
-  files.forEach(file => {
-    const fullPath = path.join(PUBLIC_DIR, file);
-    const stat = fs.statSync(fullPath);
-
-    if (stat.isFile()) {
-      const ext = path.extname(file).toLowerCase();
-      if (IMAGE_EXTENSIONS.includes(ext)) {
-        allImages.push(`/${file}`);
-        rootImages++;
-      }
-    }
-  });
-
-  console.log(`   ✓ ${rootImages} images trouvées\n`);
 
   // Générer le fichier TypeScript
   console.log('📝 Génération de imageManager.ts...');

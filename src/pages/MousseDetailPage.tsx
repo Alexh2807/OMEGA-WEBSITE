@@ -228,7 +228,7 @@ const MousseDetailPage = () => {
                   ? mousseProduct.image.startsWith('/')
                     ? mousseProduct.image
                     : `/${mousseProduct.image}`
-                  : '/omega mousse.png'
+                  : '/products/omega-mousse.webp'
               }
               alt={mousseProduct.name}
               className="w-12 h-12 object-contain"
@@ -383,7 +383,7 @@ const MousseDetailPage = () => {
                         ? mousseProduct.image.startsWith('/')
                           ? mousseProduct.image
                           : `/${mousseProduct.image}`
-                        : '/omega mousse.png'
+                        : '/products/omega-mousse.webp'
                     }
                     alt={mousseProduct.name}
                     className="w-full h-[500px] object-contain"
@@ -578,7 +578,7 @@ const MousseDetailPage = () => {
                           ? product.image.startsWith('/')
                             ? product.image
                             : `/${product.image}`
-                          : '/placeholder.png'
+                          : '/products/placeholder.webp'
                       }
                       alt={product.name}
                       className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"

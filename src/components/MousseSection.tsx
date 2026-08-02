@@ -112,7 +112,7 @@ const ProductImage = ({ isVisible, scrollY }: { isVisible: boolean; scrollY: num
         }}
       >
         <img
-          src="/products/omega mousse.png"
+          src="/products/omega-mousse.webp"
           alt="OMEGA MOUSSE - Liquide premium pour soirées mousse événementielles"
           className="w-full h-auto object-contain object-center"
           style={{

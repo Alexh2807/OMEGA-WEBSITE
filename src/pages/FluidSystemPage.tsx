@@ -19,7 +19,7 @@ const FluidSystemPage = () => {
       name: 'OMEGA MOUSSE PREMIUM',
       description: 'Le liquide à mousse événementielle le plus performant du marché',
       longDescription: 'Développé depuis 2005, perfectionné en 2023. 18 ans de R&D pour la mousse la plus dense et stable du marché. Formule éco-responsable à 98% biodégradable.',
-      image: '/products/omega mousse.png',
+      image: '/products/omega-mousse.webp',
       icon: Droplets,
       color: 'cyan',
       features: [
@@ -44,7 +44,7 @@ const FluidSystemPage = () => {
       name: 'OMEGA NEIGE',
       description: 'Liquide à neige pour effets hivernaux réalistes',
       longDescription: 'Créez une atmosphère hivernale magique avec notre liquide à neige professionnel. Particules fines et légères pour une chute de neige réaliste et persistante.',
-      image: '/products/omega mousse.png',
+      image: '/products/omega-mousse.webp',
       icon: Snowflake,
       color: 'blue',
       features: [
@@ -70,7 +70,7 @@ const FluidSystemPage = () => {
       name: 'OMEGA FUMÉE',
       description: 'Liquide fumigène pour effets atmosphériques',
       longDescription: 'Liquide fumigène haute performance pour créer des ambiances mystérieuses et dramatiques. Densité optimale avec dispersion contrôlée pour effets visuels percutants.',
-      image: '/products/LiquideProHazer5L.png',
+      image: '/products/liquide-pro-hazer-5l.webp',
       icon: Wind,
       color: 'gray',
       features: [
@@ -96,7 +96,7 @@ const FluidSystemPage = () => {
       name: 'OMEGA FLAMME',
       description: 'Liquide pour effets de flamme spectaculaires',
       longDescription: 'Créez des effets de flamme impressionnants en toute sécurité. Notre formule spéciale offre des couleurs vives et une combustion contrôlée pour des spectacles inoubliables.',
-      image: '/products/El-Fuego-Sagrador.png',
+      image: '/products/el-fuego-sagrador.webp',
       icon: Flame,
       color: 'orange',
       features: [

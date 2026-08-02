@@ -4,31 +4,32 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 20/06/2026 07:35:07
+ * Dernière mise à jour: 02/08/2026 04:31:04
  */
 
 // Liste de toutes les images disponibles dans /public
 export const productImages = [
-  "/products/ChatGPT Image 25 juil. 2025, 00_53_57 copy copy.png",
-  "/products/ChatGPT Image 25 juil. 2025, 00_53_57 copy.png",
-  "/products/ChatGPT Image 25 juil. 2025, 00_53_57.png",
-  "/products/El-Fuego-Sagrador.png",
-  "/products/Hazer-co2-generated.png",
-  "/products/HazerCO2remake.png",
-  "/products/HazerCO2test.png",
-  "/products/LiquideProHazer5L.png",
-  "/products/Logo OMEGA Haute qualité copy copy.png",
-  "/products/Logo OMEGA Haute qualité copy.png",
-  "/products/Logo OMEGA Haute qualité.png",
-  "/products/Logo-omega-hq-transparent.png",
-  "/products/OMEGA-DMX-Interface.png",
-  "/products/image-png.png",
-  "/products/image.png",
-  "/products/omega mousse 2.png",
-  "/products/omega mousse.png",
-  "/products/omega-dmx-soft-beams.png",
-  "/products/omega-dmx-soft-dashboard.png",
-  "/products/omega-dmx-soft-stage.png"
+  "/products/el-fuego-sagrador.webp",
+  "/products/hazer-co2-generated.webp",
+  "/products/hazer-co2-remake.webp",
+  "/products/hazer-co2-test.webp",
+  "/products/image-png.webp",
+  "/products/image.webp",
+  "/products/liquide-pro-hazer-5l.webp",
+  "/products/logo-omega-hq-transparent.webp",
+  "/products/omega-dmx-interface.webp",
+  "/products/omega-dmx-soft-3d.webp",
+  "/products/omega-dmx-soft-beams.webp",
+  "/products/omega-dmx-soft-color.webp",
+  "/products/omega-dmx-soft-dash.webp",
+  "/products/omega-dmx-soft-dashboard.webp",
+  "/products/omega-dmx-soft-move.webp",
+  "/products/omega-dmx-soft-plan2d.webp",
+  "/products/omega-dmx-soft-stage.webp",
+  "/products/omega-dmx-soft-stage3d.webp",
+  "/products/omega-mousse-2.webp",
+  "/products/omega-mousse.webp",
+  "/products/placeholder.webp"
 ];
 
 /**

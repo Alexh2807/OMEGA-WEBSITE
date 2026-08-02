@@ -227,7 +227,7 @@ const HazerDetailPage = () => {
                   ? hazerProduct.image.startsWith('/')
                     ? hazerProduct.image
                     : `/${hazerProduct.image}`
-                  : '/Hazer-co2-generated.png'
+                  : '/products/hazer-co2-generated.webp'
               }
               alt={hazerProduct.name}
               className="w-12 h-12 object-contain"
@@ -372,7 +372,7 @@ const HazerDetailPage = () => {
                         ? hazerProduct.image.startsWith('/')
                           ? hazerProduct.image
                           : `/${hazerProduct.image}`
-                        : '/Hazer-co2-generated.png'
+                        : '/products/hazer-co2-generated.webp'
                     }
                     alt={hazerProduct.name}
                     className="w-full h-[500px] object-contain"
@@ -561,7 +561,7 @@ const HazerDetailPage = () => {
                           ? product.image.startsWith('/')
                             ? product.image
                             : `/${product.image}`
-                          : '/placeholder.png'
+                          : '/products/placeholder.webp'
                       }
                       alt={product.name}
                       className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
