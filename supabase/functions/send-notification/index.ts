@@ -32,6 +32,35 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SITE = 'https://omegasud.fr';
 
+/** Identifiant du logo joint au message, référencé par `cid:` dans le HTML. */
+const LOGO_CID = 'logo-omega';
+
+/**
+ * Le logo, encodé une fois puis conservé : l'instance de la fonction est réutilisée
+ * d'un appel à l'autre, inutile de le retélécharger à chaque e-mail.
+ * `null` = tentative faite et échouée ; on n'insiste pas, le texte de remplacement
+ * prend le relais.
+ */
+let logoBase64: string | null | undefined;
+
+async function chargerLogo(): Promise<string | null> {
+  if (logoBase64 !== undefined) return logoBase64;
+  try {
+    const r = await fetch(`${SITE}/email/logo-omega.png`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const octets = new Uint8Array(await r.arrayBuffer());
+    let binaire = '';
+    for (const o of octets) binaire += String.fromCharCode(o);
+    // Découpé en lignes de 76 caractères, comme l'exige MIME (RFC 2045). Une seule
+    // ligne de ~32 000 caractères dépasserait la limite SMTP et romprait la connexion.
+    logoBase64 = (btoa(binaire).match(/.{1,76}/g) ?? []).join('\r\n');
+  } catch (err) {
+    console.error('Logo indisponible, envoi sans image :', err);
+    logoBase64 = null;
+  }
+  return logoBase64;
+}
+
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') || '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
@@ -56,6 +85,84 @@ const bloc = (v: unknown) => e(v).replace(/\n/g, '<br>');
 
 const euros = (n: unknown) =>
   `${Number(n ?? 0).toFixed(2).replace('.', ',')}&nbsp;&euro;`;
+
+/**
+ * Version texte du message, dérivée du HTML.
+ *
+ * Un e-mail HTML SANS équivalent texte est un signal de spam classique : les filtres
+ * y voient une caractéristique des envois de masse, et Gmail l'a effectivement classé
+ * en indésirable lors des premiers essais. Un message `multipart/alternative` correct
+ * n'est pas un détail cosmétique, c'est ce qu'attend tout client de messagerie.
+ */
+function htmlVersTexte(html: string): string {
+  return (
+    html
+      // Ni le style ni l'en-tête n'ont d'équivalent lisible.
+      .replace(/<(style|head|script)[\s\S]*?<\/\1>/gi, '')
+      // L'aperçu masqué ferait doublon avec la première ligne du corps.
+      .replace(/<div style="display:none[\s\S]*?<\/div>/gi, '')
+      // Un lien doit rester cliquable une fois les balises retirées.
+      .replace(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|tr|h1|h2|h3|table)>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      // Entités utilisées par les gabarits.
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&euro;/g, 'EUR')
+      .replace(/&mdash;/g, '—')
+      .replace(/&rsquo;/g, '’')
+      .replace(/&times;/g, 'x')
+      .replace(/&eacute;/g, 'é')
+      .replace(/&egrave;/g, 'è')
+      .replace(/&agrave;/g, 'à')
+      .replace(/&ecirc;/g, 'ê')
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      // `&amp;` en dernier, sinon il ressusciterait les entités déjà traitées.
+      .replace(/&amp;/g, '&')
+      .split('\n')
+      .map((l) => l.trim())
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+      // ⚠ ASCII STRICT, et ce n'est pas un choix esthétique. denomailer n'encode pas
+      // la partie texte : les octets partent tels quels sur le socket. Avec des
+      // accents, le serveur SMTP rompait la connexion en pleine écriture — journaux
+      // « BrokenPipe » puis « BadResource », worker tué, fonction en 503 et AUCUN
+      // e-mail envoyé. Le HTML, lui, est bien encodé et conserve tous ses accents :
+      // seule cette version de repli est translittérée.
+      .normalize('NFD')
+      .replace(DIACRITIQUES, '')
+      .replace(/[^\x20-\x7E\n]/g, ' ')
+      // ⚠ Pliage OBLIGATOIRE lui aussi : SMTP interdit les lignes de plus de
+      // 1000 octets (RFC 5321), et le gabarit HTML tient sur de très longues lignes
+      // dont le texte hérite.
+      .split('\n')
+      .map((ligne) => plier(ligne, 78))
+      .join('\n')
+      .replace(/[ \t]+$/gm, '')
+  );
+}
+
+const DIACRITIQUES = new RegExp('[\\u0300-\\u036f]', 'g');
+
+/** Coupe une ligne aux espaces, sans jamais tronquer un mot plus long que la limite. */
+function plier(ligne: string, largeur: number): string {
+  if (ligne.length <= largeur) return ligne;
+  const sortie: string[] = [];
+  let courante = '';
+  for (const mot of ligne.split(' ')) {
+    if (courante && courante.length + 1 + mot.length > largeur) {
+      sortie.push(courante);
+      courante = mot;
+    } else {
+      courante = courante ? `${courante} ${mot}` : mot;
+    }
+  }
+  if (courante) sortie.push(courante);
+  return sortie.join('\n');
+}
 
 // ---------------------------------------------------------------------------
 // Gabarit
@@ -100,10 +207,15 @@ function gabarit(opts: {
     <tr><td bgcolor="#07070d" align="center" style="background-color:#07070d;padding:48px 16px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#07070d" style="max-width:560px;background-color:#07070d;">
 
+        <!-- Logo JOINT au message (cid:), et non chargé depuis le site : les clients de
+             messagerie bloquent les images distantes par défaut, le logo n'apparaissait
+             donc qu'une fois sur deux. Le texte de remplacement est stylé en blanc :
+             s'il s'affiche malgré tout, il doit rester lisible sur ce fond sombre —
+             sans couleur explicite il sortait en noir sur noir, donc invisible. -->
         <tr><td bgcolor="#07070d" align="center" style="background-color:#07070d;padding:0 0 32px 0;">
           <a href="${SITE}" style="text-decoration:none;">
-            <img src="${SITE}/email/logo-omega.png" alt="OMEGA" width="240"
-                 style="display:block;width:240px;max-width:240px;height:auto;border:0;outline:none;text-decoration:none;">
+            <img src="cid:${LOGO_CID}" alt="OMEGA" width="240"
+                 style="display:block;width:240px;max-width:240px;height:auto;border:0;outline:none;text-decoration:none;color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;font-size:26px;font-weight:700;letter-spacing:3px;">
           </a>
         </td></tr>
 
@@ -197,6 +309,19 @@ async function envoyer(destinataires: string[], sujet: string, html: string) {
   const expediteur = `${Deno.env.get('SMTP_FROM_NAME') || 'OMEGA'} <${
     Deno.env.get('SMTP_FROM') || utilisateur
   }>`;
+  const texte = htmlVersTexte(html);
+  const logo = await chargerLogo();
+  const pieces = logo
+    ? [
+        {
+          contentType: 'image/png',
+          filename: 'logo-omega.png',
+          content: logo,
+          encoding: 'base64' as const,
+          contentID: LOGO_CID,
+        },
+      ]
+    : [];
 
   // Un message par destinataire : personne ne découvre l'adresse des autres, et le
   // refus du serveur pour l'un n'emporte pas les autres.
@@ -205,7 +330,16 @@ async function envoyer(destinataires: string[], sujet: string, html: string) {
   try {
     for (const destinataire of destinataires) {
       try {
-        await client.send({ from: expediteur, to: destinataire, subject: sujet, html });
+        await client.send({
+          from: expediteur,
+          to: destinataire,
+          subject: sujet,
+          html,
+          // multipart/alternative : voir htmlVersTexte(). Sans cette partie, le message
+          // part en HTML seul, ce que les filtres pénalisent.
+          content: texte,
+          attachments: pieces,
+        });
         envoyes++;
       } catch (err) {
         echecs.push(`${destinataire} : ${err}`);
