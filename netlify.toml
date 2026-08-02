@@ -4,6 +4,13 @@
   command = "npm run build"
   publish = "dist"
 
+# Messagerie du back-office : lecture IMAP et réponse SMTP de la boîte OMEGA.
+# Le regroupement par esbuild embarque imapflow/mailparser/nodemailer dans le paquet
+# déployé — sans quoi la fonction ne les trouverait pas à l'exécution.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # ⚠ AVANT la règle SPA, sinon elle attrape tout.
 #
 # Un fichier d'assets absent doit répondre 404. Sans cette règle, le repli SPA renvoyait

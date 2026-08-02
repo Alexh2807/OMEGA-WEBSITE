@@ -12,6 +12,7 @@ import {
   FileText,
   FileSpreadsheet,
   Star,
+  Mail,
 } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('./admin/AdminDashboard'));
@@ -20,6 +21,7 @@ const AdminProducts = lazy(() => import('./admin/AdminProducts'));
 const AdminOrders = lazy(() => import('./admin/AdminOrders'));
 const AdminPlanningEditor = lazy(() => import('./admin/AdminPlanningEditor'));
 const AdminMessages = lazy(() => import('./admin/AdminMessages'));
+const AdminMailbox = lazy(() => import('./admin/AdminMailbox'));
 const AdminBugReports = lazy(() => import('./admin/AdminBugReports'));
 const AdminBilling = lazy(() => import('./admin/AdminBilling'));
 const AdminAccounting = lazy(() => import('./admin/AdminAccounting'));
@@ -84,6 +86,7 @@ const AdminPage = () => {
     { id: 'reviews', label: 'Avis Clients', icon: Star },
     { id: 'planning', label: 'Planning', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'mailbox', label: 'Messagerie', icon: Mail },
     { id: 'bugs', label: 'Signalements', icon: Bug },
     { id: 'billing', label: 'Facturation', icon: FileText },
     { id: 'accounting', label: 'Comptabilité', icon: FileSpreadsheet },
@@ -104,6 +107,8 @@ const AdminPage = () => {
         return <AdminPlanningEditor />;
       case 'messages':
         return <AdminMessages />;
+      case 'mailbox':
+        return <AdminMailbox />;
       case 'bugs':
         return <AdminBugReports />;
       case 'billing':
