@@ -271,6 +271,9 @@ async function envoyerMail(a: string, objet: string, corps: string, messageId?: 
         objet,
         statut: 'envoye',
         origine: 'manuel',
+        // Écrit en texte : ces messages sont saisis au clavier, ils n'ont pas de
+        // version HTML propre. Le journal doit malgré tout pouvoir les relire.
+        corps_texte: corps,
       }),
     });
   } catch (err) {

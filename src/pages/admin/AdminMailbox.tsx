@@ -42,6 +42,8 @@ interface LigneJournal {
   statut: 'envoye' | 'echec';
   erreur: string | null;
   origine: 'auto' | 'manuel';
+  corps_html: string | null;
+  corps_texte: string | null;
 }
 
 /** Les trois vues. « Journal » n'est pas un dossier IMAP : voir plus bas. */
@@ -73,6 +75,7 @@ const AdminMailbox = () => {
   // au lieu de le deviner.
   const [cheminEnvoyes, setCheminEnvoyes] = useState<string | null>(null);
   const [journal, setJournal] = useState<LigneJournal[]>([]);
+  const [journalOuvert, setJournalOuvert] = useState<LigneJournal | null>(null);
   // `recherche` suit la frappe ; `requete` ne la rattrape qu'une fois la saisie posée.
   // Sans ce délai, chaque touche déclencherait une recherche sur le serveur de
   // messagerie — huit requêtes pour écrire « commande ».
@@ -173,6 +176,7 @@ const AdminMailbox = () => {
 
   useEffect(() => {
     setOuvert(null);
+    setJournalOuvert(null);
     charger();
   }, [vue, requete]);
 
@@ -360,7 +364,7 @@ const AdminMailbox = () => {
           aucune copie dans « Envoyés » (c'est le logiciel de messagerie qui le fait),
           les notifications du site y seraient donc invisibles. Le journal les retient
           en base, échecs compris. */}
-      {!ouvert && !redaction && (
+      {!ouvert && !redaction && !journalOuvert && (
         <div className="flex flex-wrap gap-2 mb-6">
           {(
             [
@@ -387,7 +391,7 @@ const AdminMailbox = () => {
       {/* Recherche. Elle interroge le serveur de messagerie ou la base selon la vue —
           jamais une liste déjà chargée : filtrer ici supposerait d'avoir tout
           rapatrié, ce qui ne tient pas au-delà de quelques centaines de messages. */}
-      {!ouvert && !redaction && (
+      {!ouvert && !redaction && !journalOuvert && (
         <div className="mb-4">
           <div className="relative">
             <Search
@@ -417,8 +421,68 @@ const AdminMailbox = () => {
         </div>
       )}
 
+      {/* Un envoi du journal, ouvert */}
+      {journalOuvert && (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setJournalOuvert(null)}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Retour au journal
+          </button>
+
+          <div className="bg-white/5 rounded-lg p-5 border border-white/10">
+            <div className="text-white font-semibold text-lg mb-1">
+              {journalOuvert.objet || '(sans objet)'}
+            </div>
+            <div className="text-gray-400 text-sm">
+              À {journalOuvert.destinataire} · {journalOuvert.evenement} ·{' '}
+              {dateCourte(journalOuvert.created_at)}
+            </div>
+            <div
+              className={`text-sm font-semibold mt-2 ${
+                journalOuvert.statut === 'echec' ? 'text-red-400' : 'text-green-400'
+              }`}
+            >
+              {journalOuvert.statut === 'echec'
+                ? 'Refusé par le serveur'
+                : 'Accepté par le serveur'}
+            </div>
+            {journalOuvert.erreur && (
+              <div className="text-red-300 text-xs mt-2 break-all">
+                {journalOuvert.erreur}
+              </div>
+            )}
+          </div>
+
+          {journalOuvert.corps_html ? (
+            /* Rendu dans une iframe CLOISONNÉE. Ce HTML vient de nos gabarits, mais il
+               contient du texte écrit par des clients : l'isoler coûte une ligne et
+               retire tout risque d'exécution dans le back-office. `sandbox` vide =
+               aucun script, aucune navigation, aucun formulaire. */
+            <iframe
+              title={`Message envoyé à ${journalOuvert.destinataire}`}
+              sandbox=""
+              srcDoc={journalOuvert.corps_html}
+              className="w-full h-[560px] rounded-lg border border-white/10 bg-black"
+            />
+          ) : journalOuvert.corps_texte ? (
+            <div className="bg-black/30 border border-white/10 rounded-lg p-4 text-gray-200 text-sm whitespace-pre-line max-h-[560px] overflow-auto">
+              {journalOuvert.corps_texte}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm bg-white/5 border border-white/10 rounded-lg p-4">
+              Le contenu de cet envoi n'a pas été conservé — il est antérieur à
+              l'enregistrement des messages, ou il a été purgé.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Journal des envois du site */}
-      {!ouvert && !redaction && vue === 'journal' && (
+      {!ouvert && !redaction && !journalOuvert && vue === 'journal' && (
         <>
           {chargement ? (
             <div className="text-gray-400 flex items-center gap-2 py-8 justify-center">
@@ -433,12 +497,14 @@ const AdminMailbox = () => {
             <>
               <div className="space-y-2">
                 {journal.map(l => (
-                  <div
+                  <button
                     key={l.id}
-                    className={`flex items-start justify-between gap-4 rounded-lg p-4 border ${
+                    type="button"
+                    onClick={() => setJournalOuvert(l)}
+                    className={`w-full text-left flex items-start justify-between gap-4 rounded-lg p-4 border transition-colors ${
                       l.statut === 'echec'
-                        ? 'bg-red-500/10 border-red-500/30'
-                        : 'bg-white/5 border-white/10'
+                        ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
+                        : 'bg-white/5 border-white/10 hover:bg-white/10'
                     }`}
                   >
                     <div className="min-w-0">
@@ -467,7 +533,7 @@ const AdminMailbox = () => {
                         {l.statut === 'echec' ? 'échec' : 'accepté'}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
               <p className="text-gray-500 text-xs mt-4">

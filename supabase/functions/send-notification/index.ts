@@ -347,15 +347,26 @@ async function envoyer(
           attachments: pieces,
         });
         envoyes++;
-        trace.push({ evenement, destinataire, objet: sujet, statut: 'envoye' });
+        trace.push({
+          evenement,
+          destinataire,
+          objet: sujet,
+          statut: 'envoye',
+          corps_html: html,
+          corps_texte: texte,
+        });
       } catch (err) {
         echecs.push(`${destinataire} : ${err}`);
+        // Le corps est conservé même en cas d'échec : c'est justement là qu'on veut
+        // relire ce qui aurait dû partir.
         trace.push({
           evenement,
           destinataire,
           objet: sujet,
           statut: 'echec',
           erreur: String(err).slice(0, 500),
+          corps_html: html,
+          corps_texte: texte,
         });
       }
     }
@@ -386,6 +397,8 @@ async function journaliser(
     objet: string;
     statut: 'envoye' | 'echec';
     erreur?: string;
+    corps_html?: string;
+    corps_texte?: string;
   }[]
 ) {
   if (lignes.length === 0) return;
