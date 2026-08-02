@@ -315,6 +315,20 @@ async function envoyer(
     Deno.env.get('SMTP_FROM') || utilisateur
   }>`;
   const texte = htmlVersTexte(html);
+
+  /*
+   * Deux versions du même message, et ce n'est pas un détail :
+   *  - celle EXPÉDIÉE référence le logo joint (`cid:`), seul moyen fiable de l'afficher
+   *    dans un client de messagerie, qui bloque les images distantes par défaut ;
+   *  - celle ARCHIVÉE dans le journal pointe vers l'URL du site, car `cid:` n'existe
+   *    que dans un e-mail : dans l'aperçu du back-office, l'image serait cassée.
+   * Conserver l'URL plutôt que le logo lui-même garde aussi le journal léger — aucune
+   * image n'est stockée en base.
+   */
+  const htmlArchive = html.replace(
+    new RegExp(`cid:${LOGO_CID}`, 'g'),
+    `${SITE}/email/logo-omega.png`
+  );
   const logo = await chargerLogo();
   const pieces = logo
     ? [
@@ -352,7 +366,7 @@ async function envoyer(
           destinataire,
           objet: sujet,
           statut: 'envoye',
-          corps_html: html,
+          corps_html: htmlArchive,
           corps_texte: texte,
         });
       } catch (err) {
@@ -365,7 +379,7 @@ async function envoyer(
           objet: sujet,
           statut: 'echec',
           erreur: String(err).slice(0, 500),
-          corps_html: html,
+          corps_html: htmlArchive,
           corps_texte: texte,
         });
       }

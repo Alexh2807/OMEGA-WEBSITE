@@ -608,12 +608,24 @@ const AdminMailbox = () => {
               {dateCourte(ouvert.date)}
             </div>
 
-            {/* Le corps est affiché en TEXTE, jamais en HTML : injecter le HTML d'un
-                expéditeur inconnu dans le back-office ouvrirait la porte à l'exécution
-                de son code. */}
-            <div className="text-gray-200 text-sm whitespace-pre-line leading-relaxed max-h-96 overflow-auto">
-              {ouvert.texte || '(message sans contenu texte)'}
-            </div>
+            {/* Le message tel qu'il a été envoyé — mise en forme et images comprises —
+                mais dans une iframe CLOISONNÉE (`sandbox` vide : aucun script, aucune
+                navigation, aucun formulaire, aucun accès à la page qui l'entoure).
+                C'est ce qui permet d'afficher le HTML d'un expéditeur inconnu sans lui
+                donner le moindre pouvoir sur le back-office. Sans ce cloisonnement, il
+                faudrait s'en tenir au texte brut. */}
+            {ouvert.html ? (
+              <iframe
+                title={`Message de ${nomDe(ouvert.de)}`}
+                sandbox=""
+                srcDoc={ouvert.html}
+                className="w-full h-[520px] rounded-lg border border-white/10 bg-white"
+              />
+            ) : (
+              <div className="text-gray-200 text-sm whitespace-pre-line leading-relaxed max-h-96 overflow-auto">
+                {ouvert.texte || '(message sans contenu)'}
+              </div>
+            )}
 
             {ouvert.piecesJointes.length > 0 && (
               <div className="mt-4 pt-4 border-t border-white/10">
