@@ -11,6 +11,7 @@ import {
   Settings,
   ToggleLeft,
   ToggleRight,
+  ChevronDown,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Phone } from 'lucide-react';
@@ -20,10 +21,29 @@ import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import { COMPANY_INFO } from '../config/legalInfo';
 import { supabase } from '../lib/supabase';
 
+/**
+ * La gamme OMEGA, regroupée sous un seul onglet.
+ *
+ * Sept liens côte à côte faisaient passer la barre sur DEUX lignes. Les quatre entrées
+ * produits sont donc réunies ici, et cette liste sert aux deux menus : celui du bureau
+ * et celui du mobile. Une seule source, pas deux listes à maintenir en parallèle.
+ *
+ * ⚠ Les destinations sont EXACTEMENT celles de l'ancien menu — « Smoke System » pointe
+ * bien vers /machine-hazer, comme avant. Regrouper des liens ne doit pas en changer un
+ * seul au passage.
+ */
+const GAMME_OMEGA = [
+  { to: '/machine-hazer', libelle: 'Smoke System' },
+  { to: '/fluid-system', libelle: 'Fluid System' },
+  { to: '/omega-dmx-interface', libelle: 'DMX Interface' },
+  { to: '/produits', libelle: 'Tous les produits' },
+];
+
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isGammeOpen, setIsGammeOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const { user, signOut, isAdmin, userType, setUserType } = useAuth();
   const { totalItems } = useCart();
@@ -43,6 +63,7 @@ const Header = () => {
   useEffect(() => {
     setIsUserMenuOpen(false);
     setIsMenuOpen(false);
+    setIsGammeOpen(false);
   }, [location.pathname]);
 
   // Fermer les menus lors du clic extérieur
@@ -51,10 +72,12 @@ const Header = () => {
       const target = event.target as Element;
       if (
         !target.closest('.user-menu-container') &&
-        !target.closest('.mobile-menu-container')
+        !target.closest('.mobile-menu-container') &&
+        !target.closest('.gamme-menu-container')
       ) {
         setIsUserMenuOpen(false);
         setIsMenuOpen(false);
+        setIsGammeOpen(false);
       }
     };
 
@@ -115,6 +138,10 @@ const Header = () => {
   const toggleUserType = () => {
     setUserType(userType === 'pro' ? 'particulier' : 'pro');
   };
+
+  // L'onglet reste allumé tant qu'on est sur l'une de ses pages : sans cela, entrer
+  // dans la gamme ferait perdre tout repère de position dans la barre.
+  const gammeActive = GAMME_OMEGA.some(lien => location.pathname === lien.to);
   return (
     <header
       className={`fixed top-0 w-full z-50 transition-all duration-300 ${
@@ -131,47 +158,60 @@ const Header = () => {
             />
           </Link>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-8">
+          {/* Menu bureau — `lg` et non `md` : à 768 px, la barre ne peut pas tenir sur
+              une ligne, le menu compact est alors préférable. */}
+          <div className="hidden lg:flex items-center gap-6">
             <Link
               to="/"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              className="text-white hover:text-blue-400 transition-colors duration-300 whitespace-nowrap"
             >
               Accueil
             </Link>
-            <Link
-              to="/machine-hazer"
-              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
-            >
-              Smoke System
-            </Link>
-            <Link
-              to="/fluid-system"
-              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
-            >
-              Fluid System
-            </Link>
-            <Link
-              to="/omega-dmx-interface"
-              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
-            >
-              DMX Interface
-            </Link>
-            <Link
-              to="/produits"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
-            >
-              Tous les Produits
-            </Link>
+
+            {/* Gamme OMEGA — même mécanique que le menu du compte, juste en dessous :
+                clic pour ouvrir, fermeture au clic extérieur et au changement de page. */}
+            <div className="relative gamme-menu-container">
+              <button
+                onClick={() => setIsGammeOpen(!isGammeOpen)}
+                aria-expanded={isGammeOpen}
+                className={`flex items-center gap-1 transition-colors duration-300 whitespace-nowrap font-medium ${
+                  gammeActive ? 'text-blue-400' : 'text-white hover:text-blue-400'
+                }`}
+              >
+                Gamme OMEGA
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform duration-200 ${isGammeOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {isGammeOpen && (
+                <div className="absolute left-0 top-full mt-2 bg-black/95 backdrop-blur-md rounded-lg p-2 min-w-56 border border-white/10 shadow-xl">
+                  {GAMME_OMEGA.map(lien => (
+                    <Link
+                      key={lien.to}
+                      to={lien.to}
+                      className={`block px-3 py-2 rounded-md transition-colors whitespace-nowrap ${
+                        location.pathname === lien.to
+                          ? 'text-blue-400 bg-white/5'
+                          : 'text-white hover:text-blue-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {lien.libelle}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Link
               to="/spectacles"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              className="text-white hover:text-blue-400 transition-colors duration-300 whitespace-nowrap"
             >
               Spectacles
             </Link>
             <Link
               to="/contact"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
+              className="text-white hover:text-blue-400 transition-colors duration-300 whitespace-nowrap"
             >
               Contact
             </Link>
@@ -208,7 +248,11 @@ const Header = () => {
                 title="Appelez-nous pour un devis"
               >
                 <Phone size={20} />
-                <span className="hidden lg:inline">{COMPANY_INFO.phone}</span>
+                {/* Le numéro en toutes lettres n'apparaît qu'à partir de `xl` : entre
+                    1024 et 1280 px, il suffirait à faire repasser la barre sur deux
+                    lignes. En dessous, l'icône reste cliquable et appelle le même
+                    numéro. */}
+                <span className="hidden xl:inline">{COMPANY_INFO.phone}</span>
               </a>
             ) : (
               <Link
@@ -304,9 +348,10 @@ const Header = () => {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Bouton du menu compact — même seuil que le menu bureau ci-dessus (`lg`),
+              sinon il resterait une plage de largeurs sans aucun menu affiché. */}
           <button
-            className="md:hidden text-white"
+            className="lg:hidden text-white"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -315,7 +360,7 @@ const Header = () => {
 
         {/* Mobile Menu */}
         <div
-          className={`md:hidden absolute top-full left-0 w-full bg-black/95 backdrop-blur-md transition-all duration-300 ${
+          className={`lg:hidden absolute top-full left-0 w-full bg-black/95 backdrop-blur-md transition-all duration-300 ${
             isMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
           } mobile-menu-container`}
         >
@@ -341,30 +386,30 @@ const Header = () => {
             >
               Accueil
             </Link>
-            <Link
-              to="/machine-hazer"
-              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
-            >
-              Smoke System
-            </Link>
-            <Link
-              to="/fluid-system"
-              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
-            >
-              Fluid System
-            </Link>
-            <Link
-              to="/omega-dmx-interface"
-              className="text-white hover:text-blue-400 transition-colors duration-300 font-medium"
-            >
-              DMX Interface
-            </Link>
-            <Link
-              to="/produits"
-              className="text-white hover:text-blue-400 transition-colors duration-300"
-            >
-              Tous les Produits
-            </Link>
+
+            {/* Même regroupement qu'en bureau, mais déplié : sur un menu vertical la
+                place ne manque pas, et un second niveau à ouvrir serait une gêne. */}
+            <div>
+              <div className="text-gray-400 text-xs uppercase tracking-wider mb-2">
+                Gamme OMEGA
+              </div>
+              <div className="flex flex-col space-y-3 pl-3 border-l border-white/10">
+                {GAMME_OMEGA.map(lien => (
+                  <Link
+                    key={lien.to}
+                    to={lien.to}
+                    className={`transition-colors duration-300 ${
+                      location.pathname === lien.to
+                        ? 'text-blue-400'
+                        : 'text-white hover:text-blue-400'
+                    }`}
+                  >
+                    {lien.libelle}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
             <Link
               to="/spectacles"
               className="text-white hover:text-blue-400 transition-colors duration-300"
