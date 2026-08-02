@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, RefreshCw, Send, ArrowLeft, Paperclip, Loader2 } from 'lucide-react';
+import { Mail, RefreshCw, Send, ArrowLeft, Paperclip, Loader2, PenSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 
@@ -38,6 +38,12 @@ const AdminMailbox = () => {
   const [reponse, setReponse] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const [nonConfigure, setNonConfigure] = useState(false);
+  // Rédaction d'un message neuf. `null` = on n'est pas en train d'en écrire un.
+  const [redaction, setRedaction] = useState<{
+    a: string;
+    objet: string;
+    corps: string;
+  } | null>(null);
 
   const appeler = async (corps: Record<string, unknown>) => {
     const { data } = await supabase.auth.getSession();
@@ -115,6 +121,25 @@ const AdminMailbox = () => {
     }
   };
 
+  const envoyerNouveau = async () => {
+    if (!redaction?.a.trim() || !redaction.corps.trim()) return;
+    setEnvoi(true);
+    try {
+      await appeler({
+        action: 'envoyer',
+        a: redaction.a,
+        objet: redaction.objet,
+        corps: redaction.corps,
+      });
+      toast.success('Message envoyé');
+      setRedaction(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "L'envoi a échoué");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
   const dateCourte = (d: string | null) =>
     d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
 
@@ -149,29 +174,90 @@ const AdminMailbox = () => {
         <div className="flex items-center gap-3">
           <Mail className="text-blue-400" size={24} />
           <h2 className="text-2xl font-bold text-white">
-            {ouvert ? 'Message' : 'Messagerie'}
+            {redaction ? 'Nouveau message' : ouvert ? 'Message' : 'Messagerie'}
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          {ouvert && (
+          {(ouvert || redaction) && (
             <button
-              onClick={() => setOuvert(null)}
+              onClick={() => (redaction ? setRedaction(null) : setOuvert(null))}
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors"
             >
               <ArrowLeft size={16} />
               Retour
             </button>
           )}
-          <button
-            onClick={charger}
-            disabled={chargement}
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
-          >
-            <RefreshCw size={16} className={chargement ? 'animate-spin' : ''} />
-            Actualiser
-          </button>
+          {!redaction && !ouvert && (
+            <>
+              <button
+                onClick={() => setRedaction({ a: '', objet: '', corps: '' })}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+              >
+                <PenSquare size={16} />
+                Nouveau message
+              </button>
+              <button
+                onClick={charger}
+                disabled={chargement}
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={chargement ? 'animate-spin' : ''} />
+                Actualiser
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Rédaction d'un message neuf */}
+      {redaction && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Destinataire</label>
+            <input
+              type="email"
+              value={redaction.a}
+              onChange={e => setRedaction({ ...redaction, a: e.target.value })}
+              placeholder="client@exemple.fr"
+              className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Objet</label>
+            <input
+              type="text"
+              value={redaction.objet}
+              onChange={e => setRedaction({ ...redaction, objet: e.target.value })}
+              placeholder="Objet du message"
+              className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Message</label>
+            <textarea
+              value={redaction.corps}
+              onChange={e => setRedaction({ ...redaction, corps: e.target.value })}
+              rows={10}
+              placeholder="Votre message…"
+              className="w-full bg-black/30 border border-white/10 rounded-lg p-4 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={envoyerNouveau}
+              disabled={envoi || !redaction.a.trim() || !redaction.corps.trim()}
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all disabled:opacity-50"
+            >
+              <Send size={16} />
+              {envoi ? 'Envoi…' : 'Envoyer'}
+            </button>
+            <span className="text-gray-500 text-sm">
+              Expédié depuis contact@omegasud.fr. La réponse arrivera dans cette
+              messagerie.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Liste */}
       {!ouvert && (

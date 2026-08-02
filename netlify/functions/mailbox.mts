@@ -151,8 +151,12 @@ async function ouvrir(uid: number) {
   }
 }
 
-/** Répond à un message, en rattachant la réponse au fil d'origine. */
-async function repondre(a: string, objet: string, corps: string, messageId?: string) {
+/**
+ * Envoie un message. Avec `messageId`, c'est une réponse : elle est préfixée « Re: »
+ * et rattachée au fil d'origine. Sans lui, c'est un message neuf, dont l'objet est
+ * laissé exactement tel que l'expéditeur l'a écrit.
+ */
+async function envoyerMail(a: string, objet: string, corps: string, messageId?: string) {
   const transport = nodemailer.createTransport({
     host: conf.smtpHote,
     port: conf.smtpPort,
@@ -163,7 +167,10 @@ async function repondre(a: string, objet: string, corps: string, messageId?: str
   const envoi = await transport.sendMail({
     from: `OMEGA <${conf.utilisateur}>`,
     to: a,
-    subject: objet.toLowerCase().startsWith('re') ? objet : `Re: ${objet}`,
+    subject:
+      messageId && !objet.toLowerCase().startsWith('re')
+        ? `Re: ${objet}`
+        : objet || '(sans objet)',
     text: corps,
     // Sans ces deux en-têtes, la réponse ouvre une conversation distincte au lieu de
     // se ranger sous la demande d'origine chez le destinataire.
@@ -216,7 +223,17 @@ export default async (req: Request, _context: Context) => {
       }
       case 'repondre':
         if (!a || !corps) return json({ error: 'Destinataire et texte requis' }, 400);
-        return json(await repondre(a, objet ?? '', corps, messageId));
+        return json(await envoyerMail(a, objet ?? '', corps, messageId));
+
+      case 'envoyer': {
+        if (!a || !corps) return json({ error: 'Destinataire et texte requis' }, 400);
+        // Garde-fou : une adresse manifestement invalide serait refusée par le serveur
+        // après coup, avec un message bien moins clair pour l'expéditeur.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(a).trim())) {
+          return json({ error: 'Adresse du destinataire invalide' }, 400);
+        }
+        return json(await envoyerMail(String(a).trim(), objet ?? '', corps));
+      }
       default:
         return json({ error: 'Action inconnue' }, 400);
     }
