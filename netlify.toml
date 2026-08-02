@@ -4,7 +4,23 @@
   command = "npm run build"
   publish = "dist"
 
-# SPA : toutes les routes sont servies par index.html (React Router gère le reste)
+# ⚠ AVANT la règle SPA, sinon elle attrape tout.
+#
+# Un fichier d'assets absent doit répondre 404. Sans cette règle, le repli SPA renvoyait
+# index.html avec un code 200 : le navigateur recevait du HTML là où il attendait du
+# JavaScript, et échouait sur un message obscur
+# (« Failed to fetch dynamically imported module »). Cela arrive à tout visiteur dont
+# l'onglet est resté ouvert pendant une mise en ligne, puisque Vite renomme chaque
+# morceau à chaque build. Le repli côté application est dans src/utils/lazyPage.ts.
+#
+# Netlify sert les fichiers existants AVANT d'appliquer les redirections : les assets
+# réellement présents ne passent donc jamais par ici.
+[[redirects]]
+  from = "/assets/*"
+  to = "/index.html"
+  status = 404
+
+# SPA : toutes les autres routes sont servies par index.html (React Router gère le reste)
 [[redirects]]
   from = "/*"
   to = "/index.html"

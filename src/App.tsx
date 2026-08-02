@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense, lazy } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -16,31 +16,34 @@ import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
 import { supabase } from './lib/supabase';
 import toast from 'react-hot-toast';
+import { lazyPage } from './utils/lazyPage';
 
-// Lazy-loaded pages
-const HomePage = lazy(() => import('./pages/HomePage'));
-const HazerDetailPage = lazy(() => import('./pages/HazerDetailPage'));
-const MousseDetailPage = lazy(() => import('./pages/MousseDetailPage'));
-const SmokeSystemPage = lazy(() => import('./pages/SmokeSystemPage'));
-const Smoke700DetailPage = lazy(() => import('./pages/Smoke700DetailPage'));
-const FluidSystemPage = lazy(() => import('./pages/FluidSystemPage'));
-const NeigeDetailPage = lazy(() => import('./pages/NeigeDetailPage'));
-const FumeeDetailPage = lazy(() => import('./pages/FumeeDetailPage'));
-const FlammeDetailPage = lazy(() => import('./pages/FlammeDetailPage'));
-const ProductsPage = lazy(() => import('./pages/ProductsPage'));
-const OmegaDmxInterfacePage = lazy(() => import('./pages/OmegaDmxInterfacePage'));
-const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
-const CartPage = lazy(() => import('./pages/CartPage'));
-const AccountPage = lazy(() => import('./pages/AccountPage'));
-const OrdersPage = lazy(() => import('./pages/OrdersPage'));
-const ContactPage = lazy(() => import('./pages/ContactPage'));
-const AuthPage = lazy(() => import('./pages/AuthPage'));
-const AdminPage = lazy(() => import('./pages/AdminPage'));
-const MessagesPage = lazy(() => import('./pages/MessagesPage'));
-const EmailConfirmationPage = lazy(() => import('./pages/EmailConfirmationPage'));
-const SpectaclesPage = lazy(() => import('./pages/SpectaclesPage'));
-const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
-const TermsPage = lazy(() => import('./pages/TermsPage'));
+// Pages chargées à la demande. `lazyPage` et non `lazy` : après un déploiement, les
+// morceaux de l'ancienne version n'existent plus sur le serveur et un onglet resté
+// ouvert échouerait à charger sa page suivante. Voir src/utils/lazyPage.ts.
+const HomePage = lazyPage(() => import('./pages/HomePage'));
+const HazerDetailPage = lazyPage(() => import('./pages/HazerDetailPage'));
+const MousseDetailPage = lazyPage(() => import('./pages/MousseDetailPage'));
+const SmokeSystemPage = lazyPage(() => import('./pages/SmokeSystemPage'));
+const Smoke700DetailPage = lazyPage(() => import('./pages/Smoke700DetailPage'));
+const FluidSystemPage = lazyPage(() => import('./pages/FluidSystemPage'));
+const NeigeDetailPage = lazyPage(() => import('./pages/NeigeDetailPage'));
+const FumeeDetailPage = lazyPage(() => import('./pages/FumeeDetailPage'));
+const FlammeDetailPage = lazyPage(() => import('./pages/FlammeDetailPage'));
+const ProductsPage = lazyPage(() => import('./pages/ProductsPage'));
+const OmegaDmxInterfacePage = lazyPage(() => import('./pages/OmegaDmxInterfacePage'));
+const ProductDetailPage = lazyPage(() => import('./pages/ProductDetailPage'));
+const CartPage = lazyPage(() => import('./pages/CartPage'));
+const AccountPage = lazyPage(() => import('./pages/AccountPage'));
+const OrdersPage = lazyPage(() => import('./pages/OrdersPage'));
+const ContactPage = lazyPage(() => import('./pages/ContactPage'));
+const AuthPage = lazyPage(() => import('./pages/AuthPage'));
+const AdminPage = lazyPage(() => import('./pages/AdminPage'));
+const MessagesPage = lazyPage(() => import('./pages/MessagesPage'));
+const EmailConfirmationPage = lazyPage(() => import('./pages/EmailConfirmationPage'));
+const SpectaclesPage = lazyPage(() => import('./pages/SpectaclesPage'));
+const PrivacyPolicyPage = lazyPage(() => import('./pages/PrivacyPolicyPage'));
+const TermsPage = lazyPage(() => import('./pages/TermsPage'));
 
 // Composant pour gérer le scroll vers le haut
 const ScrollToTop = () => {
