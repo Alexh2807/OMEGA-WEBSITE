@@ -106,21 +106,45 @@ async function dossiers() {
   }
 }
 
-/** Les N derniers messages d'un dossier, du plus récent au plus ancien. */
-async function lister(limite: number, dossier = 'INBOX') {
+/**
+ * Les N derniers messages d'un dossier, du plus récent au plus ancien.
+ * Avec `recherche`, le tri est fait PAR LE SERVEUR de messagerie (commande IMAP
+ * SEARCH) : on ne rapatrie jamais la boîte pour la filtrer ici. C'est ce qui permet
+ * de rester rapide quel que soit le nombre de messages.
+ */
+async function lister(limite: number, dossier = 'INBOX', recherche = '') {
   const client = await connexionImap();
   try {
     const boite = await client.mailboxOpen(dossier, { readOnly: true });
     const total = boite.exists;
     if (!total) return { messages: [], total: 0 };
 
-    const debut = Math.max(1, total - limite + 1);
+    let plage: string;
+    let trouves = total;
+
+    const q = recherche.trim();
+    if (q) {
+      // Un seul mot cherché à la fois dans l'expéditeur, le destinataire et l'objet.
+      // Volontairement PAS dans le corps : `BODY` oblige beaucoup de serveurs à
+      // ouvrir chaque message, ce qui s'effondre sur une grosse boîte.
+      const uids = await client.search(
+        { or: [{ from: q }, { to: q }, { subject: q }] },
+        { uid: true }
+      );
+      if (!uids || uids.length === 0) return { messages: [], total: 0, recherche: q };
+      trouves = uids.length;
+      // Les plus récents d'abord, et on n'en rapatrie que `limite`.
+      plage = uids.slice(-limite).join(',');
+    } else {
+      plage = `${Math.max(1, total - limite + 1)}:${total}`;
+    }
+
     const messages: unknown[] = [];
-    for await (const m of client.fetch(`${debut}:${total}`, {
-      envelope: true,
-      flags: true,
-      size: true,
-    })) {
+    for await (const m of client.fetch(
+      plage,
+      { envelope: true, flags: true, size: true },
+      q ? { uid: true } : undefined
+    )) {
       messages.push({
         uid: m.uid,
         objet: m.envelope?.subject ?? '(sans objet)',
@@ -138,8 +162,9 @@ async function lister(limite: number, dossier = 'INBOX') {
       });
     }
     // `fetch` rend les messages dans l'ordre de la boîte : on inverse pour présenter
-    // les plus récents en premier.
-    return { messages: messages.reverse(), total };
+    // les plus récents en premier. `total` = nombre de résultats, pas taille du
+    // dossier, pour que l'écran puisse annoncer « 12 trouvés ».
+    return { messages: messages.reverse(), total: trouves, ...(q ? { recherche: q } : {}) };
   } finally {
     await client.logout().catch(() => {});
   }
@@ -267,7 +292,7 @@ export default async (req: Request, _context: Context) => {
   }
 
   try {
-    const { action, uid, limite, a, objet, corps, messageId, dossier } =
+    const { action, uid, limite, a, objet, corps, messageId, dossier, recherche } =
       await req.json();
 
     switch (action) {
@@ -275,7 +300,11 @@ export default async (req: Request, _context: Context) => {
         return json(await dossiers());
       case 'lister':
         return json(
-          await lister(Math.min(Number(limite) || 25, 100), dossier || 'INBOX')
+          await lister(
+            Math.min(Number(limite) || 25, 100),
+            dossier || 'INBOX',
+            typeof recherche === 'string' ? recherche : ''
+          )
         );
       case 'ouvrir': {
         const message = await ouvrir(Number(uid), dossier || 'INBOX');

@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, RefreshCw, Send, ArrowLeft, Paperclip, Loader2, PenSquare } from 'lucide-react';
+import {
+  Mail,
+  RefreshCw,
+  Send,
+  ArrowLeft,
+  Paperclip,
+  Loader2,
+  PenSquare,
+  Search,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 
@@ -64,6 +73,17 @@ const AdminMailbox = () => {
   // au lieu de le deviner.
   const [cheminEnvoyes, setCheminEnvoyes] = useState<string | null>(null);
   const [journal, setJournal] = useState<LigneJournal[]>([]);
+  // `recherche` suit la frappe ; `requete` ne la rattrape qu'une fois la saisie posée.
+  // Sans ce délai, chaque touche déclencherait une recherche sur le serveur de
+  // messagerie — huit requêtes pour écrire « commande ».
+  const [recherche, setRecherche] = useState('');
+  const [requete, setRequete] = useState('');
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    const minuteur = setTimeout(() => setRequete(recherche.trim()), 350);
+    return () => clearTimeout(minuteur);
+  }, [recherche]);
 
   const appeler = async (corps: Record<string, unknown>) => {
     const { data } = await supabase.auth.getSession();
@@ -88,13 +108,25 @@ const AdminMailbox = () => {
     try {
       // Le journal vit en base, pas dans la boîte : aucun appel IMAP ici.
       if (vue === 'journal') {
-        const { data, error } = await supabase
+        let requeteSql = supabase
           .from('email_log')
-          .select('*')
+          .select('*', { count: 'exact' })
           .order('created_at', { ascending: false })
           .limit(100);
+
+        if (requete) {
+          // Filtré PAR LA BASE, sur les colonnes indexées en trigrammes : la table
+          // n'est jamais rapatriée pour être triée ici.
+          const motif = `%${requete}%`;
+          requeteSql = requeteSql.or(
+            `destinataire.ilike.${motif},objet.ilike.${motif},evenement.ilike.${motif}`
+          );
+        }
+
+        const { data, error, count } = await requeteSql;
         if (error) throw error;
         setJournal((data as LigneJournal[]) ?? []);
+        setTotal(count ?? 0);
         setNonConfigure(false);
         return;
       }
@@ -123,13 +155,14 @@ const AdminMailbox = () => {
         dossier = chemin;
       }
 
-      const r = await appeler({ action: 'lister', limite: 30, dossier });
+      const r = await appeler({ action: 'lister', limite: 30, dossier, recherche: requete });
       if (r.configured === false) {
         setNonConfigure(true);
         return;
       }
       setNonConfigure(false);
       setMessages(r.messages ?? []);
+      setTotal(r.total ?? 0);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Messagerie inaccessible');
@@ -141,7 +174,7 @@ const AdminMailbox = () => {
   useEffect(() => {
     setOuvert(null);
     charger();
-  }, [vue]);
+  }, [vue, requete]);
 
   const ouvrir = async (uid: number) => {
     setOuverture(true);
@@ -348,6 +381,39 @@ const AdminMailbox = () => {
               {libelle}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Recherche. Elle interroge le serveur de messagerie ou la base selon la vue —
+          jamais une liste déjà chargée : filtrer ici supposerait d'avoir tout
+          rapatrié, ce qui ne tient pas au-delà de quelques centaines de messages. */}
+      {!ouvert && !redaction && (
+        <div className="mb-4">
+          <div className="relative">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+            />
+            <input
+              type="search"
+              value={recherche}
+              onChange={e => setRecherche(e.target.value)}
+              placeholder={
+                vue === 'journal'
+                  ? 'Rechercher : destinataire, objet, type d’envoi…'
+                  : 'Rechercher : expéditeur, destinataire, objet…'
+              }
+              className="w-full bg-black/30 border border-white/10 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+          {requete && !chargement && (
+            <div className="text-gray-500 text-sm mt-2">
+              {total === 0
+                ? 'Aucun résultat'
+                : `${total} résultat${total > 1 ? 's' : ''} pour « ${requete} »`}
+              {vue !== 'journal' && total > 30 && ' — les 30 plus récents sont affichés'}
+            </div>
+          )}
         </div>
       )}
 
