@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
@@ -27,14 +28,47 @@ const STRIPE_TEST_MODE = String(
   import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
 ).startsWith('pk_test_');
 
+/* ⚠ LE MONTANT N'EST PLUS UN PARAMÈTRE.
+   Avant, ce composant recevait `amount` et le transmettait à `create-payment-intent`,
+   qui créait le paiement pour cette somme. Le montant venait donc du navigateur : on
+   pouvait payer 0,50 € une machine à 1 900 €.
+   Désormais il envoie seulement DES IDENTIFIANTS DE PRODUIT ET DES QUANTITÉS à la
+   fonction `devis-commande`, qui relit les prix en base, calcule la TVA selon le pays
+   et le statut du client, ajoute les frais de port, et renvoie le montant qu'ELLE a
+   arrêté. `recapitulatif` est remonté au panier pour que l'affichage montre exactement
+   ce qui sera débité — un écart entre les deux serait la porte ouverte aux litiges. */
+export interface LigneDevis {
+  product_id: string;
+  quantity: number;
+}
+export interface RecapitulatifDevis {
+  produits_ht: number;
+  port_ht: number;
+  port_ttc: number;
+  port_libelle: string;
+  base_ht: number;
+  taux_tva: number;
+  tva: number;
+  total_ttc: number;
+  regime: string;
+  mention: string | null;
+  territoire: string | null;
+}
+
 interface CheckoutFormProps {
-  amount: number;
-  onSuccess: (paymentIntentId: string) => void;
+  items: LigneDevis[];
+  addressId: string;
+  express?: boolean;
+  onQuote?: (recap: RecapitulatifDevis) => void;
+  onSuccess: (paymentIntentId: string, quoteId: string) => void;
   onError: (error: string) => void;
 }
 
 const CheckoutForm: React.FC<CheckoutFormProps> = ({
-  amount,
+  items,
+  addressId,
+  express,
+  onQuote,
   onSuccess,
   onError,
 }) => {
@@ -42,6 +76,8 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
+  const [quoteId, setQuoteId] = useState('');
+  const [recap, setRecap] = useState<RecapitulatifDevis | null>(null);
   const [cardholderName, setCardholderName] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [isCreatingIntent, setIsCreatingIntent] = useState(false);
@@ -73,39 +109,42 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
       const idempotencyKey = idempotencyKeyRef.current;
 
       try {
-        console.log('🔄 Création PaymentIntent pour', amount, '€', 'avec clé:', idempotencyKey);
+        /* ⚠ JETON DE L'UTILISATEUR, pas la clé anon : la fonction doit savoir QUI
+           commande, pour lire son statut d'entreprise, la validité de son numéro de
+           TVA et vérifier que l'adresse lui appartient. */
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Session expirée — reconnectez-vous.');
 
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/devis-commande`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-              'Idempotency-Key': idempotencyKey, // ← CLÉ STRIPE POUR ÉVITER DUPLICATIONS
+              Authorization: `Bearer ${session.access_token}`,
+              'Idempotency-Key': idempotencyKey,
             },
-            body: JSON.stringify({
-              amount: Math.round(amount * 100), // Convertir en centimes
-              currency: 'eur',
-            }),
+            body: JSON.stringify({ items, address_id: addressId, express: !!express }),
           }
         );
 
+        const data = await response.json();
         if (!response.ok) {
-          throw new Error('Erreur lors de la création du paiement');
+          // Le serveur explique POURQUOI (stock, pays non desservi, adresse) : on
+          // remonte son message tel quel, il est écrit pour le client.
+          throw new Error(data?.error || 'Erreur lors de la création du paiement');
         }
 
-        const data = await response.json();
-
-        // Ne mettre à jour que si le composant est toujours monté
         if (isMounted) {
           setClientSecret(data.client_secret);
-          console.log('✅ PaymentIntent créé avec succès:', data.payment_intent_id);
+          setQuoteId(data.quote_id);
+          setRecap(data.recapitulatif || null);
+          if (data.recapitulatif && onQuote) onQuote(data.recapitulatif);
         }
       } catch (error) {
-        console.error('❌ Erreur PaymentIntent:', error);
+        console.error('Erreur préparation paiement', error);
         if (isMounted) {
-          onError("Erreur lors de l'initialisation du paiement");
+          onError(error instanceof Error ? error.message : "Erreur lors de l'initialisation du paiement");
         }
       } finally {
         if (isMounted) {
@@ -114,7 +153,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
       }
     };
 
-    if (amount > 0 && !clientSecret && !isCreatingIntent) {
+    if (items.length > 0 && addressId && !clientSecret && !isCreatingIntent) {
       createPaymentIntent();
     }
 
@@ -122,7 +161,11 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [amount]); // ← ENLEVÉ onError des dépendances pour éviter re-render
+    // Le devis est demandé UNE fois par ouverture du paiement (le parent remonte une clé
+    // à chaque ouverture). On ne dépend pas de `items` : une variation de référence
+    // relancerait la préparation en boucle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressId]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -191,7 +234,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         toast.error(errorMessage);
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         toast.success('Paiement réussi !');
-        onSuccess(paymentIntent.id);
+        // Le devis accompagne le paiement : c'est LUI qui porte les montants et le
+        // régime de TVA, et c'est à partir de lui que la commande sera créée.
+        onSuccess(paymentIntent.id, quoteId);
       }
     } catch (err) {
       console.error('Erreur inattendue:', err);
@@ -391,7 +436,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         ) : (
           <>
             <Lock size={20} />
-            Payer {amount.toFixed(2)}€ en sécurité
+            {/* Le montant affiché est CELUI DU SERVEUR : le bouton ne peut pas annoncer
+                un prix différent de ce qui sera débité. */}
+            Payer {recap ? recap.total_ttc.toFixed(2) : '…'}€ en sécurité
           </>
         )}
       </button>
@@ -400,19 +447,32 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
 };
 
 interface StripeCheckoutProps {
-  amount: number;
-  onSuccess: (paymentIntentId: string) => void;
+  items: LigneDevis[];
+  addressId: string;
+  express?: boolean;
+  onQuote?: (recap: RecapitulatifDevis) => void;
+  onSuccess: (paymentIntentId: string, quoteId: string) => void;
   onError: (error: string) => void;
 }
 
 const StripeCheckout: React.FC<StripeCheckoutProps> = ({
-  amount,
+  items,
+  addressId,
+  express,
+  onQuote,
   onSuccess,
   onError,
 }) => {
   return (
     <Elements stripe={stripePromise}>
-      <CheckoutForm amount={amount} onSuccess={onSuccess} onError={onError} />
+      <CheckoutForm
+        items={items}
+        addressId={addressId}
+        express={express}
+        onQuote={onQuote}
+        onSuccess={onSuccess}
+        onError={onError}
+      />
     </Elements>
   );
 };

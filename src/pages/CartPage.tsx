@@ -15,7 +15,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AddressManager from '../components/AddressManager';
-import StripeCheckout from '../components/StripeCheckout';
+import StripeCheckout, {
+  type RecapitulatifDevis,
+} from '../components/StripeCheckout';
 import VitrineCTA from '../components/VitrineCTA';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import { computeShipping } from '../utils/shipping';
@@ -33,6 +35,10 @@ const CartPage = () => {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [expressShipping, setExpressShipping] = useState(false);
   const [checkoutKey, setCheckoutKey] = useState(0); // Pour forcer la re-création du composant
+  /* Récapitulatif calculé PAR LE SERVEUR (TVA du pays du client, port, total). Il fait
+     autorité sur l'affichage : les totaux calculés localement ne servent qu'à donner un
+     ordre d'idée avant que l'adresse ne soit connue. */
+  const [recapServeur, setRecapServeur] = useState<RecapitulatifDevis | null>(null);
 
   const handleCheckoutClick = () => {
     if (vitrineMode) return; // vente en ligne désactivée
@@ -71,27 +77,23 @@ const CartPage = () => {
     setShowCheckout(true);
   };
 
-  const handlePaymentSuccess = async (paymentIntentId: string) => {
+  /* ⚠ LA COMMANDE N'EST PLUS CRÉÉE PAR LE NAVIGATEUR.
+     Avant, cette fonction insérait la commande avec `sub_total`, `tax` et `total`
+     calculés côté client : n'importe qui pouvait enregistrer une commande de 1 € pour
+     une machine à 1 900 €, ou une TVA nulle.
+     Désormais on appelle `confirmer_commande(devis, paiement)` : le serveur recopie les
+     montants ET le régime de TVA depuis le DEVIS qu'il avait lui-même calculé. Le
+     navigateur ne transmet que deux identifiants. La fonction est idempotente : un
+     double clic, un retour arrière ou une reprise après coupure ne créent pas de
+     seconde commande. */
+  const handlePaymentSuccess = async (
+    paymentIntentId: string,
+    quoteId: string
+  ) => {
     setLoading(true);
     const toastId = toast.loading('Finalisation de votre commande...');
 
     try {
-      // Étape 0 : VÉRIFIER SI UNE COMMANDE EXISTE DÉJÀ AVEC CE PAYMENT INTENT
-      const { data: existingOrder } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('stripe_payment_intent_id', paymentIntentId)
-        .maybeSingle();
-
-      if (existingOrder) {
-        console.log('⚠️ Commande déjà créée pour ce paiement:', paymentIntentId);
-        toast.success('Votre commande a déjà été enregistrée !', { id: toastId });
-        await clearCart();
-        navigate('/commandes');
-        return;
-      }
-
-      // Étape 1 : Récupérer le token d'authentification de l'utilisateur
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -100,6 +102,15 @@ const CartPage = () => {
           'Session utilisateur introuvable. Veuillez vous reconnecter.'
         );
       }
+
+      const { data: conf, error: confError } = await supabase.rpc(
+        'confirmer_commande',
+        { p_quote_id: quoteId, p_payment_intent: paymentIntentId }
+      );
+      if (confError) throw confError;
+      const orderId = (conf as { order_id?: string } | null)?.order_id;
+      if (!orderId) throw new Error('Commande introuvable après paiement.');
+      const dejaCreee = (conf as { deja_creee?: boolean } | null)?.deja_creee;
 
       // Étape 2 : Récupérer le Charge ID depuis notre fonction backend sécurisée
       let chargeId = '';
@@ -131,88 +142,50 @@ const CartPage = () => {
         console.error("Erreur critique lors de l'appel à get-charge-id:", e);
       }
 
-      const totals = calculateTotals();
+      /* Trace du paiement. Le montant est relu SUR LA COMMANDE (donc sur le devis
+         serveur), jamais recalculé ici : deux calculs, ce sont deux vérités.
+         Un échec n'interrompt pas le parcours — le client a payé et sa commande
+         existe ; il ne doit pas voir d'erreur pour un enregistrement annexe. */
+      if (!dejaCreee) {
+        const { data: cmd } = await supabase
+          .from('orders')
+          .select('total')
+          .eq('id', orderId)
+          .single();
 
-      // Étape 3 : Créer la commande dans la base de données
-      // (total = produits + LIVRAISON : doit correspondre au montant Stripe encaissé)
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          stripe_payment_intent_id: paymentIntentId,
-          sub_total: totals.subTotal,
-          tax: totals.tax,
-          total: totals.total + (shipping.cost ?? 0),
-          shipping_cost: shipping.cost ?? 0,
-          shipping_method: shipping.method,
-          status: 'confirmed',
-          user_type: userType,
-          shipping_address: selectedAddress
-            ? {
-                name: selectedAddress.name,
-                first_name: selectedAddress.first_name,
-                last_name: selectedAddress.last_name,
-                company: selectedAddress.company,
-                address_line_1: selectedAddress.address_line_1,
-                address_line_2: selectedAddress.address_line_2,
-                city: selectedAddress.city,
-                postal_code: selectedAddress.postal_code,
-                country: selectedAddress.country,
-                phone: selectedAddress.phone,
-              }
-            : null,
-        })
-        .select()
-        .single();
+        const { error: paymentRecordError } = await supabase
+          .from('payment_records')
+          .insert({
+            invoice_id: null,
+            order_id: orderId,
+            amount: cmd?.total ?? null,
+            payment_date: new Date().toISOString(),
+            payment_method: 'carte',
+            status: 'succeeded',
+            reference: paymentIntentId,
+            stripe_charge_id: chargeId || null, // crucial pour les remboursements
+            created_by: user?.id ?? null,
+            notes: `Paiement pour la commande ${orderId}`,
+          });
 
-      if (orderError) throw orderError;
-
-      // Étape 4 : Créer l'enregistrement de paiement de manière complète et fiable
-      const { error: paymentRecordError } = await supabase
-        .from('payment_records')
-        .insert({
-          invoice_id: null,
-          order_id: order.id, // Lier à la commande
-          amount: totals.total + (shipping.cost ?? 0),
-          payment_date: new Date().toISOString(),
-          payment_method: 'carte',
-          status: 'succeeded', // Ajouter un statut clair
-          reference: paymentIntentId, // Garder le Payment Intent comme référence
-          stripe_charge_id: chargeId || null, // Le Charge ID, crucial pour les remboursements
-          created_by: user.id,
-          notes: `Paiement pour la commande ${order.id}`,
-        });
-
-      if (paymentRecordError) {
-        // Log l'erreur mais ne bloque pas l'utilisateur qui a déjà payé
-        console.error(
-          "Erreur lors de la création de l'enregistrement de paiement:",
-          paymentRecordError
-        );
-      } else {
-        console.log('✅ Enregistrement de paiement créé avec succès.');
+        if (paymentRecordError) {
+          console.error(
+            "Erreur lors de la création de l'enregistrement de paiement:",
+            paymentRecordError
+          );
+        }
       }
 
-      // Créer les items de la commande
-      const orderItems = items.map(item => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price:
-          userType === 'pro'
-            ? item.product?.price_ht || item.product?.price || 0
-            : item.product?.price || 0,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-      if (itemsError) throw itemsError;
-
-      // Vider le panier
+      // Les lignes de commande ont été créées par `confirmer_commande`, à partir du
+      // devis : rien à insérer ici.
       await clearCart();
 
-      toast.success('Commande passée avec succès !', { id: toastId });
+      toast.success(
+        dejaCreee
+          ? 'Votre commande était déjà enregistrée.'
+          : 'Commande passée avec succès !',
+        { id: toastId }
+      );
       navigate('/commandes');
     } catch (err: any) {
       console.error('Erreur inattendue lors de la finalisation:', err);
@@ -622,29 +595,58 @@ const CartPage = () => {
                 </button>
               </div>
 
+              {/* ⚠ Tant que le serveur n'a pas répondu, on affiche l'estimation locale ;
+                  dès qu'il a arrêté le devis, c'est LUI qui s'affiche. Le client doit
+                  toujours lire exactement ce qui sera débité, TVA comprise — et selon son
+                  pays elle peut être nulle (autoliquidation, export). */}
               <div className="mb-6 p-4 bg-white/5 rounded-lg">
                 <div className="flex justify-between text-white mb-1">
-                  <span>Produits:</span>
-                  <span className="font-semibold">{totals.total.toFixed(2)}€</span>
+                  <span>Produits HT :</span>
+                  <span className="font-semibold">
+                    {(recapServeur ? recapServeur.produits_ht : totals.subTotal).toFixed(2)}€
+                  </span>
+                </div>
+                <div className="flex justify-between text-white mb-1">
+                  <span>Livraison{recapServeur ? ' HT' : ''} :</span>
+                  <span className="font-semibold">
+                    {(recapServeur ? recapServeur.port_ht : shipping.cost ?? 0).toFixed(2)}€
+                  </span>
                 </div>
                 <div className="flex justify-between text-white mb-2">
-                  <span>Livraison:</span>
-                  <span className="font-semibold">{(shipping.cost ?? 0).toFixed(2)}€</span>
+                  <span>
+                    TVA{recapServeur ? ` ${recapServeur.taux_tva}%` : ' 20%'} :
+                  </span>
+                  <span className="font-semibold">
+                    {(recapServeur ? recapServeur.tva : totals.tax).toFixed(2)}€
+                  </span>
                 </div>
                 <div className="flex justify-between text-white mb-2 border-t border-white/10 pt-2">
                   <span>Total à payer:</span>
                   <span className="font-bold text-xl">
-                    {grandTotal.toFixed(2)}€
+                    {(recapServeur ? recapServeur.total_ttc : grandTotal).toFixed(2)}€
                   </span>
                 </div>
+                {recapServeur?.mention && (
+                  <div className="text-emerald-300 text-sm mb-2 leading-relaxed">
+                    {recapServeur.mention}
+                  </div>
+                )}
                 <div className="text-gray-400 text-sm">
-                  TVA incluse • Expédition sous {shippingConfig.delay_days} jours • Paiement sécurisé par Stripe
+                  Expédition sous {shippingConfig.delay_days} jours • Paiement sécurisé par Stripe
                 </div>
               </div>
 
+              {/* On ne transmet QUE des identifiants de produit et des quantités :
+                  le serveur relit les prix, calcule la TVA du pays et les frais de
+                  port, et arrête lui-même le montant à débiter. */}
               <StripeCheckout
                 key={checkoutKey}
-                amount={grandTotal}
+                items={items.map(i => ({
+                  product_id: i.product_id,
+                  quantity: i.quantity,
+                }))}
+                addressId={selectedAddress?.id || ''}
+                onQuote={setRecapServeur}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
               />
