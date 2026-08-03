@@ -237,6 +237,31 @@ const AdminBugReports: React.FC = () => {
   ).length;
   const versions = Array.from(new Set(reports.map((r) => r.app_version || '?'))).sort().reverse();
 
+  /* Versions proposées pour « corrigé dans la version ».
+     On ne se contente pas des versions DÉJÀ vues : une correction se planifie pour une
+     version À VENIR, qui par définition n'existe encore nulle part. On propose donc les
+     versions connues ET les trois suivantes, calculées depuis la plus haute rencontrée.
+     La saisie libre reste possible (c'est une liste de suggestions, pas une contrainte). */
+  const versionsCorrection = (() => {
+    const vues = new Set<string>();
+    reports.forEach((r) => {
+      if (r.app_version) vues.add(r.app_version.trim());
+      if (r.fixed_in_version) vues.add(r.fixed_in_version.trim());
+    });
+    const num = (v: string) => v.split('.').map((n) => parseInt(n, 10) || 0);
+    const triees = Array.from(vues).filter(Boolean).sort((a, b) => {
+      const [am, an] = num(a), [bm, bn] = num(b);
+      return am - bm || an - bn;
+    });
+    const suite: string[] = [];
+    const haute = triees[triees.length - 1];
+    if (haute) {
+      const [maj, min] = num(haute);
+      for (let i = 1; i <= 3; i++) suite.push(`${maj}.${min + i}`);
+    }
+    return Array.from(new Set([...suite.reverse(), ...triees.reverse()]));
+  })();
+
   return (
     <div className="text-gray-200">
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -403,18 +428,28 @@ const AdminBugReports: React.FC = () => {
                       en résolu (il sort de « reste à traiter ») et le client voit
                       « corrigé en 1.34 » dans son logiciel, sans qu'on lui écrive. */}
                   <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-lg bg-gray-900/70 border border-gray-800">
-                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500 mr-1">Traitement</span>
+                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500 mr-1">
+                      Sera corrigé dans la version
+                    </span>
+                    {/* Liste de suggestions plutôt qu'un menu fermé : une correction se
+                        planifie souvent pour une version qui n'existe pas encore. */}
                     <input
+                      list={`versions-${r.id}`}
                       defaultValue={r.fixed_in_version || ''}
                       onBlur={(e) => { if ((e.target.value || '') !== (r.fixed_in_version || '')) marquerCorrige(r.id, e.target.value); }}
                       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                      placeholder="Corrigé en… (ex. 1.34)"
-                      className="px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs outline-none focus:border-emerald-500 w-40"
-                      title="Renseigner la version passe le signalement en « résolu » et l'affiche au client"
+                      placeholder="ex. 1.34"
+                      className="px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs outline-none focus:border-emerald-500 w-32"
+                      title="Renseigner la version passe le signalement en « résolu » et l'annonce au client dans son logiciel"
                     />
+                    <datalist id={`versions-${r.id}`}>
+                      {versionsCorrection.map((v) => <option key={v} value={v} />)}
+                    </datalist>
                     {r.fixed_in_version && (
                       <span className="px-2 py-1 rounded-lg text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                        corrigé en {r.fixed_in_version}
+                        {/* Ce que le CLIENT verra, selon SA version : signalé en {app_version},
+                            corrigé en {fixed_in_version}. */}
+                        signalé en {r.app_version || '?'} → corrigé en {r.fixed_in_version}
                       </span>
                     )}
                     <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer ml-2"
