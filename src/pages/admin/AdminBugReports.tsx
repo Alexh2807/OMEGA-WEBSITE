@@ -340,8 +340,28 @@ const AdminBugReports: React.FC = () => {
       </div>
 
       {loading && <div className="text-gray-400 text-sm">Chargement…</div>}
-      {!loading && visibles.length === 0 && (
-        <div className="text-gray-400 text-sm">Aucun signalement à afficher.</div>
+      {/* ⚠ Une liste vide a DEUX causes très différentes, et les confondre fait croire à
+          une perte de données (constaté le 3 août : « le site me dit aucun signalement »,
+          alors que les 6 étaient simplement tous résolus ou fermés, donc hors du filtre
+          par défaut « Reste à traiter »). On dit donc LAQUELLE des deux, et on offre la
+          sortie en un clic. */}
+      {!loading && visibles.length === 0 && reports.length === 0 && (
+        <div className="text-gray-400 text-sm">Aucun signalement n'a encore été envoyé.</div>
+      )}
+      {!loading && visibles.length === 0 && reports.length > 0 && (
+        <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-5 text-sm text-gray-300">
+          <div className="font-semibold text-white mb-1">Rien à traiter pour le moment.</div>
+          <div className="text-gray-400">
+            Les {reports.length} signalement{reports.length > 1 ? 's' : ''} enregistré{reports.length > 1 ? 's' : ''} {reports.length > 1 ? 'sont' : 'est'} hors des filtres actuels
+            {filtre === 'actifs' ? ' (résolus ou fermés)' : ''}.
+          </div>
+          <button
+            onClick={() => { setFiltre('tous'); setVersionFiltre('toutes'); setSeveriteFiltre('toutes'); }}
+            className="mt-3 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-xs hover:border-cyan-500 transition"
+          >
+            Afficher tous les signalements
+          </button>
+        </div>
       )}
 
       <div className="space-y-2">
