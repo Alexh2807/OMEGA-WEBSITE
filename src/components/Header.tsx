@@ -9,7 +9,6 @@ import {
   MessageSquare,
   Bell,
   Settings,
-  ToggleLeft,
   ToggleRight,
   ChevronDown,
 } from 'lucide-react';
@@ -45,7 +44,7 @@ const Header = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isGammeOpen, setIsGammeOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const { user, signOut, isAdmin, userType, setUserType } = useAuth();
+  const { user, signOut, isAdmin, userType } = useAuth();
   const { totalItems } = useCart();
   const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
@@ -135,9 +134,8 @@ const Header = () => {
     setIsUserMenuOpen(false);
   };
 
-  const toggleUserType = () => {
-    setUserType(userType === 'pro' ? 'particulier' : 'pro');
-  };
+  /* `toggleUserType` a été retiré : le mode d'affichage n'est plus un choix libre mais
+     la conséquence du statut entreprise du compte (cf. AuthContext). */
 
   // L'onglet reste allumé tant qu'on est sur l'une de ses pages : sans cela, entrer
   // dans la gamme ferait perdre tout repère de position dans la barre.
@@ -216,29 +214,20 @@ const Header = () => {
               Contact
             </Link>
 
-            {/* Pro/Particulier Switch */}
-            <div className="flex items-center gap-2 bg-white/10 rounded-full px-3 py-2">
-              <span
-                className={`text-xs font-medium transition-colors ${userType === 'particulier' ? 'text-white' : 'text-gray-400'}`}
+            {/* ⚠ PLUS DE BASCULE LIBRE : l'affichage HT n'est plus un choix, c'est la
+                conséquence du statut déclaré dans le compte. Une bascule libre affichait
+                −20 % à qui cliquait, et le vrai prix n'apparaissait qu'au paiement.
+                Ici on se contente d'INDIQUER le mode ; il se change dans « Mon compte ». */}
+            {user && userType === 'pro' && (
+              <Link
+                to="/compte"
+                title="Vous êtes enregistré comme entreprise : les prix sont affichés hors taxes. Modifiable dans votre compte."
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full px-3 py-2 transition-colors"
               >
-                Particulier
-              </span>
-              <button
-                onClick={toggleUserType}
-                className="text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                {userType === 'pro' ? (
-                  <ToggleRight size={20} />
-                ) : (
-                  <ToggleLeft size={20} />
-                )}
-              </button>
-              <span
-                className={`text-xs font-medium transition-colors ${userType === 'pro' ? 'text-white' : 'text-gray-400'}`}
-              >
-                Pro {userType === 'pro' && '(HT)'}
-              </span>
-            </div>
+                <ToggleRight size={18} className="text-blue-400" />
+                <span className="text-xs font-medium text-white">Pro (HT)</span>
+              </Link>
+            )}
 
             {/* Panier (vente en ligne) — ou téléphone en MODE VITRINE */}
             {vitrineMode ? (
@@ -365,20 +354,20 @@ const Header = () => {
           } mobile-menu-container`}
         >
           <div className="flex flex-col space-y-4 p-6">
-            {/* Mobile Pro/Particulier Switch */}
-            <div className="flex items-center justify-between p-3 bg-white/10 rounded-lg">
-              <span className="text-white text-sm">Mode d'affichage:</span>
-              <button
-                onClick={toggleUserType}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  userType === 'pro'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white/20 text-white'
-                }`}
+            {/* Même règle qu'en version bureau : on indique le mode, on ne le bascule
+                pas. Il découle du statut entreprise déclaré dans le compte. */}
+            {user && (
+              <Link
+                to="/compte"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center justify-between p-3 bg-white/10 rounded-lg"
               >
-                {userType === 'pro' ? 'Pro (HT)' : 'Particulier (TTC)'}
-              </button>
-            </div>
+                <span className="text-white text-sm">Prix affichés :</span>
+                <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white">
+                  {userType === 'pro' ? 'Pro (HT)' : 'Particulier (TTC)'}
+                </span>
+              </Link>
+            )}
 
             <Link
               to="/"

@@ -25,6 +25,16 @@ interface Profile {
   city: string;
   postal_code: string;
   country: string;
+  /* Identité fiscale. ⚠ `vat_number_valid` n'est PAS modifiable par le client : un
+     trigger en base le protège (sinon il suffirait de le passer à `true` pour obtenir
+     0 % de TVA). Seule la fonction serveur `verifier-tva` l'écrit, après avoir
+     interrogé le fichier européen VIES. */
+  is_company: boolean;
+  company_name: string | null;
+  vat_number: string | null;
+  vat_number_valid: boolean | null;
+  vat_checked_at: string | null;
+  vat_checked_name: string | null;
 }
 
 const AccountPage = () => {
@@ -63,6 +73,12 @@ const AccountPage = () => {
             city: '',
             postal_code: '',
             country: 'France',
+            is_company: false,
+            company_name: null,
+            vat_number: null,
+            vat_number_valid: null,
+            vat_checked_at: null,
+            vat_checked_name: null,
           }
         );
       }
@@ -74,14 +90,59 @@ const AccountPage = () => {
     }
   };
 
+  /* Vérification du numéro de TVA auprès du fichier européen VIES.
+     ⚠ Tout se passe côté serveur : c'est le résultat de CETTE vérification qui décide
+     de l'autoliquidation. S'il venait du navigateur, il suffirait de répondre « valide »
+     pour ne plus payer de TVA. */
+  const [verifTva, setVerifTva] = useState(false);
+  const verifierTva = async () => {
+    if (!profile?.vat_number) {
+      toast.error('Saisissez votre numéro de TVA intracommunautaire.');
+      return;
+    }
+    setVerifTva(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verifier-tva`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ vat_number: profile.vat_number }),
+        }
+      );
+      const j = await r.json();
+      if (j.valide === true) {
+        toast.success(`Numéro vérifié : ${j.nom || 'entreprise reconnue'}`);
+      } else if (j.indisponible) {
+        // On ne prétend pas que c'est valide : la TVA sera facturée, et on le dit.
+        toast(j.motif, { icon: '⏳', duration: 8000 });
+      } else {
+        toast.error(j.motif || 'Numéro non reconnu.');
+      }
+      await loadProfile();   // relit l'état RÉEL écrit par le serveur
+    } catch (e) {
+      toast.error('Vérification impossible pour le moment.');
+    } finally {
+      setVerifTva(false);
+    }
+  };
+
   const saveProfile = async () => {
     if (!profile || !user) return;
 
     setSaving(true);
     try {
+      /* ⚠ On n'envoie PAS `vat_number_valid` / `vat_checked_*` : ces champs
+         appartiennent au serveur. Le trigger les ignorerait de toute façon, mais les
+         omettre ici évite de laisser croire qu'ils sont modifiables. */
+      const { vat_number_valid, vat_checked_at, vat_checked_name, ...modifiable } = profile;
       const { error } = await supabase.from('profiles').upsert({
-        id: user.id,
-        ...profile,
+        ...modifiable,
+        id: user.id,          // ⚠ APRÈS l'étalement : c'est l'identité de session qui fait foi
         updated_at: new Date().toISOString(),
       });
 
@@ -91,6 +152,7 @@ const AccountPage = () => {
       } else {
         toast.success('Profil mis à jour avec succès');
         setIsEditing(false);
+        await loadProfile();
       }
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -274,6 +336,104 @@ const AccountPage = () => {
                       }`}
                       placeholder="Votre numéro de téléphone"
                     />
+                  </div>
+
+                  {/* ── ENTREPRISE ET TVA ─────────────────────────────────────
+                      Se déclarer entreprise ne donne AUCUN avantage fiscal en soi :
+                      seule la vérification du numéro auprès de VIES ouvre droit à
+                      l'autoliquidation. On l'écrit noir sur blanc pour éviter la
+                      question « pourquoi on me facture encore la TVA ? ». */}
+                  <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                    <label className="flex items-center gap-3 cursor-pointer mb-1">
+                      <input
+                        type="checkbox"
+                        checked={!!profile?.is_company}
+                        onChange={e => handleInputChange('is_company', e.target.checked as never)}
+                        disabled={!isEditing}
+                        className="w-5 h-5 accent-blue-500"
+                      />
+                      <span className="text-white font-medium">
+                        Je commande pour une entreprise
+                      </span>
+                    </label>
+                    <p className="text-gray-400 text-sm ml-8">
+                      Une entreprise de l'Union européenne (hors France) dont le numéro de
+                      TVA est vérifié est facturée <b>sans TVA</b> (autoliquidation).
+                    </p>
+
+                    {profile?.is_company && (
+                      <div className="mt-4 space-y-4 ml-8">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Raison sociale
+                          </label>
+                          <input
+                            type="text"
+                            value={profile?.company_name || ''}
+                            onChange={e => handleInputChange('company_name', e.target.value)}
+                            disabled={!isEditing}
+                            className={`w-full border rounded-lg px-4 py-3 transition-colors ${
+                              isEditing
+                                ? 'bg-white/5 border-white/20 text-white focus:border-blue-400 focus:outline-none'
+                                : 'bg-gray-700 border-gray-600 text-gray-300 cursor-not-allowed'
+                            }`}
+                            placeholder="Nom de votre société"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            N° de TVA intracommunautaire
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            <input
+                              type="text"
+                              value={profile?.vat_number || ''}
+                              onChange={e =>
+                                handleInputChange('vat_number', e.target.value.toUpperCase())
+                              }
+                              disabled={!isEditing}
+                              className={`flex-1 min-w-[220px] border rounded-lg px-4 py-3 font-mono transition-colors ${
+                                isEditing
+                                  ? 'bg-white/5 border-white/20 text-white focus:border-blue-400 focus:outline-none'
+                                  : 'bg-gray-700 border-gray-600 text-gray-300 cursor-not-allowed'
+                              }`}
+                              placeholder="DE123456789"
+                            />
+                            <button
+                              type="button"
+                              onClick={verifierTva}
+                              disabled={verifTva || !profile?.vat_number}
+                              className="px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold transition"
+                            >
+                              {verifTva ? 'Vérification…' : 'Vérifier'}
+                            </button>
+                          </div>
+
+                          {/* État RÉEL, écrit par le serveur — jamais une supposition. */}
+                          {profile?.vat_number_valid === true && (
+                            <p className="mt-2 text-emerald-300 text-sm">
+                              ✓ Numéro vérifié
+                              {profile.vat_checked_name ? ` — ${profile.vat_checked_name}` : ''}
+                              {profile.vat_checked_at
+                                ? ` (le ${new Date(profile.vat_checked_at).toLocaleDateString('fr-FR')})`
+                                : ''}
+                            </p>
+                          )}
+                          {profile?.vat_number_valid === false && (
+                            <p className="mt-2 text-red-300 text-sm">
+                              ✗ Numéro non reconnu par le service européen VIES. La TVA sera facturée.
+                            </p>
+                          )}
+                          {profile?.vat_number && profile?.vat_number_valid == null && (
+                            <p className="mt-2 text-amber-300 text-sm">
+                              Numéro pas encore vérifié — cliquez sur « Vérifier ». Tant qu'il ne
+                              l'est pas, la TVA est facturée.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Ville et Code postal */}

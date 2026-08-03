@@ -7,8 +7,9 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  /* Lecture seule : « pro » se règle dans le compte (profiles.is_company),
+     pas par un bouton d'interface — voir le commentaire dans resolveAdmin. */
   userType: 'pro' | 'particulier';
-  setUserType: (type: 'pro' | 'particulier') => void;
   signUp: (
     email: string,
     password: string,
@@ -45,21 +46,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // ANTI-RACE (audit) : `loading` ne repasse à false qu'une fois le rôle
     // résolu, sinon AdminPage voyait un instant isAdmin=false et éjectait
     // un vrai admin vers l'accueil.
+    /* ⚠ Le statut « pro » vient DU PROFIL, plus d'un bouton d'interface.
+       Avant, « Pro / Particulier » était une bascule libre dans l'en-tête : n'importe
+       qui cliquait « Pro » et voyait les prix HT, soit 20 % de moins. Ça n'a plus
+       d'effet sur le montant débité (le serveur seul l'arrête depuis le 3 août), mais
+       l'affichage mentait — le client découvrait le vrai prix au moment de payer.
+       Désormais : est « pro » celui qui s'est déclaré entreprise dans son compte. */
     const resolveAdmin = async (u: User | null) => {
       if (!u) {
         setIsAdmin(false);
+        setUserType('particulier');
         return;
       }
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, is_company')
           .eq('id', u.id)
           .single();
         setIsAdmin(!error && data?.role === 'admin');
+        setUserType(!error && data?.is_company ? 'pro' : 'particulier');
       } catch (err) {
         console.error('Error checking user role:', err);
         setIsAdmin(false);
+        setUserType('particulier');
       }
     };
 
@@ -149,7 +159,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     loading,
     isAdmin,
     userType,
-    setUserType,
     signUp,
     signIn,
     signOut,

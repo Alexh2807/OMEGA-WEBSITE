@@ -22,6 +22,18 @@ import {
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 
+/* Mention légale à porter sur la facture selon le régime. Une livraison
+   intracommunautaire ou une exportation exonérée SANS sa mention est une facture
+   irrégulière : c'est elle qui justifie l'absence de TVA en cas de contrôle. */
+const MENTIONS_REGIME: Record<string, string> = {
+  ue_b2b:
+    "Autoliquidation — livraison intracommunautaire exonérée (art. 262 ter I du CGI). TVA due par le preneur.",
+  export:
+    "Exonération de TVA — exportation hors Union européenne (art. 262 I du CGI).",
+};
+const mentionRegime = (regime: string | null | undefined): string | null =>
+  (regime && MENTIONS_REGIME[regime]) || null;
+
 interface Order {
   id: string;
   user_id: string;
@@ -37,6 +49,14 @@ interface Order {
   created_at: string;
   updated_at: string;
   shipping_address: any;
+  stripe_payment_intent_id: string | null;
+  /* Régime fiscal figé au moment de la vente (cf. migration 20260803190000). */
+  customer_country: string | null;
+  is_company: boolean | null;
+  company_name: string | null;
+  vat_number: string | null;
+  vat_regime: string | null;
+  vat_rate: number | null;
   order_items: {
     id: string;
     quantity: number;
@@ -265,6 +285,16 @@ const AdminOrders = () => {
     try {
       const loadingToast = toast.loading('Création de la facture en cours...');
 
+      /* Mentions légales de la société, lues dans les RÉGLAGES : SIRET, n° de TVA,
+         pénalités de retard et indemnité de recouvrement (obligatoires entre
+         professionnels). Elles se modifient dans l'administration, jamais dans le code. */
+      const { data: reglagesFact } = await supabase
+        .from('billing_settings')
+        .select('legal_mentions')
+        .limit(1)
+        .maybeSingle();
+      const mentionsSociete = reglagesFact?.legal_mentions || '';
+
       // Générer le numéro de facture de manière atomique
       const { data: invoiceNumber, error: numberError } = await supabase
         .rpc('get_next_invoice_number_atomic');
@@ -363,7 +393,20 @@ const AdminOrders = () => {
             .split('T')[0],
           payment_terms: 30,
           notes: `Facture générée automatiquement depuis la commande #${order.id.slice(0, 8)}`,
-          legal_mentions: 'Mentions légales OMEGA',
+          /* ⚠ Les mentions viennent des RÉGLAGES (Admin → Facturation), pas d'une chaîne
+             en dur : elles contiennent le SIRET, le n° de TVA et les pénalités de retard
+             obligatoires entre professionnels. Une facture sans elles est irrégulière. */
+          legal_mentions: mentionsSociete,
+          /* Régime fiscal RECOPIÉ depuis la commande — jamais recalculé : une facture
+             doit refléter ce qui a été facturé le jour de la vente, même si le taux ou
+             le statut du client change ensuite. */
+          customer_country: order.customer_country,
+          is_company: order.is_company ?? false,
+          company_name: order.company_name,
+          vat_number: order.vat_number,
+          vat_regime: order.vat_regime,
+          vat_rate: order.vat_rate,
+          vat_mention: mentionRegime(order.vat_regime),
         })
         .select()
         .single();
@@ -380,15 +423,18 @@ const AdminOrders = () => {
       // Créer les lignes de facture à partir des items de commande
       const invoiceItems =
         order.order_items?.map((item: any, index: number) => {
-          const unitPriceHT =
-            order.user_type === 'pro' ? item.price : item.price / 1.2;
+          /* Les lignes de commande sont désormais enregistrées EN HT par le serveur
+             (`confirmer_commande` recopie `unit_ht` du devis). On ne divise donc plus
+             par 1,2 au hasard selon un `user_type` d'affichage.
+             Le taux est celui du RÉGIME de la commande : 0 % pour une autoliquidation
+             ou un export — écrire 20 % en dur produirait une facture fausse. */
           return {
             invoice_id: invoice.id,
             product_id: item.product_id,
             description: item.product?.name || 'Produit',
             quantity: item.quantity,
-            unit_price_ht: unitPriceHT,
-            tax_rate: 20.0,
+            unit_price_ht: item.price,
+            tax_rate: Number(order.vat_rate ?? 20),
             sort_order: index,
           };
         }) || [];

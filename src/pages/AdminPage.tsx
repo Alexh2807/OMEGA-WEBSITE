@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   Star,
   Mail,
+  Receipt,
 } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('./admin/AdminDashboard'));
@@ -25,6 +26,7 @@ const AdminMailbox = lazy(() => import('./admin/AdminMailbox'));
 const AdminBugReports = lazy(() => import('./admin/AdminBugReports'));
 const AdminBilling = lazy(() => import('./admin/AdminBilling'));
 const AdminAccounting = lazy(() => import('./admin/AdminAccounting'));
+const AdminTva = lazy(() => import('./admin/AdminTva'));
 const AdminSettings = lazy(() => import('./admin/AdminSettings'));
 const AdminReviews = lazy(() => import('./admin/AdminReviews'));
 
@@ -90,6 +92,7 @@ const AdminPage = () => {
     { id: 'bugs', label: 'Signalements', icon: Bug },
     { id: 'billing', label: 'Facturation', icon: FileText },
     { id: 'accounting', label: 'Comptabilité', icon: FileSpreadsheet },
+    { id: 'tva', label: 'TVA', icon: Receipt },
     { id: 'settings', label: 'Paramètres', icon: Settings },
   ];
 
@@ -115,6 +118,8 @@ const AdminPage = () => {
         return <AdminBilling />;
       case 'accounting':
         return <AdminAccounting />;
+      case 'tva':
+        return <AdminTva />;
       case 'settings':
         return <AdminSettings />;
       default:
