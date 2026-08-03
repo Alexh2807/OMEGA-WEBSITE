@@ -45,6 +45,12 @@ interface BugReport {
   show_name: string | null;
   show_bytes: number | null;
   show_encoding: string | null;
+  /* Traitement et publication (migration 20260803140000). `fixed_in_version` est ce que
+     le client voit dans son logiciel : « corrigé en 1.34 ». `is_public` fait apparaître
+     le problème dans la liste publique — jamais par défaut, le texte vient d'un client. */
+  fixed_in_version: string | null;
+  is_public: boolean;
+  public_title: string | null;
 }
 
 interface ReportMessage {
@@ -112,6 +118,9 @@ const AdminBugReports: React.FC = () => {
   const [reponse, setReponse] = useState('');
   const [envoi, setEnvoi] = useState(false);
   const [voirDiag, setVoirDiag] = useState<string | null>(null);
+  const [versionFiltre, setVersionFiltre] = useState<string>('toutes');
+  const [severiteFiltre, setSeveriteFiltre] = useState<string>('toutes');
+  const [tri, setTri] = useState<string>('priorite');
 
   const charger = useCallback(async () => {
     setLoading(true);
@@ -144,11 +153,28 @@ const AdminBugReports: React.FC = () => {
     if (!messages[id]) chargerMessages(id);
   };
 
-  const majChamp = async (id: string, champ: 'status' | 'severity' | 'admin_note', valeur: string) => {
+  const majChamp = async (
+    id: string,
+    champ: 'status' | 'severity' | 'admin_note' | 'fixed_in_version' | 'is_public' | 'public_title',
+    valeur: string | boolean | null
+  ) => {
     // Mise à jour optimiste : le back-office reste fluide même sur une connexion lente.
     setReports((rs) => rs.map((r) => (r.id === id ? { ...r, [champ]: valeur } : r)));
     const { error } = await supabase.from('bug_reports').update({ [champ]: valeur }).eq('id', id);
     if (error) { toast.error('Enregistrement refusé : ' + error.message); charger(); }
+  };
+
+  /* Marquer corrigé = un seul geste. Renseigner la version fait passer le ticket en
+     « résolu » : sans ça, il resterait dans « reste à traiter » alors qu'il est fait,
+     et il faudrait penser à changer DEUX champs pour une seule décision. */
+  const marquerCorrige = async (id: string, version: string) => {
+    const v = version.trim();
+    setReports((rs) => rs.map((r) => (r.id === id ? { ...r, fixed_in_version: v || null, status: v ? 'resolu' : r.status } : r)));
+    const patch: Record<string, unknown> = { fixed_in_version: v || null };
+    if (v) patch.status = 'resolu';
+    const { error } = await supabase.from('bug_reports').update(patch).eq('id', id);
+    if (error) { toast.error('Enregistrement refusé : ' + error.message); charger(); return; }
+    toast.success(v ? `Marqué corrigé en ${v}` : 'Version de correction retirée');
   };
 
   const repondre = async (id: string) => {
@@ -172,20 +198,44 @@ const AdminBugReports: React.FC = () => {
     toast.success('Réponse envoyée');
   };
 
-  const visibles = reports.filter((r) => {
-    if (filtre === 'actifs' && (r.status === 'ferme' || r.status === 'doublon')) return false;
-    if (filtre !== 'actifs' && filtre !== 'tous' && r.status !== filtre) return false;
-    const q = recherche.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      r.title.toLowerCase().includes(q) ||
-      r.body.toLowerCase().includes(q) ||
-      (r.contact_email || '').toLowerCase().includes(q) ||
-      (r.app_version || '').toLowerCase().includes(q)
-    );
-  });
+  /* Tri et filtres — la file de traitement.
+     « Reste à traiter » n'est pas un filtre parmi d'autres : c'est la vue par défaut,
+     celle qui répond à « qu'est-ce qu'il me reste à faire ». Un ticket marqué résolu en
+     sort automatiquement, ce qui est exactement l'effet demandé : renseigner la version
+     de correction vide la liste. */
+  const visibles = reports
+    .filter((r) => {
+      if (filtre === 'actifs' && (r.status === 'ferme' || r.status === 'doublon' || r.status === 'resolu')) return false;
+      if (filtre !== 'actifs' && filtre !== 'tous' && r.status !== filtre) return false;
+      if (versionFiltre !== 'toutes' && (r.app_version || '?') !== versionFiltre) return false;
+      if (severiteFiltre !== 'toutes' && r.severity !== severiteFiltre) return false;
+      const q = recherche.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        r.title.toLowerCase().includes(q) ||
+        r.body.toLowerCase().includes(q) ||
+        (r.contact_email || '').toLowerCase().includes(q) ||
+        (r.app_version || '').toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      if (tri === 'anciennete') return +new Date(a.created_at) - +new Date(b.created_at);
+      if (tri === 'arrivee') return +new Date(b.created_at) - +new Date(a.created_at);
+      if (tri === 'priorite') {
+        // Priorité = gravité d'abord, puis le plus ancien : ce qui bloque quelqu'un
+        // depuis longtemps passe avant ce qui gêne à peine depuis ce matin.
+        const p = (r: BugReport) => (r.severity === 'bloquant' ? 0 : r.severity === 'normal' ? 1 : 2);
+        return p(a) - p(b) || +new Date(a.created_at) - +new Date(b.created_at);
+      }
+      return +new Date(b.updated_at) - +new Date(a.updated_at);   // activité
+    });
 
   const nouveaux = reports.filter((r) => r.status === 'nouveau').length;
+  const aTraiter = reports.filter((r) => r.status === 'nouveau' || r.status === 'en_cours').length;
+  const bloquants = reports.filter(
+    (r) => (r.status === 'nouveau' || r.status === 'en_cours') && r.severity === 'bloquant'
+  ).length;
+  const versions = Array.from(new Set(reports.map((r) => r.app_version || '?'))).sort().reverse();
 
   return (
     <div className="text-gray-200">
@@ -193,9 +243,19 @@ const AdminBugReports: React.FC = () => {
         <div className="flex items-center gap-2 mr-auto">
           <Bug className="w-5 h-5 text-cyan-400" />
           <h2 className="text-xl font-bold text-white">Signalements OMEGADMX</h2>
+          {/* Ce qui reste à faire, lisible sans compter : c'est la question qu'on se pose
+              en ouvrant cette page. */}
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+            {aTraiter} à traiter
+          </span>
           {nouveaux > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
               {nouveaux} nouveau{nouveaux > 1 ? 'x' : ''}
+            </span>
+          )}
+          {bloquants > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/15 text-red-300 border border-red-500/40">
+              {bloquants} bloquant{bloquants > 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -213,9 +273,37 @@ const AdminBugReports: React.FC = () => {
           onChange={(e) => setFiltre(e.target.value)}
           className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm outline-none"
         >
-          <option value="actifs">À traiter</option>
+          <option value="actifs">Reste à traiter</option>
           <option value="tous">Tous</option>
           {Object.entries(STATUTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select
+          value={versionFiltre}
+          onChange={(e) => setVersionFiltre(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm outline-none"
+          title="Version d'où vient le signalement"
+        >
+          <option value="toutes">Toutes versions</option>
+          {versions.map((v) => <option key={v} value={v}>{v === '?' ? 'version inconnue' : 'V' + v}</option>)}
+        </select>
+        <select
+          value={severiteFiltre}
+          onChange={(e) => setSeveriteFiltre(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm outline-none"
+        >
+          <option value="toutes">Toutes gravités</option>
+          {Object.entries(SEVERITES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select
+          value={tri}
+          onChange={(e) => setTri(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm outline-none"
+          title="Ordre d'affichage"
+        >
+          <option value="priorite">Tri : priorité</option>
+          <option value="arrivee">Tri : plus récents</option>
+          <option value="anciennete">Tri : plus anciens</option>
+          <option value="activite">Tri : dernière activité</option>
         </select>
         <button
           onClick={charger}
@@ -307,6 +395,46 @@ const AdminBugReports: React.FC = () => {
                             title="Envoi anonyme : le client suit l'échange avec ce code, sans compte">
                         Code de suivi : {r.track_code.slice(0, 8)}…
                       </span>
+                    )}
+                  </div>
+
+                  {/* ---- Traitement : version de correction + publication ----
+                      Renseigner la version fait DEUX choses d'un coup : le ticket passe
+                      en résolu (il sort de « reste à traiter ») et le client voit
+                      « corrigé en 1.34 » dans son logiciel, sans qu'on lui écrive. */}
+                  <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-lg bg-gray-900/70 border border-gray-800">
+                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500 mr-1">Traitement</span>
+                    <input
+                      defaultValue={r.fixed_in_version || ''}
+                      onBlur={(e) => { if ((e.target.value || '') !== (r.fixed_in_version || '')) marquerCorrige(r.id, e.target.value); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                      placeholder="Corrigé en… (ex. 1.34)"
+                      className="px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs outline-none focus:border-emerald-500 w-40"
+                      title="Renseigner la version passe le signalement en « résolu » et l'affiche au client"
+                    />
+                    {r.fixed_in_version && (
+                      <span className="px-2 py-1 rounded-lg text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        corrigé en {r.fixed_in_version}
+                      </span>
+                    )}
+                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer ml-2"
+                           title="Fait apparaître ce problème dans la liste publique consultable depuis le logiciel">
+                      <input
+                        type="checkbox"
+                        checked={!!r.is_public}
+                        onChange={(e) => majChamp(r.id, 'is_public', e.target.checked)}
+                        className="accent-cyan-500 w-4 h-4"
+                      />
+                      Publier dans « problèmes connus »
+                    </label>
+                    {r.is_public && (
+                      <input
+                        defaultValue={r.public_title || ''}
+                        onBlur={(e) => { if ((e.target.value || '') !== (r.public_title || '')) majChamp(r.id, 'public_title', e.target.value.trim() || null); }}
+                        placeholder="Titre public (vide = titre d'origine)"
+                        className="flex-1 min-w-[220px] px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs outline-none focus:border-cyan-500"
+                        title="⚠ Le titre d'origine est écrit par le client : reformulez-le s'il contient un lieu, un nom ou une information privée"
+                      />
                     )}
                   </div>
 
