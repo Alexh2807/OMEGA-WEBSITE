@@ -22,7 +22,6 @@ import {
   RotateCcw,
   X,
   FileCheck,
-  Send,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Invoice, Quote, BillingSettings, Refund } from '../../types/billing';
@@ -526,9 +525,24 @@ const AdminBilling = () => {
               : invoice.customer_name) || '',
           'Email Client': invoice.customer_email || '',
           Statut: getStatusText(invoice.status),
-          'Total HT': (invoice.total_ht || 0).toFixed(2),
-          'Total TVA': (invoice.total_tva || 0).toFixed(2),
+          /* ⚠ Ces deux colonnes lisaient `total_ht` et `total_tva`, qui N'EXISTENT PAS
+             sur une facture : les vrais champs sont `subtotal_ht` et `tax_amount`.
+             L'export sortait donc 0,00 € de HT et 0,00 € de TVA sur CHAQUE ligne, seul
+             le TTC était juste — un fichier inexploitable par le comptable. */
+          'Total HT': (invoice.subtotal_ht || 0).toFixed(2),
+          'Total TVA': (invoice.tax_amount || 0).toFixed(2),
           'Total TTC': (invoice.total_ttc || 0).toFixed(2),
+          /* Sans le régime, le comptable ne peut pas ventiler : une facture à 0 % peut
+             être une autoliquidation UE, une exportation ou une livraison outre-mer —
+             trois lignes différentes de la déclaration. */
+          'Régime TVA': invoice.vat_regime || '',
+          'Taux TVA (%)': invoice.vat_rate != null ? String(invoice.vat_rate) : '',
+          'Pays client': invoice.customer_country || '',
+          'N° TVA client': invoice.vat_number || '',
+          'Mention légale TVA': invoice.vat_mention || '',
+          'Transmise en compta le': invoice.tiime_sent_at
+            ? format(new Date(invoice.tiime_sent_at), 'yyyy-MM-dd HH:mm')
+            : 'NON TRANSMISE',
           'Montant Payé': summary.amountPaid.toFixed(2),
           'Montant Remboursé': summary.totalRefunded.toFixed(2),
           'Net à Payer':
@@ -854,13 +868,32 @@ const AdminBilling = () => {
                         >
                           <FileCheck size={16} />
                         </button>
+                        {/* Transmission en comptabilité. Elle part normalement TOUTE
+                            SEULE à la création de la facture ; ce bouton ne sert qu'au
+                            rattrapage (comptabilité indisponible ce jour-là, facture
+                            ancienne). Il dit toujours où en est la facture, et un renvoi
+                            — qui créerait un doublon dans Tiime — doit être confirmé. */}
                         <button
                           onClick={async () => {
-                            const t = toast.loading('Envoi vers Tiime (via Make)…');
+                            const dejaPartie = !!invoice.tiime_sent_at;
+                            if (
+                              dejaPartie &&
+                              !window.confirm(
+                                `La facture ${invoice.invoice_number} a déjà été transmise ` +
+                                  `à la comptabilité le ` +
+                                  `${new Date(invoice.tiime_sent_at as string).toLocaleString('fr-FR')}.\n\n` +
+                                  `La renvoyer créera une SECONDE facture dans Tiime : ` +
+                                  `le chiffre d'affaires et la TVA seront comptés deux fois.\n\n` +
+                                  `Renvoyer quand même ?`
+                              )
+                            ) {
+                              return;
+                            }
+                            const t = toast.loading('Transmission à la comptabilité…');
                             try {
                               const { data, error } =
                                 await supabase.functions.invoke('send-to-make', {
-                                  body: { invoiceId: invoice.id },
+                                  body: { invoiceId: invoice.id, force: dejaPartie },
                                 });
                               if (error) {
                                 // Extraire le vrai message renvoyé par la fonction
@@ -873,26 +906,37 @@ const AdminBilling = () => {
                               }
                               if (data?.sent) {
                                 toast.success(
-                                  'Facture envoyée à Make — création dans Tiime en cours',
+                                  'Facture transmise à la comptabilité (Tiime)',
                                   { id: t }
                                 );
+                                loadData();
                               } else {
                                 toast.error(
                                   data?.message ||
                                     data?.error ||
-                                    'Webhook Make non configuré',
+                                    'Comptabilité non configurée',
                                   { id: t }
                                 );
                               }
                             } catch (e: any) {
                               toast.error(
-                                e?.message || 'Erreur envoi vers Make',
+                                e?.message || 'Transmission impossible',
                                 { id: t }
                               );
                             }
                           }}
-                          className="p-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors"
-                          title="Créer cette facture dans Tiime (via Make.com)"
+                          className={`p-2 rounded-lg transition-colors ${
+                            invoice.tiime_sent_at
+                              ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                              : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                          }`}
+                          title={
+                            invoice.tiime_sent_at
+                              ? `Déjà transmise à la comptabilité le ${new Date(
+                                  invoice.tiime_sent_at
+                                ).toLocaleString('fr-FR')} — cliquer pour renvoyer`
+                              : 'Transmettre cette facture à la comptabilité (Tiime)'
+                          }
                         >
                           <Send size={16} />
                         </button>

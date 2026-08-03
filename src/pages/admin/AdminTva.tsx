@@ -30,7 +30,11 @@ interface Declaration {
   ventes_france: Bloc;
   ventes_ue_b2c: Bloc;
   livraisons_intracommunautaires: Bloc;
+  /** Exportations HORS Union européenne (art. 262 I). */
   exportations: Bloc;
+  /** DOM/COM (art. 294) : 0 % comme l'export, mais une AUTRE ligne de déclaration.
+      Optionnel : une base antérieure à la migration du 4 août ne le renvoie pas. */
+  livraisons_outre_mer?: Bloc;
   total_tva_collectee: number;
   total_ht: number;
   sans_regime: number;
@@ -151,6 +155,14 @@ const AdminTva: React.FC = () => {
         0,
         decl.exportations.nb,
       ],
+      // ⚠ Ligne DISTINCTE des exportations : une livraison vers un DOM sort aussi à 0 %,
+      // mais elle ne se déclare pas dans la même case que l'export hors UE.
+      [
+        'Livraisons outre-mer (exonerees, art. 294)',
+        decl.livraisons_outre_mer?.base_ht ?? 0,
+        0,
+        decl.livraisons_outre_mer?.nb ?? 0,
+      ],
       ['TOTAL', decl.total_ht, decl.total_tva_collectee, ''],
       ['', '', '', ''],
       ['Detail par pays', 'Regime', 'Base HT', 'TVA'],
@@ -262,7 +274,10 @@ const AdminTva: React.FC = () => {
 
       {decl && (
         <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-5">
+          {/* Cinq catégories, pas quatre : l'outre-mer a sa propre carte. Il sort à 0 %
+              comme l'export hors UE, mais il ne se déclare pas dans la même case — les
+              additionner ferait recopier un chiffre faux sur la déclaration. */}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 mb-5">
             <Carte
               titre="Ventes en France"
               sous="TVA 20 % collectée — France et Monaco"
@@ -284,10 +299,16 @@ const AdminTva: React.FC = () => {
               couleur="bg-amber-500/10 border-amber-500/30"
             />
             <Carte
-              titre="Exportations"
-              sous="Hors UE et outre-mer — exonéré (262 I / 294)"
+              titre="Exportations hors UE"
+              sous="Suisse, Royaume-Uni… — exonéré (art. 262 I)"
               bloc={decl.exportations}
               couleur="bg-emerald-500/10 border-emerald-500/30"
+            />
+            <Carte
+              titre="Livraisons outre-mer"
+              sous="DOM et collectivités — exonéré (art. 294)"
+              bloc={decl.livraisons_outre_mer ?? { base_ht: 0, nb: 0 }}
+              couleur="bg-teal-500/10 border-teal-500/30"
             />
           </div>
 

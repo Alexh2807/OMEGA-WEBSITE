@@ -487,6 +487,37 @@ const AdminOrders = () => {
       toast.dismiss(loadingToast);
       toast.success(`✅ Facture ${invoice.invoice_number} créée avec succès !`);
 
+      /* ENVOI AUTOMATIQUE VERS LA COMPTABILITÉ (Make → Tiime).
+         Générer une facture, c'est décider qu'elle existe : elle doit partir en
+         comptabilité dans la foulée, sans qu'on ait à y penser. Avant, il fallait
+         cliquer un second bouton facture par facture — donc on l'oubliait.
+         Deux garde-fous : la fonction refuse une facture déjà transmise (pas de
+         doublon dans Tiime), et un échec ne casse pas la création — la facture
+         réapparaît simplement comme « non transmise » dans l'écran Facturation. */
+      try {
+        const { data: envoi } = await supabase.functions.invoke('send-to-make', {
+          body: { invoiceId: invoice.id },
+        });
+        if (envoi?.sent) {
+          toast.success('Facture transmise à la comptabilité (Tiime)');
+        } else if (envoi?.configured === false) {
+          toast('Comptabilité non configurée : facture à transmettre manuellement', {
+            icon: '⚠️',
+          });
+        } else if (!envoi?.deja_envoye) {
+          toast('Facture NON transmise à la comptabilité — à envoyer depuis Facturation', {
+            icon: '⚠️',
+            duration: 7000,
+          });
+        }
+      } catch (e) {
+        console.error('Envoi comptabilité impossible :', e);
+        toast('Facture NON transmise à la comptabilité — à envoyer depuis Facturation', {
+          icon: '⚠️',
+          duration: 7000,
+        });
+      }
+
       // Stocker l'ID de la facture et naviguer vers la facturation
       console.log('💾 Stockage ID facture pour ouverture:', invoice.id);
       sessionStorage.setItem('openInvoiceId', invoice.id);

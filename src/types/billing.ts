@@ -94,6 +94,18 @@ export interface Invoice {
   updated_at: string;
   sent_at?: string;
   paid_at?: string;
+  /* Transmission vers la comptabilité (Make → Tiime). Non nul = déjà partie :
+     la renvoyer créerait un doublon, donc un second envoi doit être forcé. */
+  tiime_sent_at?: string | null;
+  /* Identité fiscale de la vente, recopiée depuis la commande : c'est elle qui
+     décide de la ligne de déclaration et de la mention portée sur la facture. */
+  customer_country?: string | null;
+  is_company?: boolean | null;
+  company_name?: string | null;
+  vat_number?: string | null;
+  vat_regime?: 'fr' | 'ue_b2b' | 'ue_b2c' | 'export' | null;
+  vat_rate?: number | null;
+  vat_mention?: string | null;
   invoice_items?: InvoiceItem[];
   payment_records?: PaymentRecord[];
   refunds?: Refund[];
