@@ -164,6 +164,14 @@ const AdminBugReports: React.FC = () => {
     if (error) { toast.error('Enregistrement refusé : ' + error.message); charger(); }
   };
 
+  /* Format de version accepté : `X.Y` ou `X.YY` (1.34, 1.9, 12.5). Rien d'autre.
+     ⚠ Ce champ n'est PAS un commentaire : sa valeur est comparée à la version installée
+     chez le client (`cmpVersions`) pour lui dire « vous l'avez déjà » / « mettez à jour »
+     / « à paraître ». Un texte libre du genre « prochaine version » y casserait la
+     comparaison en silence — le client verrait une annonce fausse. On refuse donc à la
+     saisie plutôt que de laisser passer. */
+  const VERSION_OK = /^\d{1,2}\.\d{1,2}$/;
+
   /* Marquer corrigé = un seul geste. Renseigner la version fait passer le ticket en
      « résolu » : sans ça, il resterait dans « reste à traiter » alors qu'il est fait,
      et il faudrait penser à changer DEUX champs pour une seule décision. */
@@ -456,11 +464,33 @@ const AdminBugReports: React.FC = () => {
                     <input
                       list={`versions-${r.id}`}
                       defaultValue={r.fixed_in_version || ''}
-                      onBlur={(e) => { if ((e.target.value || '') !== (r.fixed_in_version || '')) marquerCorrige(r.id, e.target.value); }}
+                      inputMode="decimal"
+                      maxLength={5}
+                      /* Filtrage à la frappe : seuls des chiffres et UN point peuvent
+                         entrer. Empêcher la saisie vaut mieux que refuser après coup. */
+                      onInput={(e) => {
+                        const el = e.target as HTMLInputElement;
+                        let v = el.value.replace(/[^\d.]/g, '');
+                        const p = v.split('.');
+                        if (p.length > 2) v = p[0] + '.' + p.slice(1).join('');
+                        v = v.slice(0, 5);
+                        if (v !== el.value) el.value = v;
+                      }}
+                      onBlur={(e) => {
+                        const el = e.target as HTMLInputElement;
+                        const v = el.value.trim();
+                        if (v === (r.fixed_in_version || '')) return;
+                        if (v && !VERSION_OK.test(v)) {
+                          toast.error('Format attendu : X.XX (par exemple 1.34)');
+                          el.value = r.fixed_in_version || '';       // on rend la valeur d'avant
+                          return;
+                        }
+                        marquerCorrige(r.id, v);
+                      }}
                       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                      placeholder="ex. 1.34"
-                      className="px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs outline-none focus:border-emerald-500 w-32"
-                      title="Renseigner la version passe le signalement en « résolu » et l'annonce au client dans son logiciel"
+                      placeholder="1.34"
+                      className="px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs outline-none focus:border-emerald-500 w-24 font-mono"
+                      title="Numéro de version uniquement, au format X.XX (ex. 1.34). Renseigner la version passe le signalement en « résolu » et l'annonce au client dans son logiciel."
                     />
                     <datalist id={`versions-${r.id}`}>
                       {versionsCorrection.map((v) => <option key={v} value={v} />)}
