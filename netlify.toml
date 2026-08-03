@@ -47,3 +47,34 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# En-têtes de sécurité, sur toutes les pages.
+#
+# `frame-ancestors 'none'` (doublé par X-Frame-Options pour les vieux navigateurs)
+# interdit d'afficher le site dans le cadre d'un autre site. Sans cela, n'importe qui
+# pouvait empiler une page invisible d'omegasud.fr sous de faux boutons et faire
+# cliquer un client connecté dans son dos — sur le panier ou le back-office.
+# Le site ne s'affiche dans aucun cadre (le logiciel OMEGADMX ouvre le vrai navigateur),
+# donc l'interdiction ne coûte rien.
+#
+# `nosniff` empêche le navigateur de deviner le type d'un fichier : un fichier déposé
+# par un client ne peut plus être réinterprété comme du script.
+# `Referrer-Policy` évite d'envoyer l'adresse complète de la page (qui peut contenir un
+# identifiant de commande) aux sites tiers.
+# `Permissions-Policy` coupe les capacités que le site n'utilise pas.
+#
+# Volontairement PAS de `script-src` ici : il faudrait rééditer ce fichier à chaque
+# service ajouté, et une omission couperait les paiements. La protection contre
+# l'injection vient de React, qui échappe tout ce qu'il affiche (aucun
+# `dangerouslySetInnerHTML` dans le code).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors 'none'"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # `payment` est délégué à Stripe : le paiement actuel n'en a pas besoin (champs de
+    # carte classiques), mais activer un jour Apple Pay / Google Pay ne demandera ainsi
+    # aucune retouche de ce fichier.
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), payment=(self \"https://js.stripe.com\")"
