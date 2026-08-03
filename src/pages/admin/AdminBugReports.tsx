@@ -38,6 +38,13 @@ interface BugReport {
   status: string;
   severity: string;
   admin_note: string | null;
+  /* Show joint par le client (facultatif). `show_data` = JSON gzip+base64 — voir la
+     migration 20260803090000. Sert à REJOUER le problème avec sa configuration réelle
+     plutôt qu'à le deviner. */
+  show_data: string | null;
+  show_name: string | null;
+  show_bytes: number | null;
+  show_encoding: string | null;
 }
 
 interface ReportMessage {
@@ -59,6 +66,35 @@ const SEVERITES: Record<string, string> = {
   normal: 'Normal',
   mineur: 'Mineur',
 };
+
+const poids = (o: number | null) => {
+  if (!o) return '';
+  return o < 1024 ? o + ' o' : o < 1024 * 1024 ? (o / 1024).toFixed(0) + ' Ko' : (o / 1048576).toFixed(1) + ' Mo';
+};
+
+/* Rend le .omshow tel que l'application le lit : on décompresse le gzip du client.
+   ⚠ Ne PAS se contenter d'un atob() : le contenu est compressé (un show de 500 Ko tient
+   en ~80 Ko), le fichier serait illisible. `show_encoding` dit quel cas on a — on ne
+   devine pas, un client sur une WebView sans CompressionStream envoie du JSON brut. */
+async function telechargerShow(r: BugReport) {
+  if (!r.show_data) return;
+  const bin = Uint8Array.from(atob(r.show_data), (c) => c.charCodeAt(0));
+  let texte: string;
+  if (r.show_encoding === 'gzip+base64') {
+    const flux = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
+    texte = await new Response(flux).text();
+  } else {
+    texte = new TextDecoder().decode(bin);
+  }
+  const nom = (r.show_name || 'show').replace(/[\\/:*?"<>|]/g, '_');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([texte], { type: 'application/json' }));
+  a.download = `${nom}.omshow`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
 
 const couleurStatut = (s: string) =>
   s === 'nouveau' ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
@@ -255,6 +291,15 @@ const AdminBugReports: React.FC = () => {
                         className="px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs hover:border-cyan-500 transition"
                       >
                         {voirDiag === r.id ? 'Masquer' : 'Infos techniques'}
+                      </button>
+                    )}
+                    {r.show_data && (
+                      <button
+                        onClick={() => telechargerShow(r)}
+                        className="px-2 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/40 text-xs text-cyan-300 hover:border-cyan-400 transition font-semibold"
+                        title="Télécharge le show du client au format .omshow, prêt à ouvrir dans OmegaDMX"
+                      >
+                        Show du client{r.show_bytes ? ` · ${poids(r.show_bytes)}` : ''}
                       </button>
                     )}
                     {!r.user_id && (
