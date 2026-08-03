@@ -19,6 +19,7 @@ import StripeCheckout, {
   type RecapitulatifDevis,
 } from '../components/StripeCheckout';
 import VitrineCTA from '../components/VitrineCTA';
+import AchatEntreprise from '../components/AchatEntreprise';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import { computeShipping } from '../utils/shipping';
 import toast from 'react-hot-toast';
@@ -424,6 +425,16 @@ const CartPage = () => {
                 Récapitulatif
               </h3>
 
+              {/* Statut d'achat : c'est LUI qui décide de la TVA, il doit donc être ici,
+                  au-dessus du montant, et non caché dans la page Compte. Tout changement
+                  invalide le devis en cours — on force une nouvelle demande au serveur. */}
+              <AchatEntreprise
+                onChangement={() => {
+                  setRecapServeur(null);
+                  setCheckoutKey(prev => prev + 1);
+                }}
+              />
+
               {/* Adresse de livraison — OBLIGATOIRE avant paiement */}
               <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
                 <div className="flex items-center justify-between mb-2">
@@ -456,7 +467,7 @@ const CartPage = () => {
 
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between text-gray-300">
-                  <span>Sous-total</span>
+                  <span>Sous-total produits</span>
                   <span>{totals.subTotal.toLocaleString('fr-FR', EURO)} HT</span>
                 </div>
                 {/* ⚠ Ne JAMAIS affirmer « TVA (20 %) » ici : à ce stade le navigateur ne
@@ -475,11 +486,13 @@ const CartPage = () => {
                     <Truck size={16} className="text-blue-400" />
                     Livraison
                   </span>
+                  {/* Le barème de livraison est exprimé en TTC : on le DIT, sinon ce
+                      montant se lisait comme un HT et venait grossir un total mélangé. */}
                   <span>
                     {shipping.needsQuote
                       ? 'Sur devis'
                       : shipping.cost !== null
-                        ? `${shipping.cost.toLocaleString('fr-FR', EURO)}`
+                        ? `${shipping.cost.toLocaleString('fr-FR', EURO)} TTC`
                         : 'Selon adresse'}
                   </span>
                 </div>
@@ -510,20 +523,22 @@ const CartPage = () => {
                   </div>
                 )}
                 <div className="border-t border-white/20 pt-4">
-                  {/* Total HT, seul chiffre certain avant que le serveur ait établi le
-                      régime de TVA. Le total à payer s'affiche au récapitulatif de
-                      paiement, TVA et livraison comprises. */}
-                  <div className="flex justify-between text-xl font-bold text-white">
-                    <span>Total HT</span>
-                    <span>
-                      {shipping.cost !== null
-                        ? `${(totals.subTotal + (shipping.cost ?? 0)).toLocaleString('fr-FR', EURO)}`
-                        : `${totals.subTotal.toLocaleString('fr-FR', EURO)} + livraison`}
+                  {/* ⚠ Pas de « total » ici. Les produits sont en HT, le barème de
+                      livraison en TTC, et le taux de TVA n'est pas encore connu :
+                      additionner les trois donnerait un chiffre qui ne veut rien dire et
+                      qui ne correspondrait pas au montant débité. Le total exact — celui
+                      qu'arrête le serveur — s'affiche au clic suivant, avant toute
+                      saisie de carte. */}
+                  <div className="flex justify-between text-white">
+                    <span className="font-semibold">Total à payer</span>
+                    <span className="text-sm text-gray-400">
+                      à l'étape suivante
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-2">
-                    TVA et total à payer calculés à l'étape suivante, d'après votre
-                    adresse de livraison.
+                    Le montant exact, TVA et livraison comprises, s'affiche avant le
+                    paiement — il dépend de votre adresse et de votre statut (particulier
+                    ou entreprise).
                   </p>
                 </div>
               </div>
@@ -599,8 +614,11 @@ const CartPage = () => {
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 border border-white/10 max-w-md w-full">
               <div className="flex items-center justify-between mb-6">
+                {/* « Paiement Sécurisé » en titre PUIS « Paiement sécurisé par Stripe »
+                    sous le bouton : la même promesse deux fois dans la même fenêtre.
+                    Le titre dit maintenant l'étape, la ligne du bas rassure. */}
                 <h3 className="text-2xl font-bold text-white">
-                  Paiement Sécurisé
+                  Régler ma commande
                 </h3>
                 <button
                   onClick={() => setShowCheckout(false)}
@@ -628,8 +646,13 @@ const CartPage = () => {
                   </span>
                 </div>
                 <div className="flex justify-between text-white mb-2">
+                  {/* Typographie française : espace avant le %, et taux du SERVEUR.
+                      Tant qu'il n'a pas répondu on n'annonce aucun taux plutôt que d'en
+                      supposer un — le client d'une entreprise UE vérifiée paie 0 %. */}
                   <span>
-                    TVA{recapServeur ? ` ${recapServeur.taux_tva}%` : ' 20%'} :
+                    {recapServeur
+                      ? `TVA (${Number(recapServeur.taux_tva).toLocaleString('fr-FR')} %) :`
+                      : 'TVA :'}
                   </span>
                   <span className="font-semibold">
                     {(recapServeur ? recapServeur.tva : totals.tax).toLocaleString('fr-FR', EURO)}
@@ -646,8 +669,10 @@ const CartPage = () => {
                     {recapServeur.mention}
                   </div>
                 )}
+                {/* La mention « paiement sécurisé » est portée UNE SEULE FOIS, sous le
+                    bouton de paiement. Elle était répétée ici et deux lignes plus bas. */}
                 <div className="text-gray-400 text-sm">
-                  Expédition sous {shippingConfig.delay_days} jours • Paiement sécurisé par Stripe
+                  Expédition sous {shippingConfig.delay_days} jours
                 </div>
               </div>
 

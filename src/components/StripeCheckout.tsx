@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { EURO } from '../utils/prix';
 import { supabase } from '../lib/supabase';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -286,19 +287,23 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Bandeau MODE TEST : visible dès que la clé Stripe est une clé de test */}
+      {/* MODE TEST — UN SEUL bloc.
+          Il y en avait deux : un bandeau en haut qui donnait la carte 4242, et un
+          encadré en bas qui redonnait la même carte plus les autres. Le client lisait
+          deux fois la même chose, à deux endroits, dans deux couleurs. */}
       {STRIPE_TEST_MODE && (
         <div className="p-4 bg-orange-500/15 border border-orange-400/40 rounded-lg">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="text-orange-400 flex-shrink-0" size={20} />
-            <div>
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-orange-400 flex-shrink-0 mt-0.5" size={20} />
+            <div className="min-w-0">
               <h4 className="text-orange-300 font-semibold">
-                Paiement en MODE TEST
+                Paiement en mode test — aucun débit réel
               </h4>
-              <p className="text-orange-200/80 text-sm mt-1">
-                Aucun débit réel ne sera effectué. Utilisez la carte de test
-                4242 4242 4242 4242 (date future, CVC 123).
-              </p>
+              <div className="text-orange-200/80 text-sm mt-2 space-y-0.5">
+                <p>Paiement accepté : 4242 4242 4242 4242</p>
+                <p>Paiement refusé : 4000 0000 0000 0002</p>
+                <p>Date : une date future (12/30) · CVC : 123</p>
+              </div>
             </div>
           </div>
         </div>
@@ -394,34 +399,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         </div>
       )}
 
-      {/* Informations de sécurité */}
-      <div className="flex items-center gap-2 text-gray-400 text-sm bg-white/5 p-3 rounded-lg">
-        <Lock size={16} />
-        <span>
-          Paiement sécurisé SSL • Vos données sont protégées par Stripe
-        </span>
-      </div>
-
-      {/* Cartes de test : en dev local OU dès que la clé Stripe est en mode test */}
-      {(import.meta.env.DEV || STRIPE_TEST_MODE) && (
-        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-          <h4 className="text-blue-400 font-semibold mb-2 flex items-center gap-2">
-            <CreditCard size={16} />
-            Cartes de test Stripe
-          </h4>
-          <div className="text-blue-300 text-sm space-y-1">
-            <p>
-              • <strong>Succès :</strong> 4242 4242 4242 4242
-            </p>
-            <p>
-              • <strong>Refusée :</strong> 4000 0000 0000 0002
-            </p>
-            <p>
-              • <strong>Date :</strong> 12/25 • <strong>CVC :</strong> 123
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Mention de sécurité : UNE SEULE, sous le bouton de paiement (voir plus bas).
+          Le panier en affichait déjà une (« Paiement sécurisé par Stripe ») et ce
+          composant une seconde, deux lignes plus loin. */}
 
       <button
         type="submit"
@@ -437,11 +417,18 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
           <>
             <Lock size={20} />
             {/* Le montant affiché est CELUI DU SERVEUR : le bouton ne peut pas annoncer
-                un prix différent de ce qui sera débité. */}
-            Payer {recap ? recap.total_ttc.toFixed(2) : '…'}€ en sécurité
+                un prix différent de ce qui sera débité. Au format français, comme
+                partout ailleurs sur le site. */}
+            Payer {recap ? recap.total_ttc.toLocaleString('fr-FR', EURO) : '…'}
           </>
         )}
       </button>
+
+      <p className="text-gray-400 text-xs text-center flex items-center justify-center gap-1.5">
+        <Lock size={12} />
+        Paiement sécurisé par Stripe — vos coordonnées bancaires ne transitent pas par
+        nos serveurs.
+      </p>
     </form>
   );
 };

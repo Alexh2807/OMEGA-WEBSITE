@@ -411,8 +411,14 @@ const AddressManager: React.FC<AddressManagerProps> = ({
               </div>
 
               <div>
+                {/* ⚠ Ce champ n'est QU'UNE ÉTIQUETTE DE LIVRAISON : il s'imprime sur le
+                    colis, il ne déclare rien fiscalement. Il était intitulé
+                    « Entreprise (optionnel) » : un client professionnel le remplissait,
+                    croyait acheter au nom de sa société, et repartait facturé avec TVA
+                    sans qu'on lui ait rien demandé. On dit maintenant ce qu'il fait, et
+                    où se décide l'achat au nom d'une société. */}
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Entreprise (optionnel)
+                  Société destinataire (optionnel)
                 </label>
                 <input
                   type="text"
@@ -421,8 +427,13 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     setFormData({ ...formData, company: e.target.value })
                   }
                   className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-                  placeholder="Nom de l'entreprise"
+                  placeholder="Nom à faire figurer sur le colis"
                 />
+                <p className="text-gray-400 text-xs mt-2">
+                  Sert uniquement à l'adressage du colis. Pour acheter au nom d'une
+                  société et faire vérifier votre numéro de TVA, utilisez « J'achète en
+                  tant que » dans le panier.
+                </p>
               </div>
 
               <div>

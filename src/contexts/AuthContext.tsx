@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
@@ -10,6 +10,11 @@ interface AuthContextType {
   /* Lecture seule : « pro » se règle dans le compte (profiles.is_company),
      pas par un bouton d'interface — voir le commentaire dans resolveAdmin. */
   userType: 'pro' | 'particulier';
+  /* Relit le statut EN BASE. À appeler après une déclaration d'entreprise, sinon
+     l'en-tête continue d'afficher « Particulier · Prix TTC » alors que le client
+     vient de se déclarer société — incohérence relevée à l'usage.
+     ⚠ Ne prend AUCUN paramètre : on ne choisit pas son statut, on le relit. */
+  rafraichirStatut: () => Promise<void>;
   signUp: (
     email: string,
     password: string,
@@ -39,6 +44,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     'particulier'
   );
   const [isAdmin, setIsAdmin] = useState(false);
+  /* Le résolveur est défini dans l'effet ; on le garde sous la main pour pouvoir le
+     rejouer à la demande sans dupliquer la requête. */
+  const resolveRef = useRef<((u: User | null) => Promise<void>) | null>(null);
 
   useEffect(() => {
     // SÉCURITÉ (audit) : le statut admin vient UNIQUEMENT de profiles.role
@@ -72,6 +80,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUserType('particulier');
       }
     };
+
+    resolveRef.current = resolveAdmin;
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -154,11 +164,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsAdmin(false);
   };
 
+  /* Relit le statut en base. Utilisé après une déclaration d'entreprise faite depuis
+     le panier : sans cela l'en-tête affichait encore « Particulier · Prix TTC » alors
+     que le client venait de se déclarer société et voyait sa TVA passer à 0 %. */
+  const rafraichirStatut = async () => {
+    if (resolveRef.current) await resolveRef.current(user);
+  };
+
   const value = {
     user,
     loading,
     isAdmin,
     userType,
+    rafraichirStatut,
     signUp,
     signIn,
     signOut,
