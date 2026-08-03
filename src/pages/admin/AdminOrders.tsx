@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
+import { EURO } from '../../utils/prix';
 
 /* Mention légale à porter sur la facture selon le régime. Une livraison
    intracommunautaire ou une exportation exonérée SANS sa mention est une facture
@@ -849,7 +850,7 @@ const AdminOrders = () => {
                   </td>
                   <td className="p-4">
                     <div className="text-white font-semibold">
-                      {order.total.toFixed(2)}€
+                      {order.total.toLocaleString('fr-FR', EURO)}
                     </div>
                     <div className="text-gray-400 text-sm">
                       {order.order_items?.length || 0} article
@@ -1106,11 +1107,11 @@ const AdminOrders = () => {
                         </div>
                         <div className="text-gray-400 text-sm">
                           Quantité: {item.quantity} • Prix unitaire:{' '}
-                          {item.price.toFixed(2)}€
+                          {item.price.toLocaleString('fr-FR', EURO)}
                         </div>
                       </div>
                       <div className="text-white font-semibold">
-                        {(item.price * item.quantity).toFixed(2)}€
+                        {(item.price * item.quantity).toLocaleString('fr-FR', EURO)}
                       </div>
                     </div>
                   ))}
@@ -1122,19 +1123,19 @@ const AdminOrders = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-400">Sous-total:</span>
                       <span className="text-white">
-                        {selectedOrder.sub_total.toFixed(2)}€
+                        {selectedOrder.sub_total.toLocaleString('fr-FR', EURO)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">TVA:</span>
                       <span className="text-white">
-                        {selectedOrder.tax.toFixed(2)}€
+                        {selectedOrder.tax.toLocaleString('fr-FR', EURO)}
                       </span>
                     </div>
                     <div className="flex justify-between border-t border-white/20 pt-2 font-semibold">
                       <span className="text-white">Total:</span>
                       <span className="text-blue-400 text-lg">
-                        {selectedOrder.total.toFixed(2)}€
+                        {selectedOrder.total.toLocaleString('fr-FR', EURO)}
                       </span>
                     </div>
                   </div>
@@ -1188,7 +1189,7 @@ const AdminOrders = () => {
                 <div>
                   <span className="text-gray-400">Total:</span>
                   <span className="text-white ml-2">
-                    {selectedOrder.total.toFixed(2)}€
+                    {selectedOrder.total.toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
                 <div>
@@ -1221,7 +1222,7 @@ const AdminOrders = () => {
                   placeholder="0.00"
                 />
                 <p className="text-gray-400 text-xs mt-1">
-                  Maximum: {selectedOrder.total.toFixed(2)}€
+                  Maximum: {selectedOrder.total.toLocaleString('fr-FR', EURO)}
                 </p>
               </div>
 

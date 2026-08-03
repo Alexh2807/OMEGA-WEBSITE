@@ -37,6 +37,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import Modal from '../../components/Modal';
+import { EURO } from '../../utils/prix';
 
 // --- Interfaces de types ---
 interface Provider {
@@ -1497,7 +1498,7 @@ const AdminPlanningEditor: React.FC = () => {
                           {totalCost > 0 && (
                             <span className="flex items-center gap-1 text-green-400">
                               <Euro size={12} />
-                              {totalCost.toFixed(2)}€
+                              {totalCost.toLocaleString('fr-FR', EURO)}
                             </span>
                           )}
                         </div>

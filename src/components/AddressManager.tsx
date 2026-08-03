@@ -281,6 +281,14 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                 {showSelection && (
                   <button
                     onClick={() => onAddressSelect?.(address)}
+                    /* Bouton en icône seule : sans intitulé, ni le client pressé ni un
+                       lecteur d'écran ne savent que cette coche CHOISIT l'adresse. */
+                    title={
+                      selectedAddressId === address.id
+                        ? 'Adresse de livraison choisie'
+                        : 'Choisir cette adresse pour la livraison'
+                    }
+                    aria-label="Choisir cette adresse pour la livraison"
                     className={`p-2 rounded-lg transition-colors ${
                       selectedAddressId === address.id
                         ? 'bg-blue-400 text-white'

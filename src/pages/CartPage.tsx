@@ -22,6 +22,7 @@ import VitrineCTA from '../components/VitrineCTA';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import { computeShipping } from '../utils/shipping';
 import toast from 'react-hot-toast';
+import { EURO } from '../utils/prix';
 
 const CartPage = () => {
   const { items, updateQuantity, removeFromCart, totalItems, clearCart } =
@@ -372,7 +373,7 @@ const CartPage = () => {
                       {item.product?.description}
                     </p>
                     <div className="text-blue-400 font-bold text-lg">
-                      {getItemPrice(item).toFixed(2)}€ {totals.label}
+                      {getItemPrice(item).toLocaleString('fr-FR', EURO)} {totals.label}
                     </div>
                   </div>
 
@@ -400,7 +401,7 @@ const CartPage = () => {
                     </div>
 
                     <div className="text-white font-bold text-lg min-w-[80px] text-right">
-                      {(getItemPrice(item) * item.quantity).toFixed(2)}€{' '}
+                      {(getItemPrice(item) * item.quantity).toLocaleString('fr-FR', EURO)}{' '}
                       {totals.label}
                     </div>
 
@@ -456,11 +457,18 @@ const CartPage = () => {
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between text-gray-300">
                   <span>Sous-total</span>
-                  <span>{totals.subTotal.toFixed(2)}€ HT</span>
+                  <span>{totals.subTotal.toLocaleString('fr-FR', EURO)} HT</span>
                 </div>
+                {/* ⚠ Ne JAMAIS affirmer « TVA (20 %) » ici : à ce stade le navigateur ne
+                    connaît pas le régime. Une entreprise européenne au numéro vérifié paie
+                    0 %, un client des DOM aussi. C'est `regime_tva`, côté serveur, qui
+                    tranche — et son verdict n'arrive qu'avec le récapitulatif de paiement.
+                    Afficher 20 % faisait lire au client un montant qu'il n'allait pas payer. */}
                 <div className="flex justify-between text-gray-300">
-                  <span>TVA (20%)</span>
-                  <span>{totals.tax.toFixed(2)}€</span>
+                  <span>TVA</span>
+                  <span className="text-sm text-gray-400">
+                    selon votre adresse
+                  </span>
                 </div>
                 <div className="flex justify-between text-gray-300">
                   <span className="flex items-center gap-2">
@@ -471,7 +479,7 @@ const CartPage = () => {
                     {shipping.needsQuote
                       ? 'Sur devis'
                       : shipping.cost !== null
-                        ? `${shipping.cost.toFixed(2)}€`
+                        ? `${shipping.cost.toLocaleString('fr-FR', EURO)}`
                         : 'Selon adresse'}
                   </span>
                 </div>
@@ -502,14 +510,21 @@ const CartPage = () => {
                   </div>
                 )}
                 <div className="border-t border-white/20 pt-4">
+                  {/* Total HT, seul chiffre certain avant que le serveur ait établi le
+                      régime de TVA. Le total à payer s'affiche au récapitulatif de
+                      paiement, TVA et livraison comprises. */}
                   <div className="flex justify-between text-xl font-bold text-white">
-                    <span>Total TTC</span>
+                    <span>Total HT</span>
                     <span>
                       {shipping.cost !== null
-                        ? `${grandTotal.toFixed(2)}€`
-                        : `${totals.total.toFixed(2)}€ + livraison`}
+                        ? `${(totals.subTotal + (shipping.cost ?? 0)).toLocaleString('fr-FR', EURO)}`
+                        : `${totals.subTotal.toLocaleString('fr-FR', EURO)} + livraison`}
                     </span>
                   </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    TVA et total à payer calculés à l'étape suivante, d'après votre
+                    adresse de livraison.
+                  </p>
                 </div>
               </div>
 
@@ -603,13 +618,13 @@ const CartPage = () => {
                 <div className="flex justify-between text-white mb-1">
                   <span>Produits HT :</span>
                   <span className="font-semibold">
-                    {(recapServeur ? recapServeur.produits_ht : totals.subTotal).toFixed(2)}€
+                    {(recapServeur ? recapServeur.produits_ht : totals.subTotal).toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
                 <div className="flex justify-between text-white mb-1">
                   <span>Livraison{recapServeur ? ' HT' : ''} :</span>
                   <span className="font-semibold">
-                    {(recapServeur ? recapServeur.port_ht : shipping.cost ?? 0).toFixed(2)}€
+                    {(recapServeur ? recapServeur.port_ht : shipping.cost ?? 0).toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
                 <div className="flex justify-between text-white mb-2">
@@ -617,13 +632,13 @@ const CartPage = () => {
                     TVA{recapServeur ? ` ${recapServeur.taux_tva}%` : ' 20%'} :
                   </span>
                   <span className="font-semibold">
-                    {(recapServeur ? recapServeur.tva : totals.tax).toFixed(2)}€
+                    {(recapServeur ? recapServeur.tva : totals.tax).toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
                 <div className="flex justify-between text-white mb-2 border-t border-white/10 pt-2">
                   <span>Total à payer:</span>
                   <span className="font-bold text-xl">
-                    {(recapServeur ? recapServeur.total_ttc : grandTotal).toFixed(2)}€
+                    {(recapServeur ? recapServeur.total_ttc : grandTotal).toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
                 {recapServeur?.mention && (

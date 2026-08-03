@@ -81,10 +81,39 @@ Deno.serve(async (req: Request) => {
        peut réinterroger le même numéro plusieurs fois (saisie, retour arrière, paiement) :
        sans cache, on se fait refuser au pire moment. 24 h seulement, pour qu'un numéro
        révoqué ne reste pas « valide » longtemps. */
+    /* ★ Le verdict doit être inscrit sur le profil de l'appelant SUR LES DEUX CHEMINS.
+       Défaut trouvé le 3 août : la réponse venue du cache retournait ici même, avant le
+       bloc d'enregistrement plus bas. Résultat : le premier client à vérifier un numéro
+       était enregistré, tous les suivants voyaient « numéro valide » à l'écran mais
+       restaient « non vérifiés » en base — donc facturés 20 % sans comprendre pourquoi.
+       Le cache ne doit accélérer que l'interrogation de VIES, jamais sauter l'écriture. */
+    const inscrireVerdict = async (
+      verdictValide: boolean | null,
+      nomSociete: string,
+      dateVerif: string
+    ) => {
+      const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') || '';
+      if (!jwt) return;
+      const { data: u, error: eUser } = await admin.auth.getUser(jwt);
+      if (eUser || !u?.user?.id) {
+        console.error('verifier-tva : appelant non identifié', eUser?.message);
+        return;
+      }
+      const { error } = await admin.from('profiles').update({
+        vat_number: brut,
+        vat_number_valid: verdictValide,
+        vat_checked_at: dateVerif,
+        vat_checked_name: nomSociete || null,
+      }).eq('id', u.user.id);
+      // ⚠ Ne PAS avaler l'erreur en silence : c'est ce qui a caché ce défaut.
+      if (error) console.error('verifier-tva : profil non mis à jour', error.message);
+    };
+
     try {
       const { data: cache } = await admin
         .from('vies_checks').select('*').eq('vat_number', brut).maybeSingle();
       if (cache && Date.now() - new Date(cache.checked_at).getTime() < 86400000) {
+        await inscrireVerdict(cache.valid, cache.company_name || '', cache.checked_at);
         return reponse({
           valide: cache.valid, numero: brut, pays,
           nom: cache.company_name || '', adresse: cache.company_address || '',
@@ -154,20 +183,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- Conservation de la preuve sur le profil de l'appelant ----
-    const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') || '';
-    if (jwt) {
-      try {
-        const { data: u } = await admin.auth.getUser(jwt);
-        if (u?.user?.id) {
-          await admin.from('profiles').update({
-            vat_number: brut,
-            vat_number_valid: valide,
-            vat_checked_at: new Date().toISOString(),
-            vat_checked_name: nom || null,
-          }).eq('id', u.user.id);
-        }
-      } catch (_e) { /* l'enregistrement échoue : la réponse reste valable */ }
-    }
+    await inscrireVerdict(valide, nom, new Date().toISOString());
 
     return reponse({
       valide,

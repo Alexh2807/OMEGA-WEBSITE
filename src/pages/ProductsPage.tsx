@@ -15,6 +15,7 @@ import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import toast from 'react-hot-toast';
+import { EURO } from '../utils/prix';
 
 const ProductsPage = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -92,14 +93,14 @@ const ProductsPage = () => {
           ? product.original_price / 1.2
           : null,
         label: 'HT',
-        taxInfo: `${product.price.toFixed(2)}€ TTC`,
+        taxInfo: `${product.price.toLocaleString('fr-FR', EURO)} TTC`,
       };
     }
     return {
       price: product.price,
       originalPrice: product.original_price,
       label: 'TTC',
-      taxInfo: product.price_ht ? `${product.price_ht.toFixed(2)}€ HT` : null,
+      taxInfo: product.price_ht ? `${product.price_ht.toLocaleString('fr-FR', EURO)} HT` : null,
     };
   };
 
@@ -286,7 +287,7 @@ const ProductsPage = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-blue-400 font-bold text-lg">
-                            {displayPrice.price.toFixed(2)}€
+                            {displayPrice.price.toLocaleString('fr-FR', EURO)}
                           </span>
                           <span className="text-gray-400 text-sm">
                             {displayPrice.label}
@@ -294,7 +295,7 @@ const ProductsPage = () => {
                         </div>
                         {displayPrice.originalPrice && (
                           <div className="text-gray-400 text-sm line-through">
-                            {displayPrice.originalPrice.toFixed(2)}€{' '}
+                            {displayPrice.originalPrice.toLocaleString('fr-FR', EURO)}{' '}
                             {displayPrice.label}
                           </div>
                         )}
@@ -412,7 +413,7 @@ const ProductsPage = () => {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-blue-400 font-bold text-xl">
-                              {displayPrice.price.toFixed(2)}€
+                              {displayPrice.price.toLocaleString('fr-FR', EURO)}
                             </span>
                             <span className="text-gray-400">
                               {displayPrice.label}
@@ -420,7 +421,7 @@ const ProductsPage = () => {
                           </div>
                           {displayPrice.originalPrice && (
                             <div className="text-gray-400 line-through">
-                              {displayPrice.originalPrice.toFixed(2)}€{' '}
+                              {displayPrice.originalPrice.toLocaleString('fr-FR', EURO)}{' '}
                               {displayPrice.label}
                             </div>
                           )}

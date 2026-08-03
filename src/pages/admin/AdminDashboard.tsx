@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { RecentActivity } from '../../types'; // Assurez-vous que ce type est bien défini
+import { EURO } from '../../utils/prix';
 
 const AdminDashboard = () => {
   const [statsData, setStatsData] = useState({
@@ -104,7 +105,7 @@ const AdminDashboard = () => {
       (recentOrdersData || []).forEach(o =>
         activities.push({
           type: 'order',
-          message: `Nouvelle commande de ${o.profiles?.first_name || 'un client'} (${o.total.toFixed(2)}€)`,
+          message: `Nouvelle commande de ${o.profiles?.first_name || 'un client'} (${o.total.toLocaleString('fr-FR', EURO)})`,
           time: new Date(o.created_at).toLocaleString('fr-FR'),
           icon: ShoppingCart,
           color: 'text-green-400',

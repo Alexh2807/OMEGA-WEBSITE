@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import { Invoice } from '../types/billing';
 import { COMPANY_INFO, getInvoiceLegalFooter } from '../config/legalInfo';
+import { EURO } from '../utils/prix';
 
 interface InvoicePDFProps {
   invoice: Invoice;
@@ -157,10 +158,10 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
                 <td className="p-2 align-top">{item.description}</td>
                 <td className="p-2 text-center align-top">{item.quantity}</td>
                 <td className="p-2 text-right align-top">
-                  {item.unit_price_ht.toFixed(2)} €
+                  {item.unit_price_ht.toLocaleString('fr-FR', EURO)}
                 </td>
                 <td className="p-2 text-right align-top font-semibold">
-                  {item.total_ht.toFixed(2)} €
+                  {item.total_ht.toLocaleString('fr-FR', EURO)}
                 </td>
               </tr>
             ))}
@@ -174,26 +175,26 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
           <div className="bg-gray-50 p-3 rounded">
             <div className="flex justify-between mb-1">
               <span>Sous-total HT</span>
-              <span>{invoice.subtotal_ht.toFixed(2)} €</span>
+              <span>{invoice.subtotal_ht.toLocaleString('fr-FR', EURO)}</span>
             </div>
             <div className="flex justify-between mb-2">
               <span>TVA (20%)</span>
-              <span>{invoice.tax_amount.toFixed(2)} €</span>
+              <span>{invoice.tax_amount.toLocaleString('fr-FR', EURO)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg border-t-2 border-gray-800 pt-2">
               <span>TOTAL TTC</span>
-              <span>{invoice.total_ttc.toFixed(2)} €</span>
+              <span>{invoice.total_ttc.toLocaleString('fr-FR', EURO)}</span>
             </div>
             {paymentStatus.amountPaid > 0 && (
               <div className="flex justify-between mt-2 text-green-600 font-semibold">
                 <span>Montant Payé</span>
-                <span>- {paymentStatus.amountPaid.toFixed(2)} €</span>
+                <span>- {paymentStatus.amountPaid.toLocaleString('fr-FR', EURO)}</span>
               </div>
             )}
             {paymentStatus.totalRefunded > 0 && (
               <div className="flex justify-between mt-1 text-purple-600 font-semibold text-sm">
                 <span>Montant Remboursé</span>
-                <span>+ {paymentStatus.totalRefunded.toFixed(2)} €</span>
+                <span>+ {paymentStatus.totalRefunded.toLocaleString('fr-FR', EURO)}</span>
               </div>
             )}
             <div
@@ -209,7 +210,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
               <span>
                 {paymentStatus.isRefunded
                   ? 'REMBOURSÉE'
-                  : `${paymentStatus.netToPay.toFixed(2)} €`}
+                  : `${paymentStatus.netToPay.toLocaleString('fr-FR', EURO)}`}
               </span>
             </div>
             {paymentStatus.isRefunded ? (

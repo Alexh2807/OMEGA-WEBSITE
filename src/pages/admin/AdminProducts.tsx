@@ -19,6 +19,7 @@ import { supabase } from '../../lib/supabase';
 import { Product, Category } from '../../types';
 import toast from 'react-hot-toast';
 import { getAllAvailableImages, getCategorizedImages } from '../../utils/imageManager';
+import { EURO } from '../../utils/prix';
 
 const AdminProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -421,11 +422,11 @@ const AdminProducts = () => {
                 </span>
                 <div className="text-right">
                   <div className="text-green-400 font-bold">
-                    {product.price.toFixed(2)}€
+                    {product.price.toLocaleString('fr-FR', EURO)}
                   </div>
                   {product.price_ht && (
                     <div className="text-gray-400 text-xs">
-                      {product.price_ht.toFixed(2)}€ HT
+                      {product.price_ht.toLocaleString('fr-FR', EURO)} HT
                     </div>
                   )}
                 </div>

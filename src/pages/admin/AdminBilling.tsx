@@ -35,6 +35,7 @@ import {
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
+import { EURO } from '../../utils/prix';
 
 const AdminBilling = () => {
   const [activeTab, setActiveTab] = useState('invoices');
@@ -783,19 +784,19 @@ const AdminBilling = () => {
                     </td>
                     <td className="p-4">
                       <div className="text-white font-semibold">
-                        {invoice.total_ttc.toFixed(2)}€
+                        {invoice.total_ttc.toLocaleString('fr-FR', EURO)}
                       </div>
                       {(() => {
                         const summary = getPaymentSummary(invoice);
                         return (
                           <div className="text-gray-400 text-sm">
-                            Payé: {summary.amountPaid.toFixed(2)}€ • Remboursé:{' '}
-                            {summary.totalRefunded.toFixed(2)}€
+                            Payé: {summary.amountPaid.toLocaleString('fr-FR', EURO)} • Remboursé:{' '}
+                            {summary.totalRefunded.toLocaleString('fr-FR', EURO)}
                             <br />
                             Net:{' '}
                             {summary.netToPay <= 0
                               ? 'REMBOURSÉE'
-                              : `${summary.netToPay.toFixed(2)}€`}
+                              : `${summary.netToPay.toLocaleString('fr-FR', EURO)}`}
                           </div>
                         );
                       })()}
@@ -986,13 +987,13 @@ const AdminBilling = () => {
                 <div>
                   <span className="text-gray-400">Total TTC:</span>
                   <span className="text-white ml-2">
-                    {selectedInvoice.total_ttc.toFixed(2)}€
+                    {selectedInvoice.total_ttc.toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
                 <div>
                   <span className="text-gray-400">Remboursable:</span>
                   <span className="text-green-400 ml-2 font-semibold">
-                    {getRefundableAmount(selectedInvoice).toFixed(2)}€
+                    {getRefundableAmount(selectedInvoice).toLocaleString('fr-FR', EURO)}
                   </span>
                 </div>
               </div>
@@ -1017,7 +1018,7 @@ const AdminBilling = () => {
                   placeholder="0.00"
                 />
                 <p className="text-gray-400 text-xs mt-1">
-                  Maximum: {getRefundableAmount(selectedInvoice).toFixed(2)}€
+                  Maximum: {getRefundableAmount(selectedInvoice).toLocaleString('fr-FR', EURO)}
                 </p>
               </div>
 

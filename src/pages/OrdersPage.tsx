@@ -17,6 +17,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { EURO } from '../utils/prix';
 
 interface Order {
   id: string;
@@ -250,7 +251,7 @@ const OrdersPage = () => {
 
                     <div className="text-right">
                       <div className="text-2xl font-bold text-white">
-                        {order.total.toFixed(2)}€
+                        {order.total.toLocaleString('fr-FR', EURO)}
                       </div>
                       <div className="text-gray-400 text-sm flex items-center gap-1">
                         <CreditCard size={14} />
@@ -312,7 +313,7 @@ const OrdersPage = () => {
                   <div className="bg-white/5 rounded-lg p-3">
                     <div className="text-gray-400 text-xs">Total</div>
                     <div className="text-white font-semibold">
-                      {order.total.toFixed(2)}€
+                      {order.total.toLocaleString('fr-FR', EURO)}
                     </div>
                   </div>
                   <div className="bg-white/5 rounded-lg p-3">
@@ -402,11 +403,11 @@ const OrdersPage = () => {
                             </h4>
                             <div className="text-gray-400 text-sm">
                               Quantité: {item.quantity} • Prix unitaire:{' '}
-                              {item.price.toFixed(2)}€
+                              {item.price.toLocaleString('fr-FR', EURO)}
                             </div>
                           </div>
                           <div className="text-white font-bold">
-                            {(item.price * item.quantity).toFixed(2)}€
+                            {(item.price * item.quantity).toLocaleString('fr-FR', EURO)}
                           </div>
                         </div>
                       ))}
@@ -419,11 +420,11 @@ const OrdersPage = () => {
                       <div className="w-64 space-y-2">
                         <div className="flex justify-between text-gray-300">
                           <span>Sous-total:</span>
-                          <span>{order.sub_total.toFixed(2)}€</span>
+                          <span>{order.sub_total.toLocaleString('fr-FR', EURO)}</span>
                         </div>
                         <div className="flex justify-between text-gray-300">
                           <span>TVA:</span>
-                          <span>{order.tax.toFixed(2)}€</span>
+                          <span>{order.tax.toLocaleString('fr-FR', EURO)}</span>
                         </div>
                         <div className="flex justify-between text-xl font-bold text-white border-t border-white/20 pt-2">
                           <span>Total:</span>
@@ -436,7 +437,7 @@ const OrdersPage = () => {
                           >
                             {order.status === 'cancelled'
                               ? 'Commande Annulée'
-                              : `${order.total.toFixed(2)}€`}
+                              : `${order.total.toLocaleString('fr-FR', EURO)}`}
                           </span>
                         </div>
                       </div>

@@ -102,6 +102,19 @@ const AccountPage = () => {
     }
     setVerifTva(true);
     try {
+      /* On enregistre d'abord le statut entreprise et la raison sociale. Sans cela, un
+         client pouvait vérifier son numéro puis quitter la page sans cliquer
+         « Enregistrer » : le numéro était vérifié en base mais le compte restait
+         « particulier », donc facturé avec TVA sans qu'on lui explique pourquoi. */
+      await supabase
+        .from('profiles')
+        .update({
+          is_company: !!profile.is_company,
+          company_name: profile.company_name || null,
+          vat_number: profile.vat_number,
+        })
+        .eq('id', user?.id);
+
       const { data: { session } } = await supabase.auth.getSession();
       const r = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verifier-tva`,
@@ -123,7 +136,20 @@ const AccountPage = () => {
       } else {
         toast.error(j.motif || 'Numéro non reconnu.');
       }
-      await loadProfile();   // relit l'état RÉEL écrit par le serveur
+      /* ⚠ On relit le VERDICT en base — jamais la réponse du navigateur — mais on ne
+         recharge SURTOUT PAS tout le profil : « Je commande pour une entreprise » et la
+         raison sociale ne sont pas encore enregistrés à cet instant. Un rechargement
+         complet les écrasait par les valeurs d'avant, la case se décochait, le bloc
+         entreprise disparaissait et le client perdait sa saisie sans voir aucun
+         résultat. On ne rapatrie donc que les trois champs écrits par le serveur. */
+      const { data: verdict } = await supabase
+        .from('profiles')
+        .select('vat_number_valid, vat_checked_at, vat_checked_name')
+        .eq('id', user?.id)
+        .single();
+      if (verdict) {
+        setProfile(p => (p ? { ...p, ...verdict } : p));
+      }
     } catch (e) {
       toast.error('Vérification impossible pour le moment.');
     } finally {

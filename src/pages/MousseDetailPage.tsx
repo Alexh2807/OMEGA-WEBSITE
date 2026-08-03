@@ -26,6 +26,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import VitrineCTA from '../components/VitrineCTA';
 import toast from 'react-hot-toast';
+import { EURO } from '../utils/prix';
 
 const MousseDetailPage = () => {
   const [activeSection, setActiveSection] = useState('hero');
@@ -135,13 +136,13 @@ const MousseDetailPage = () => {
       return {
         price: product.price_ht,
         label: 'HT',
-        taxInfo: `${product.price.toFixed(2)}€ TTC`,
+        taxInfo: `${product.price.toLocaleString('fr-FR', EURO)} TTC`,
       };
     }
     return {
       price: product.price,
       label: 'TTC',
-      taxInfo: product.price_ht ? `${product.price_ht.toFixed(2)}€ HT` : null,
+      taxInfo: product.price_ht ? `${product.price_ht.toLocaleString('fr-FR', EURO)} HT` : null,
     };
   };
 
@@ -236,7 +237,7 @@ const MousseDetailPage = () => {
             <div>
               <h2 className="text-white font-bold">{mousseProduct.name}</h2>
               <div className="text-cyan-400 font-semibold">
-                {getDisplayPrice(mousseProduct).price.toFixed(2)}€{' '}
+                {getDisplayPrice(mousseProduct).price.toLocaleString('fr-FR', EURO)}{' '}
                 <span className="text-sm text-gray-400">
                   {getDisplayPrice(mousseProduct).label}
                 </span>
@@ -307,7 +308,7 @@ const MousseDetailPage = () => {
               <div className="mb-8 p-6 bg-gradient-to-r from-cyan-950/30 to-blue-950/30 rounded-2xl border border-cyan-500/20">
                 <div className="text-sm text-gray-400 mb-2">Prix</div>
                 <div className="text-5xl font-bold text-white mb-2">
-                  {getDisplayPrice(mousseProduct).price.toFixed(2)}€
+                  {getDisplayPrice(mousseProduct).price.toLocaleString('fr-FR', EURO)}
                   <span className="text-2xl text-gray-400 ml-2">
                     {getDisplayPrice(mousseProduct).label}
                   </span>
@@ -595,7 +596,7 @@ const MousseDetailPage = () => {
 
                   <div className="flex items-center justify-between">
                     <div className="text-2xl font-bold text-cyan-400">
-                      {product.price.toFixed(2)}€
+                      {product.price.toLocaleString('fr-FR', EURO)}
                       <span className="text-sm text-gray-400 ml-1">
                         {userType === 'pro' && product.price_ht ? 'HT' : 'TTC'}
                       </span>

@@ -24,6 +24,7 @@ import VitrineCTA from '../components/VitrineCTA';
 import toast from 'react-hot-toast';
 import ProductReviews from '../components/ProductReviews';
 import ReviewForm from '../components/ReviewForm';
+import { EURO } from '../utils/prix';
 
 const ProductDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -97,14 +98,14 @@ const ProductDetailPage = () => {
           ? product.original_price / 1.2
           : null,
         label: 'HT',
-        taxInfo: `${product.price.toFixed(2)}€ TTC`,
+        taxInfo: `${product.price.toLocaleString('fr-FR', EURO)} TTC`,
       };
     }
     return {
       price: product.price,
       originalPrice: product.original_price,
       label: 'TTC',
-      taxInfo: product.price_ht ? `${product.price_ht.toFixed(2)}€ HT` : null,
+      taxInfo: product.price_ht ? `${product.price_ht.toLocaleString('fr-FR', EURO)} HT` : null,
     };
   };
 
@@ -274,14 +275,14 @@ const ProductDetailPage = () => {
             <div className="mb-6">
               <div className="flex items-center gap-4">
                 <div className="text-4xl font-bold text-blue-400">
-                  {getDisplayPrice(product).price.toFixed(2)}€
+                  {getDisplayPrice(product).price.toLocaleString('fr-FR', EURO)}
                   <span className="text-lg text-gray-400 ml-2">
                     {getDisplayPrice(product).label}
                   </span>
                 </div>
                 {getDisplayPrice(product).originalPrice && (
                   <div className="text-xl text-gray-400 line-through">
-                    {getDisplayPrice(product).originalPrice!.toFixed(2)}€{' '}
+                    {getDisplayPrice(product).originalPrice!.toLocaleString('fr-FR', EURO)}{' '}
                     {getDisplayPrice(product).label}
                   </div>
                 )}
@@ -393,7 +394,7 @@ const ProductDetailPage = () => {
                   </div>
                   <span className="text-gray-400 text-sm">
                     Total:{' '}
-                    {(getDisplayPrice(product).price * quantity).toFixed(2)}€{' '}
+                    {(getDisplayPrice(product).price * quantity).toLocaleString('fr-FR', EURO)}{' '}
                     {getDisplayPrice(product).label}
                   </span>
                 </div>

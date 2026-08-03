@@ -32,7 +32,13 @@ import {
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  /* ⚠ `idempotency-key` DOIT figurer ici. Le navigateur l'envoie pour qu'un double clic
+     sur « Payer » ne crée pas deux paiements. Sans cette autorisation, le contrôle
+     préalable (preflight) échoue et le navigateur n'envoie JAMAIS la requête : plus aucun
+     client ne peut commander. Rien ne le montre côté serveur — seul un vrai navigateur
+     le révèle. */
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const reponse = (corps: unknown, statut = 200) =>
@@ -192,8 +198,12 @@ Deno.serve(async (req: Request) => {
 
     // ---- 8. Le paiement, au montant CALCULÉ ICI ----
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', { apiVersion: '2023-10-16' });
-    const pi = await stripe.paymentIntents.create({
-      amount: Math.round(totalTtc * 100),
+    /* La clé d'idempotence vient du navigateur et vaut pour la durée du panier : deux
+       clics sur « Payer » renvoient le MÊME paiement au lieu d'en créer deux. */
+    const cleIdem = req.headers.get('idempotency-key') || undefined;
+    const centimes = Math.round(totalTtc * 100);
+    const corpsPi = {
+      amount: centimes,
       currency: 'eur',
       automatic_payment_methods: { enabled: true },
       metadata: {
@@ -203,7 +213,19 @@ Deno.serve(async (req: Request) => {
         vat_regime: regime,
         vat_rate: String(taux),
       },
-    });
+    };
+    let pi = await stripe.paymentIntents.create(
+      corpsPi,
+      cleIdem ? { idempotencyKey: cleIdem } : undefined
+    );
+    /* ★ GARDE INDISPENSABLE. Avec une clé d'idempotence, Stripe REJOUE sa première
+       réponse : si le client a changé d'adresse ou de quantité entre-temps, on
+       récupérerait le paiement de l'ANCIEN panier, à l'ANCIEN montant — et la commande
+       serait enregistrée au nouveau total tout en n'encaissant que l'ancien. Dès que le
+       montant rejoué ne correspond pas, on refait un paiement neuf, sans clé. */
+    if (pi.amount !== centimes) {
+      pi = await stripe.paymentIntents.create(corpsPi);
+    }
     await admin.from('order_quotes').update({ stripe_payment_intent_id: pi.id }).eq('id', devis.id);
 
     return reponse({
