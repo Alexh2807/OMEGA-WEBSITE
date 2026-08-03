@@ -15,9 +15,14 @@ import {
   ExternalLink,
   User,
   MapPin,
+  FileText,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EURO } from '../utils/prix';
+import { Invoice } from '../types/billing';
+import InvoicePDF from '../components/InvoicePDF';
+import { generateInvoicePDF } from '../utils/pdfGenerator';
 
 interface Order {
   id: string;
@@ -27,6 +32,9 @@ interface Order {
   status: string;
   admin_notes: string;
   created_at: string;
+  /* Utilisé plus bas pour le bloc « Suivi de votre colis » mais absent du type :
+     TypeScript signalait la propriété comme inexistante à chaque compilation. */
+  tracking_link?: string | null;
   order_items: {
     id: string;
     quantity: number;
@@ -44,12 +52,56 @@ const OrdersPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  /* Factures du client, indexées par commande. Elles ne pouvaient PAS être lues
+     jusqu'ici : la table n'avait qu'une règle d'accès réservée aux administrateurs,
+     et cette page ne mentionnait pas le mot « facture ». Le client n'avait donc
+     AUCUN moyen d'obtenir sa facture — alors que la remise d'une facture est une
+     obligation du vendeur. */
+  const [factures, setFactures] = useState<Record<string, Invoice>>({});
+  const [factureEnCours, setFactureEnCours] = useState<Invoice | null>(null);
 
   useEffect(() => {
     if (user) {
       loadOrders();
+      loadFactures();
     }
   }, [user]);
+
+  const loadFactures = async () => {
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('*, invoice_items(*), payment_records(*)')
+      .eq('customer_id', user?.id)
+      .neq('status', 'draft');
+    if (error) {
+      console.error('Chargement des factures impossible :', error);
+      return;
+    }
+    const parCommande: Record<string, Invoice> = {};
+    (data || []).forEach((f: any) => {
+      if (f.order_id) parCommande[f.order_id] = f as Invoice;
+    });
+    setFactures(parCommande);
+  };
+
+  /* Le PDF est fabriqué à partir du MÊME composant que celui du back-office : une
+     seule mise en page, donc le client et le vendeur regardent le même document.
+     On rend la facture hors écran, on la capture, puis on la retire. */
+  const telechargerFacture = async (f: Invoice) => {
+    const t = toast.loading('Préparation de votre facture…');
+    setFactureEnCours(f);
+    try {
+      // Laisse React peindre le document avant la capture.
+      await new Promise(r => setTimeout(r, 400));
+      await generateInvoicePDF(`facture-${f.invoice_number}`);
+      toast.success(`Facture ${f.invoice_number} téléchargée`, { id: t });
+    } catch (e) {
+      console.error('Génération du PDF impossible :', e);
+      toast.error('Téléchargement impossible — réessayez ou contactez-nous', { id: t });
+    } finally {
+      setFactureEnCours(null);
+    }
+  };
 
   const loadOrders = async () => {
     try {
@@ -271,6 +323,31 @@ const OrdersPage = () => {
                   </div>
                 </div>
 
+                {/* FACTURE — le client doit pouvoir la récupérer lui-même, à tout
+                    moment, sans avoir à la réclamer. Tant qu'elle n'est pas établie,
+                    on le dit clairement plutôt que de ne rien afficher : un blanc
+                    laisse croire à un oubli. */}
+                <div className="mb-6">
+                  {factures[order.id] ? (
+                    <button
+                      onClick={() => telechargerFacture(factures[order.id])}
+                      disabled={!!factureEnCours}
+                      className="flex items-center gap-2 px-4 py-3 rounded-lg bg-white/5 border border-white/15 text-white hover:border-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                    >
+                      <FileText size={18} className="text-blue-400" />
+                      <span className="font-semibold">
+                        Facture {factures[order.id].invoice_number}
+                      </span>
+                      <Download size={16} className="text-gray-400" />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-400 text-sm">
+                      <FileText size={16} />
+                      Votre facture sera disponible ici dès son établissement.
+                    </div>
+                  )}
+                </div>
+
                 {/* Tracking Link */}
                 {order.tracking_link && (
                   <div className="mb-6 p-4 bg-gradient-to-r from-blue-500/10 to-green-500/10 rounded-lg border border-blue-500/20">
@@ -449,6 +526,25 @@ const OrdersPage = () => {
           ))}
         </div>
       </div>
+
+      {/* Facture rendue HORS ÉCRAN le temps de la capture.
+          Elle doit être réellement mise en page (largeur, polices, images) : un
+          `display:none` ne produirait qu'une page blanche, html2canvas n'ayant rien à
+          photographier. On la sort donc du champ de vision au lieu de la masquer. */}
+      {factureEnCours && (
+        <div
+          aria-hidden
+          style={{
+            position: 'fixed',
+            left: '-10000px',
+            top: 0,
+            width: '800px',
+            background: '#ffffff',
+          }}
+        >
+          <InvoicePDF invoice={factureEnCours} />
+        </div>
+      )}
     </div>
   );
 };

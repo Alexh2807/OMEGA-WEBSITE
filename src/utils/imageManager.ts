@@ -4,7 +4,7 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 04/08/2026 00:28:43
+ * Dernière mise à jour: 04/08/2026 00:50:07
  */
 
 // Liste de toutes les images disponibles dans /public

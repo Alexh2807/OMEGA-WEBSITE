@@ -434,6 +434,53 @@ const PIED_ADMIN =
 
 async function composer(event: string, data: Record<string, any>): Promise<Message> {
   switch (event) {
+    /* ---- LA FACTURE EST DISPONIBLE ------------------------------------------
+       Le client n'était prévenu de rien : sa facture existait dans le back-office
+       sans qu'il puisse le savoir ni la demander. Remettre la facture est une
+       obligation du vendeur — cet e-mail est le moment où on s'en acquitte.
+       On n'attache pas de PDF (il serait figé et lourd) : on renvoie vers
+       « Mes commandes », où le client la télécharge quand il veut, autant de fois
+       qu'il veut, dans la mise en page à jour. */
+    case 'invoice_ready': {
+      const { data: f } = await supabaseAdmin
+        .from('invoices')
+        .select(
+          'invoice_number, customer_id, customer_email, subtotal_ht, tax_amount, ' +
+            'total_ttc, vat_rate, vat_mention, created_at, status'
+        )
+        .eq('id', data.id)
+        .single();
+      if (!f || f.status === 'draft') return null;
+
+      const destinataire = (await adresseDe(f.customer_id)) ?? f.customer_email;
+      if (!destinataire) return null;
+
+      const taux = Number(f.vat_rate ?? 20);
+      return {
+        destinataires: [destinataire],
+        sujet: `Votre facture ${f.invoice_number} — OMEGA`,
+        html: gabarit({
+          titre: 'Votre facture est disponible',
+          sousTitre: `Facture ${f.invoice_number}`,
+          corps:
+            p('Votre facture est à votre disposition dans votre espace client. Vous pouvez la télécharger à tout moment.') +
+            details([
+              ['Total HT', euros(f.subtotal_ht)],
+              [`TVA (${taux.toLocaleString('fr-FR')} %)`, euros(f.tax_amount)],
+              ['Total TTC', euros(f.total_ttc)],
+            ]) +
+            // La mention d'exonération est portée par la facture : on la reprend ici,
+            // pour qu'un acheteur professionnel sache tout de suite pourquoi il n'y a
+            // pas de TVA, sans avoir à ouvrir le document.
+            (f.vat_mention
+              ? p(`<span style="color:#8b8ba3;font-size:13px;">${e(f.vat_mention)}</span>`)
+              : ''),
+          bouton: { libelle: 'Télécharger ma facture', url: `${SITE}/commandes` },
+          pied: 'Conservez ce document : il vous sera demandé en cas de garantie ou de contrôle.',
+        }),
+      };
+    }
+
     // ---- vers les administrateurs -----------------------------------------
     case 'order_new': {
       const { data: c } = await supabaseAdmin

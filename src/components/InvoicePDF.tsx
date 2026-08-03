@@ -131,10 +131,14 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
                 {(invoice.billing_address as any).siren}
               </div>
             )}
-            {(invoice.billing_address as any)?.vat_number && (
+            {/* Le numéro de TVA du client vient d'abord de la FACTURE (recopié depuis la
+                commande au moment de l'achat). L'adresse de facturation ne sert que de
+                secours : sur une livraison intracommunautaire, ce numéro est une mention
+                obligatoire, il ne doit pas dépendre d'un champ d'adresse optionnel. */}
+            {(invoice.vat_number || (invoice.billing_address as any)?.vat_number) && (
               <div className="mt-2">
                 <span className="font-semibold">N° TVA :</span>{' '}
-                {(invoice.billing_address as any).vat_number}
+                {invoice.vat_number || (invoice.billing_address as any).vat_number}
               </div>
             )}
           </div>
@@ -177,8 +181,13 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
               <span>Sous-total HT</span>
               <span>{invoice.subtotal_ht.toLocaleString('fr-FR', EURO)}</span>
             </div>
+            {/* ⚠ Le taux était écrit EN DUR : une facture exonérée affichait
+                « TVA (20%) 0,00 € » — faux, et sur un document légal. Le taux est
+                celui que le serveur a arrêté pour CETTE vente. */}
             <div className="flex justify-between mb-2">
-              <span>TVA (20%)</span>
+              <span>
+                TVA ({(invoice.vat_rate ?? 20).toLocaleString('fr-FR')} %)
+              </span>
               <span>{invoice.tax_amount.toLocaleString('fr-FR', EURO)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg border-t-2 border-gray-800 pt-2">
@@ -235,6 +244,21 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({
           </div>
         </div>
       </section>
+
+      {/* ★ MENTION D'EXONÉRATION — OBLIGATOIRE sur toute facture sans TVA.
+          Elle était absente : une livraison intracommunautaire, une exportation ou une
+          livraison outre-mer partaient à 0 % sans dire POURQUOI, ce qui rend la facture
+          irrégulière et expose l'acheteur comme le vendeur en cas de contrôle.
+          Le texte est celui qu'a arrêté le serveur au moment de la vente (art. 262 ter I,
+          262 I ou 294 selon le cas), figé sur la facture. */}
+      {invoice.vat_mention && (
+        <section className="mb-6">
+          <div className="border border-gray-400 rounded p-3 text-sm">
+            <span className="font-semibold">Régime de TVA : </span>
+            {invoice.vat_mention}
+          </div>
+        </section>
+      )}
 
       {/* --- Pied de page légal --- */}
       <footer className="border-t border-gray-300 pt-5 text-xs text-gray-500">
