@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     // ---- 4. Statut fiscal : lu SUR LE PROFIL, pas déclaré par le client ----
     const { data: profil } = await admin
       .from('profiles')
-      .select('is_company, company_name, vat_number, vat_number_valid, vat_name_match, vat_checked_name')
+      .select('is_company, company_name, vat_number, vat_number_valid, vat_name_match, vat_checked_name, vat_exempt_override')
       .eq('id', user.id).maybeSingle();
     const estEntreprise = profil?.is_company === true;
     // ⚠ La validité vient de la vérification VIES enregistrée côté serveur. Un client qui
@@ -159,9 +159,27 @@ Deno.serve(async (req: Request) => {
       : profil?.vat_name_match === false ? false
       : null;
 
+    /* ★ VERROU D'ADRESSE — c'est lui qui ôte tout intérêt à l'usurpation d'un numéro.
+       Même en devinant la raison sociale du titulaire, il faut se faire livrer là où la
+       société est établie : chez elle, donc, et pas chez soi.
+       L'adresse enregistrée par VIES est conservée dans `vies_checks`, table réservée aux
+       administrateurs — elle ne transite jamais par le navigateur du client. */
+    let adresseOk: boolean | null = null;
+    if (estEntreprise && tvaValide && profil?.vat_number) {
+      const { data: fiche } = await admin
+        .from('vies_checks').select('company_address').eq('vat_number', profil.vat_number).maybeSingle();
+      const { data: concordanceAdr } = await admin.rpc('adresses_concordent', {
+        p_adresse_vies: fiche?.company_address ?? null,
+        p_code_postal: cp,
+        p_ville: String((adresse as any).city || ''),
+      });
+      adresseOk = concordanceAdr ?? null;
+    }
+
     const { data: reg } = await admin.rpc('regime_tva', {
       p_pays: pays, p_entreprise: estEntreprise, p_vat_valide: tvaValide, p_code_postal: cp,
       p_vat_number: profil?.vat_number ?? null, p_identite_ok: identiteOk,
+      p_adresse_ok: adresseOk, p_derogation: profil?.vat_exempt_override === true,
     });
     const regime = reg?.[0]?.regime || 'fr';
     const taux = Number(reg?.[0]?.taux ?? 20);

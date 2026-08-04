@@ -112,11 +112,15 @@ Deno.serve(async (req: Request) => {
         p_vies: nomSociete || null,
       });
 
+      /* ★ On n'écrit le nom du titulaire sur le profil QUE s'il concorde.
+         `profiles` est lisible par son propriétaire : y déposer le nom d'une société
+         tierce, c'est le livrer à celui-là même qui essayait d'usurper le numéro. La
+         preuve complète reste dans `vies_checks`, réservée aux administrateurs. */
       const { error } = await admin.from('profiles').update({
         vat_number: brut,
         vat_number_valid: verdictValide,
         vat_checked_at: dateVerif,
-        vat_checked_name: nomSociete || null,
+        vat_checked_name: concordance === false ? null : (nomSociete || null),
         vat_name_match: concordance ?? null,
       }).eq('id', u.user.id);
       // ⚠ Ne PAS avaler l'erreur en silence : c'est ce qui a caché ce défaut.
@@ -131,12 +135,15 @@ Deno.serve(async (req: Request) => {
         const concord = await inscrireVerdict(cache.valid, cache.company_name || '', cache.checked_at);
         return reponse({
           valide: cache.valid, numero: brut, pays,
-          nom: cache.company_name || '', adresse: cache.company_address || '',
+          // ⚠ Nom et adresse du titulaire NE SORTENT PAS quand la concordance échoue :
+          // les renvoyer donnerait la réponse à qui teste un numéro trouvé en ligne.
+          nom: concord === false ? '' : (cache.company_name || ''),
+          adresse: concord === false ? '' : (cache.company_address || ''),
           verifie_le: cache.checked_at, depuis_cache: true,
           nom_concordant: concord,
           motif: cache.valid
             ? (concord === false
-                ? "Ce numéro est valide, mais il est enregistré au nom d'une autre société que celle que vous avez indiquée. La TVA sera facturée."
+                ? "Ce numéro de TVA n'est pas enregistré au nom que vous avez indiqué. La TVA sera facturée."
                 : null)
             : "Ce numéro n'est pas reconnu par le service européen VIES.",
         });
@@ -209,13 +216,14 @@ Deno.serve(async (req: Request) => {
       valide,
       numero: brut,
       pays,
-      nom,
-      adresse,
+      // ⚠ Même règle que sur le chemin du cache : rien qui désigne le titulaire.
+      nom: concord === false ? '' : nom,
+      adresse: concord === false ? '' : adresse,
       verifie_le: new Date().toISOString(),
       nom_concordant: concord,
       motif: valide
         ? (concord === false
-            ? "Ce numéro est valide, mais il est enregistré au nom d'une autre société que celle que vous avez indiquée. La TVA sera facturée."
+            ? "Ce numéro de TVA n'est pas enregistré au nom que vous avez indiqué. La TVA sera facturée."
             : null)
         : "Ce numéro n'est pas reconnu par le service européen VIES. Vérifiez-le, ou commandez en tant que particulier.",
     });

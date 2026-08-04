@@ -122,16 +122,18 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
       );
       const j = await r.json();
       if (j.valide === true && j.nom_concordant === false) {
-        /* Le numéro existe mais il est enregistré au nom d'une AUTRE société. On le dit
-           franchement : c'est le cas d'un client qui a repris un numéro trouvé en ligne,
-           mais aussi celui d'un honnête client qui a mal orthographié sa raison sociale.
-           On lui montre le nom officiel pour qu'il puisse corriger. */
+        /* ★ ON NE DIT PAS À QUI APPARTIENT LE NUMÉRO.
+           Une première version affichait le nom officiel « pour aider à corriger » : elle
+           donnait la réponse à quiconque essayait un numéro trouvé en ligne, et annulait
+           donc le contrôle qu'elle était censée appliquer. Le titulaire légitime, lui,
+           connaît sa propre raison sociale — et la comparaison tolère déjà la casse, les
+           accents et la forme juridique. */
         toast.error(
-          `Ce numéro est enregistré au nom de « ${j.nom} ». Saisissez cette raison ` +
-            'sociale exacte, ou commandez en tant que particulier.',
+          "Ce numéro de TVA n'est pas enregistré au nom que vous avez indiqué. " +
+            'Saisissez la raison sociale exacte du titulaire, ou commandez en tant que ' +
+            'particulier.',
           { duration: 10000 }
         );
-        if (j.nom) setSociete(j.nom);
       } else if (j.valide === true) {
         toast.success(`Numéro vérifié : ${j.nom || 'entreprise reconnue'}`);
       } else if (j.indisponible) {
@@ -221,10 +223,9 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
             <p className="text-amber-300 text-xs flex items-start gap-1.5">
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
               <span>
-                Ce numéro est valide, mais il est enregistré au nom de
-                {profil.vat_checked_name ? ` « ${profil.vat_checked_name} »` : ' une autre société'}.
-                Indiquez cette raison sociale exacte pour bénéficier de l'exonération —
-                sinon la TVA sera facturée.
+                Ce numéro existe, mais il n'est pas enregistré au nom que vous avez
+                indiqué. Saisissez la raison sociale exacte du titulaire pour bénéficier
+                de l'exonération — sinon la TVA sera facturée.
               </span>
             </p>
           )}

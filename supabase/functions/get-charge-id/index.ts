@@ -56,6 +56,33 @@ Deno.serve(async req => {
       );
     }
 
+    /* ★ LE PAIEMENT DOIT ÊTRE CELUI DE L'APPELANT.
+       La fonction acceptait n'importe quel identifiant « pi_… » d'un client connecté et
+       renvoyait la référence d'encaissement correspondante — donc celle des paiements
+       des AUTRES clients. C'est cette référence qui sert de clé aux remboursements ;
+       elle n'a rien à faire entre les mains d'un tiers. */
+    const { data: aLui } = await supabaseAdmin
+      .from('order_quotes')
+      .select('id')
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!aLui) {
+      const { data: cmd } = await supabaseAdmin
+        .from('orders')
+        .select('id')
+        .eq('stripe_payment_intent_id', paymentIntentId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cmd) {
+        console.error(`get-charge-id : paiement étranger demandé par ${user.id}`);
+        return new Response(
+          JSON.stringify({ error: 'Ce paiement ne vous concerne pas.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     const paymentIntent = await stripe.paymentIntents.retrieve(
       paymentIntentId,
       {

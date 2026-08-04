@@ -105,11 +105,24 @@ const CartPage = () => {
         );
       }
 
-      const { data: conf, error: confError } = await supabase.rpc(
-        'confirmer_commande',
-        { p_quote_id: quoteId, p_payment_intent: paymentIntentId }
+      /* ★ La commande est enregistrée par le SERVEUR, qui vérifie d'abord auprès de
+         Stripe que le paiement a réellement abouti et pour le bon montant.
+         Avant, le navigateur appelait directement la fonction SQL : elle ne contrôlait
+         que la propriété du devis, jamais le paiement. On obtenait donc une commande
+         « confirmée » sans payer un centime. */
+      const rep = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirmer-commande`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ quote_id: quoteId, payment_intent: paymentIntentId }),
+        }
       );
-      if (confError) throw confError;
+      const conf = await rep.json();
+      if (!rep.ok) throw new Error(conf?.error || 'Commande non enregistrée.');
       const orderId = (conf as { order_id?: string } | null)?.order_id;
       if (!orderId) throw new Error('Commande introuvable après paiement.');
       const dejaCreee = (conf as { deja_creee?: boolean } | null)?.deja_creee;

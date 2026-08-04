@@ -53,7 +53,21 @@ Deno.serve(async req => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    // (Ajoutez ici votre vérification de rôle 'admin' si nécessaire)
+    /* ★★ CONTRÔLE DU RÔLE — IL N'EXISTAIT PAS.
+       Il ne restait qu'un commentaire « Ajoutez ici votre vérification de rôle admin si
+       nécessaire ». La fonction se contentait donc de vérifier que l'appelant était
+       CONNECTÉ : n'importe quel client pouvait déclencher un remboursement Stripe, sur
+       sa propre facture (se faire rembourser après avoir reçu la marchandise) comme sur
+       celle d'un autre. De l'argent qui sort, sans aucune décision du vendeur. */
+    const { data: profilAppelant } = await supabaseAdmin
+      .from('profiles').select('role').eq('id', user.id).maybeSingle();
+    if (profilAppelant?.role !== 'admin') {
+      console.error(`process-refund : tentative par un non-administrateur (${user.id})`);
+      return new Response(
+        JSON.stringify({ error: 'Le remboursement est réservé aux administrateurs.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // --- 2. Validation de la Requête ---
     const { invoiceId, amount, reason, adminNotes }: RefundRequest =
