@@ -78,6 +78,10 @@ const CartPage = () => {
 
   React.useEffect(() => { demanderApercu(); }, [demanderApercu]);
 
+  /* « Valider mon panier » mène à la PAGE DE COMMANDE, comme partout ailleurs.
+     Avant, tout se passait ici : l'adresse dans une fenêtre, le statut d'entreprise dans
+     un bloc, et le paiement dans une SECONDE fenêtre par-dessus le panier resté affiché
+     derrière — d'où les doublons de récapitulatif et l'impression de désordre. */
   const handleCheckoutClick = () => {
     if (vitrineMode) return; // vente en ligne désactivée
     if (!user) {
@@ -90,6 +94,9 @@ const CartPage = () => {
       toast.error('Votre panier est vide');
       return;
     }
+
+    navigate('/commande');
+    return;
 
     // ADRESSE DE LIVRAISON OBLIGATOIRE (P1 audit : les commandes partaient
     // avec shipping_address null — impossibles à expédier) + nécessaire au
@@ -633,7 +640,7 @@ const CartPage = () => {
                   className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <CreditCard size={20} />
-                  {selectedAddress ? 'Passer la Commande' : 'Choisir mon adresse'}
+                  Valider mon panier
                 </button>
               )}
 

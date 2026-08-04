@@ -34,6 +34,7 @@ const ProductsPage = lazyPage(() => import('./pages/ProductsPage'));
 const OmegaDmxInterfacePage = lazyPage(() => import('./pages/OmegaDmxInterfacePage'));
 const ProductDetailPage = lazyPage(() => import('./pages/ProductDetailPage'));
 const CartPage = lazyPage(() => import('./pages/CartPage'));
+const CheckoutPage = lazyPage(() => import('./pages/CheckoutPage'));
 const AccountPage = lazyPage(() => import('./pages/AccountPage'));
 const OrdersPage = lazyPage(() => import('./pages/OrdersPage'));
 const ContactPage = lazyPage(() => import('./pages/ContactPage'));
@@ -114,6 +115,8 @@ function App() {
                 <Route path="/produit-mousse" element={<MousseDetailPage />} />
                 <Route path="/omega-dmx-interface" element={<OmegaDmxInterfacePage />} />
                 <Route path="/panier" element={<CartPage />} />
+                {/* Page de commande : adresse, statut fiscal et paiement, dans l'ordre. */}
+                <Route path="/commande" element={<CheckoutPage />} />
                 <Route path="/compte" element={<AccountPage />} />
                 <Route path="/commandes" element={<OrdersPage />} />
                 <Route path="/contact" element={<ContactPage />} />
