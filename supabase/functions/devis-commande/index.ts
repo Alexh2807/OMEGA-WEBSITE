@@ -69,6 +69,11 @@ Deno.serve(async (req: Request) => {
     const items: Array<{ product_id: string; quantity: number }> = Array.isArray(body?.items) ? body.items : [];
     const addressId: string | null = body?.address_id ?? null;
     const express = body?.express === true;
+    /* APERÇU : le panier a besoin du taux et du total DÈS que l'adresse est choisie —
+       sinon il affiche « TVA selon votre adresse » jusqu'au bout, ce qui n'apprend rien
+       au client. En aperçu on calcule tout, mais on n'enregistre AUCUN devis et on ne
+       crée AUCUN paiement : ouvrir son panier ne doit pas semer des PaymentIntents. */
+    const apercu = body?.apercu === true;
 
     if (!items.length) return reponse({ error: 'Panier vide.' }, 400);
     if (items.length > 50) return reponse({ error: 'Trop d\'articles.' }, 400);
@@ -220,6 +225,23 @@ Deno.serve(async (req: Request) => {
     const totalTtc = cts(baseHt + tva);
     if (!(totalTtc >= 0.5)) return reponse({ error: 'Montant trop faible.' }, 400);
 
+    /* ⚠ L'APERÇU S'ARRÊTE ICI, avant toute écriture. Le panier veut connaître le taux
+       et le total dès que l'adresse est choisie ; il n'a pas à semer un devis et un
+       paiement en base à chaque consultation. */
+    if (apercu) {
+      return reponse({
+        apercu: true,
+        recapitulatif: {
+          produits_ht: produitsHt, port_ht: portHt, port_ttc: cts(Number(port.cost)),
+          port_libelle: port.label, base_ht: baseHt, taux_tva: taux, tva: tva,
+          total_ttc: totalTtc, regime,
+          mention: reg?.[0]?.mention ?? null,
+          territoire: reg?.[0]?.territoire ?? null,
+          refus_exoneration: refusExoneration,
+        },
+      });
+    }
+
     // ---- 7. Le devis, écrit par le serveur ----
     const { data: devis, error: eDevis } = await admin.from('order_quotes').insert({
       user_id: user.id,
@@ -241,6 +263,7 @@ Deno.serve(async (req: Request) => {
     if (eDevis) return reponse({ error: 'Impossible de préparer la commande.' }, 500);
 
     // ---- 8. Le paiement, au montant CALCULÉ ICI ----
+
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', { apiVersion: '2023-10-16' });
     /* La clé d'idempotence vient du navigateur et vaut pour la durée du panier : deux
        clics sur « Payer » renvoient le MÊME paiement au lieu d'en créer deux. */

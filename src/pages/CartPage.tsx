@@ -42,6 +42,42 @@ const CartPage = () => {
      ordre d'idée avant que l'adresse ne soit connue. */
   const [recapServeur, setRecapServeur] = useState<RecapitulatifDevis | null>(null);
 
+  /* ★ APERÇU DU DEVIS dès que l'adresse (ou le statut d'entreprise) est connue.
+     Le panier annonçait « TVA selon votre adresse » et le gardait même une fois
+     l'adresse choisie : le client ne connaissait son taux qu'en ouvrant la fenêtre de
+     paiement. C'est le SERVEUR qui répond — le navigateur ne recalcule rien — mais en
+     mode aperçu : aucun devis ni paiement n'est créé tant qu'on ne commande pas. */
+  const demanderApercu = React.useCallback(async () => {
+    if (!user || !selectedAddress || items.length === 0) { setRecapServeur(null); return; }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/devis-commande`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+            address_id: selectedAddress.id,
+            express: expressShipping,
+            apercu: true,
+          }),
+        }
+      );
+      const j = await r.json();
+      if (r.ok && j?.recapitulatif) setRecapServeur(j.recapitulatif);
+    } catch {
+      // Un aperçu qui échoue ne doit rien casser : on retombe sur « selon votre adresse ».
+    }
+    /* ⚠ On dépend du CONTENU du panier, pas de la référence du tableau : `items` est
+       recréé à chaque rendu, et l'aperçu partirait en boucle. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, selectedAddress?.id, expressShipping,
+      items.map(i => `${i.product_id}x${i.quantity}`).join('|')]);
+
+  React.useEffect(() => { demanderApercu(); }, [demanderApercu]);
+
   const handleCheckoutClick = () => {
     if (vitrineMode) return; // vente en ligne désactivée
     if (!user) {
@@ -443,8 +479,12 @@ const CartPage = () => {
                   invalide le devis en cours — on force une nouvelle demande au serveur. */}
               <AchatEntreprise
                 onChangement={() => {
+                  /* Le statut change ⇒ le taux change. On vide l'ancien récapitulatif ET
+                     on en redemande un aussitôt : le vider seul laissait le panier sur
+                     « TVA selon votre adresse » alors que le serveur savait répondre. */
                   setRecapServeur(null);
                   setCheckoutKey(prev => prev + 1);
+                  demanderApercu();
                 }}
               />
 
@@ -489,10 +529,17 @@ const CartPage = () => {
                     tranche — et son verdict n'arrive qu'avec le récapitulatif de paiement.
                     Afficher 20 % faisait lire au client un montant qu'il n'allait pas payer. */}
                 <div className="flex justify-between text-gray-300">
-                  <span>TVA</span>
-                  <span className="text-sm text-gray-400">
-                    selon votre adresse
+                  <span>
+                    TVA
+                    {recapServeur
+                      ? ` (${Number(recapServeur.taux_tva).toLocaleString('fr-FR')} %)`
+                      : ''}
                   </span>
+                  {recapServeur ? (
+                    <span>{recapServeur.tva.toLocaleString('fr-FR', EURO)}</span>
+                  ) : (
+                    <span className="text-sm text-gray-400">selon votre adresse</span>
+                  )}
                 </div>
                 <div className="flex justify-between text-gray-300">
                   <span className="flex items-center gap-2">
@@ -543,16 +590,31 @@ const CartPage = () => {
                       qu'arrête le serveur — s'affiche au clic suivant, avant toute
                       saisie de carte. */}
                   <div className="flex justify-between text-white">
-                    <span className="font-semibold">Total à payer</span>
-                    <span className="text-sm text-gray-400">
-                      à l'étape suivante
-                    </span>
+                    <span className="font-semibold text-xl">Total à payer</span>
+                    {recapServeur ? (
+                      <span className="font-bold text-xl">
+                        {recapServeur.total_ttc.toLocaleString('fr-FR', EURO)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">à l'étape suivante</span>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Le montant exact, TVA et livraison comprises, s'affiche avant le
-                    paiement — il dépend de votre adresse et de votre statut (particulier
-                    ou entreprise).
-                  </p>
+                  {recapServeur?.mention && (
+                    <p className="text-emerald-300 text-xs mt-2 leading-relaxed">
+                      {recapServeur.mention}
+                    </p>
+                  )}
+                  {recapServeur?.refus_exoneration && (
+                    <p className="text-amber-300 text-xs mt-2 leading-relaxed">
+                      {recapServeur.refus_exoneration}
+                    </p>
+                  )}
+                  {!recapServeur && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      Le montant exact, TVA et livraison comprises, s'affiche dès que vous
+                      aurez choisi votre adresse de livraison.
+                    </p>
+                  )}
                 </div>
               </div>
 
