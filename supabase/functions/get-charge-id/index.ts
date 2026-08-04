@@ -3,12 +3,32 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@14.24.0';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+/* CORS restreint à nos propres origines — voir le commentaire détaillé dans
+   `admin-delete-user`. `CORS_EXTRA_ORIGINS` ajoute l'origine de développement. */
+const ORIGINES = [
+  'https://omegasud.fr',
+  'https://www.omegasud.fr',
+  'https://omegasud.netlify.app', // préproduction Netlify
+  ...(Deno.env.get('CORS_EXTRA_ORIGINS') || '').split(',').map(o => o.trim()).filter(Boolean),
+];
+const corsPour = (req: Request) => ({
+  'Access-Control-Allow-Origin': ORIGINES.includes(req.headers.get('origin') || '')
+    ? (req.headers.get('origin') as string)
+    : ORIGINES[0],
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
-};
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  Vary: 'Origin',
+});
 
+/* ⚠ Version d'API UNIFIÉE sur les cinq fonctions Stripe du projet (`devis-commande`,
+   `confirmer-commande`, `get-charge-id`, `process-refund`, `stripe-webhook`). Deux
+   versions différentes, ce sont deux formes de réponse possibles pour un même objet —
+   et un champ absent d'un côté qu'on croit présent de l'autre.
+
+   ⓘ Cette fonction est devenue un FILET, pas le chemin principal : depuis le 5 août,
+   `confirmer-commande` et `stripe-webhook` écrivent eux-mêmes `stripe_charge_id` dans
+   `payment_records`. Elle reste appelée par le panier et ne coûte rien à conserver. */
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
   apiVersion: '2024-06-20',
   httpClient: Stripe.createFetchHttpClient(),
@@ -20,6 +40,7 @@ const supabaseAdmin = createClient(
 );
 
 Deno.serve(async req => {
+  const corsHeaders = corsPour(req);
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

@@ -196,6 +196,11 @@ const AdminBilling = () => {
         return 'En retard';
       case 'cancelled':
         return 'Annulée';
+      /* Statut ajouté par la migration du 5 août à la contrainte `invoices_status_check`.
+         Sans lui ici, une facture remboursée s'affichait « Brouillon » — c'est-à-dire
+         comme un document qui n'existe pas encore, alors qu'elle est émise et annulée. */
+      case 'refunded':
+        return 'Remboursée';
       default:
         return 'Brouillon';
     }
@@ -211,10 +216,15 @@ const AdminBilling = () => {
         return 'text-red-400 bg-red-500/20';
       case 'cancelled':
         return 'text-gray-400 bg-gray-500/20';
+      case 'refunded':
+        return 'text-amber-400 bg-amber-500/20';
       default:
         return 'text-blue-400 bg-blue-500/20';
     }
   };
+
+  /** Un avoir se lit à l'œil dans la liste : c'est un document de sens opposé. */
+  const estAvoir = (invoice: Invoice) => invoice.document_type === 'credit_note';
 
   const handleDownloadPDF = async (invoice: Invoice) => {
     try {
@@ -406,7 +416,12 @@ const AdminBilling = () => {
       loadInvoices();
     } catch (error) {
       console.error('Erreur remboursement:', error);
-      toast.error(error.message || 'Erreur lors du remboursement');
+      /* ★ Un remboursement peut buter sur l'inaltérabilité de la facture (trigger de
+         base). Le message brut de PostgreSQL ne dit pas quoi faire ; on le traduit et on
+         propose le seul geste régulier : l'avoir. */
+      if (!gererRefusInalterabilite(error, selectedInvoice)) {
+        toast.error((error as any)?.message || 'Erreur lors du remboursement');
+      }
     } finally {
       setRefundLoading(false);
     }
@@ -441,18 +456,138 @@ const AdminBilling = () => {
     );
   };
 
+  /**
+   * Où en est le règlement d'une facture.
+   *
+   * ## Le défaut corrigé — l'affichage était exactement INVERSÉ
+   * L'ancien calcul faisait `max(0, total − payé + remboursé)`, puis affichait
+   * « REMBOURSÉE » dès que le résultat tombait à zéro. Or :
+   *  · une facture réglée normalement (payé = total, remboursé = 0) donne **0**
+   *    → elle s'affichait « REMBOURSÉE » ;
+   *  · une facture réellement remboursée (payé = total, remboursé = total) donne
+   *    **le total** → elle s'affichait comme restant DUE, et une relance partait.
+   * La même valeur alimente la colonne « Net à payer » de l'export destiné au comptable :
+   * il lisait « REMBOURSÉE » en face de chaque encaissement normal.
+   *
+   * ## Ce qu'on distingue désormais
+   *  · `resteDu`    : ce que le client doit ENCORE = total − payé + remboursé, borné à 0.
+   *                   (Le remboursement RECRÉE une dette du client seulement s'il n'avait
+   *                    pas encore payé ; sinon les deux se compensent et il reste 0.)
+   *  · `soldee`     : plus rien à encaisser (`resteDu` nul) ET rien remboursé.
+   *  · `remboursee` : le remboursement couvre la totalité de la facture.
+   *  · `partiellementRemboursee` : un remboursement, mais pas la totalité.
+   * Trois états distincts, trois libellés distincts — un zéro ne veut pas dire la même
+   * chose selon d'où il vient.
+   *
+   * ⚠ `amountPaid` retombe sur `invoice.amount_paid` quand aucune ligne de règlement n'est
+   * encore enregistrée : depuis que la facture est émise par
+   * `creer_facture_depuis_commande()`, l'encaissement Stripe est porté par la facture
+   * elle-même, et `payment_records` est alimenté par le SERVEUR (cf. rapport).
+   */
   const getPaymentSummary = (invoice: Invoice) => {
-    const amountPaid = (invoice.payment_records || [])
-      .filter(p => p.payment_method !== 'refund')
-      .reduce((sum, p) => sum + p.amount, 0);
+    const paiements = (invoice.payment_records || []).filter(
+      p => p.payment_method !== 'refund'
+    );
+    const amountPaid = paiements.length
+      ? paiements.reduce((sum, p) => sum + p.amount, 0)
+      : invoice.amount_paid || 0;
     const totalRefunded = (invoice.refunds || [])
       .filter(r => r.status === 'succeeded')
       .reduce((sum, r) => sum + r.amount, 0);
-    const netToPay = Math.max(
-      0,
-      invoice.total_ttc - amountPaid + totalRefunded
+
+    const resteDu = Math.max(0, invoice.total_ttc - amountPaid + totalRefunded);
+    const remboursee =
+      invoice.status === 'refunded' ||
+      (totalRefunded > 0 && totalRefunded >= invoice.total_ttc - 0.005);
+    const partiellementRemboursee = totalRefunded > 0 && !remboursee;
+    const soldee = resteDu <= 0.005 && totalRefunded === 0;
+
+    return {
+      amountPaid,
+      totalRefunded,
+      resteDu,
+      soldee,
+      remboursee,
+      partiellementRemboursee,
+      /* Conservé pour compatibilité de lecture, mais ne s'interprète JAMAIS seul :
+         c'est un montant, pas un état. */
+      netToPay: resteDu,
+    };
+  };
+
+  /** Libellé de l'état de règlement — une seule source pour l'écran ET pour l'export. */
+  const libelleReglement = (s: ReturnType<typeof getPaymentSummary>): string => {
+    if (s.remboursee) return 'REMBOURSÉE';
+    if (s.soldee) return 'SOLDÉE';
+    if (s.partiellementRemboursee) return 'PARTIELLEMENT REMBOURSÉE';
+    return s.resteDu.toLocaleString('fr-FR', EURO);
+  };
+
+  /**
+   * Émettre un AVOIR sur une facture émise.
+   *
+   * Depuis la migration du 5 août, une facture émise est INALTÉRABLE : un trigger de base
+   * refuse toute modification de son contenu (art. 286 I 3° bis du CGI, 7 500 € d'amende
+   * par logiciel non conforme). La correction ne passe donc plus par une retouche mais par
+   * un avoir, qui annule la facture sans la réécrire. `creer_avoir_depuis_facture()` est
+   * idempotente : un second clic rend l'avoir déjà émis au lieu d'en créer un doublon.
+   */
+  const emettreAvoir = async (invoice: Invoice, motif?: string) => {
+    const t = toast.loading("Émission de l'avoir…");
+    try {
+      const { data: avoirId, error } = await supabase.rpc(
+        'creer_avoir_depuis_facture',
+        { p_invoice_id: invoice.id, p_motif: motif ?? null }
+      );
+      if (error || !avoirId) throw new Error(error?.message || "L'avoir n'a pas pu être émis.");
+
+      const { data: avoir } = await supabase
+        .from('invoices')
+        .select('invoice_number')
+        .eq('id', avoirId as string)
+        .maybeSingle();
+
+      toast.success(
+        `Avoir ${avoir?.invoice_number ?? ''} émis — la facture ${invoice.invoice_number} est annulée.`,
+        { id: t, duration: 8000 }
+      );
+      loadData();
+    } catch (e: any) {
+      toast.error(e?.message || "Émission de l'avoir impossible", { id: t });
+    }
+  };
+
+  /**
+   * Traduit un refus d'inaltérabilité de la base en geste possible.
+   *
+   * Sans cela, l'utilisateur reçoit le message brut de PostgreSQL (« Modification refusée
+   * sur la facture … ») et n'a aucune idée de ce qu'il doit faire à la place. On reconnaît
+   * le refus, on l'explique, et on PROPOSE l'avoir — le seul chemin régulier.
+   * Renvoie `true` si l'erreur a été prise en charge.
+   */
+  const gererRefusInalterabilite = (e: unknown, invoice: Invoice): boolean => {
+    const message = (e as any)?.message ?? String(e ?? '');
+    const estRefus =
+      /inaltérable|inalterable|Modification refusée|Lignes verrouillées|Suppression refusée|286 I 3/i.test(
+        message
+      );
+    if (!estRefus) return false;
+
+    toast.error(
+      `La facture ${invoice.invoice_number} est émise : elle ne peut plus être modifiée.`,
+      { duration: 9000 }
     );
-    return { amountPaid, totalRefunded, netToPay };
+    if (
+      window.confirm(
+        `La facture ${invoice.invoice_number} est émise et donc inaltérable ` +
+          `(art. 286 I 3° bis du CGI).\n\n` +
+          `La seule correction régulière est d'émettre un AVOIR qui l'annule, ` +
+          `puis de refacturer.\n\nÉmettre l'avoir maintenant ?`
+      )
+    ) {
+      void emettreAvoir(invoice);
+    }
+    return true;
   };
 
   const filteredInvoices = invoices.filter(invoice => {
@@ -545,8 +680,18 @@ const AdminBilling = () => {
             : 'NON TRANSMISE',
           'Montant Payé': summary.amountPaid.toFixed(2),
           'Montant Remboursé': summary.totalRefunded.toFixed(2),
-          'Net à Payer':
-            summary.netToPay <= 0 ? 'REMBOURSÉE' : summary.netToPay.toFixed(2),
+          /* ⚠ Cette colonne écrivait « REMBOURSÉE » sur toute facture soldée : le
+             comptable lisait un remboursement en face de chaque encaissement normal.
+             Le MONTANT et l'ÉTAT sont désormais deux colonnes distinctes — un chiffre
+             n'a pas à porter un mot, et un mot n'a pas à remplacer un chiffre. */
+          'Net à Payer': summary.resteDu.toFixed(2),
+          'État du règlement': summary.remboursee
+            ? 'Remboursée'
+            : summary.partiellementRemboursee
+              ? 'Partiellement remboursée'
+              : summary.soldee
+                ? 'Soldée'
+                : 'Due',
           'Date Paiement': paymentDate
             ? format(new Date(paymentDate), 'yyyy-MM-dd HH:mm')
             : '',
@@ -807,10 +952,9 @@ const AdminBilling = () => {
                             Payé: {summary.amountPaid.toLocaleString('fr-FR', EURO)} • Remboursé:{' '}
                             {summary.totalRefunded.toLocaleString('fr-FR', EURO)}
                             <br />
-                            Net:{' '}
-                            {summary.netToPay <= 0
-                              ? 'REMBOURSÉE'
-                              : `${summary.netToPay.toLocaleString('fr-FR', EURO)}`}
+                            {/* « Soldée » ≠ « Remboursée » : les deux donnaient zéro et
+                                portaient le même mot, le plus alarmant des deux. */}
+                            Net: {libelleReglement(summary)}
                           </div>
                         );
                       })()}
@@ -949,6 +1093,36 @@ const AdminBilling = () => {
                             <RotateCcw size={16} />
                           </button>
                         )}
+                        {/* ★ ÉMETTRE UN AVOIR — le geste de remplacement.
+                            Une facture émise est inaltérable : la corriger est refusé par
+                            la base. Sans ce bouton, on aurait rendu la correction
+                            IMPOSSIBLE au lieu de la rendre régulière. Absent sur un
+                            brouillon (qui se corrige directement) et sur un avoir
+                            (on n'avoire pas un avoir). */}
+                        {!estAvoir(invoice) &&
+                          invoice.status !== 'draft' &&
+                          invoice.status !== 'refunded' && (
+                            <button
+                              onClick={() => {
+                                const motif =
+                                  window.prompt(
+                                    `Émettre un AVOIR annulant la facture ${invoice.invoice_number}.\n\n` +
+                                      `L'avoir reprend toutes les lignes en négatif, porte son propre ` +
+                                      `numéro (série AV-) et référence la facture d'origine. ` +
+                                      `La facture, elle, n'est PAS modifiée — c'est ce qu'exige ` +
+                                      `l'art. 286 I 3° bis du CGI.\n\n` +
+                                      `Motif (facultatif, imprimé sur l'avoir) :`
+                                  );
+                                // `null` = annulation de la boîte de dialogue : on ne fait rien.
+                                if (motif === null) return;
+                                void emettreAvoir(invoice, motif || undefined);
+                              }}
+                              className="p-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
+                              title="Émettre un avoir (annule cette facture)"
+                            >
+                              <FileText size={16} />
+                            </button>
+                          )}
                         {invoice.order_id && (
                           <button
                             onClick={() => goToOrder(invoice.order_id!)}
@@ -1169,9 +1343,17 @@ const AdminBilling = () => {
                 ×
               </button>
             </div>
+            {/* Sur un AVOIR, on retrouve la facture annulée dans la liste déjà
+                chargée : l'avoir doit imprimer son NUMÉRO, pas un identifiant
+                technique que le client ne peut rapprocher de rien. */}
             <InvoicePDF
               invoice={selectedInvoice}
               billingSettings={billingSettings}
+              factureOrigine={
+                selectedInvoice.credit_note_of
+                  ? invoices.find(i => i.id === selectedInvoice.credit_note_of) ?? null
+                  : null
+              }
             />
           </div>
         </div>

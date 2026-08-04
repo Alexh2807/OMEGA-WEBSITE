@@ -509,7 +509,11 @@ const AdminPlanningEditor: React.FC = () => {
                 `${conflict.message}\n\nVoulez-vous continuer quand même ?`
               );
               if (!confirm) {
-                toast.info('Création annulée');
+                /* ⚠ `toast.info` n'existe pas dans react-hot-toast (seulement success,
+                   error, loading, custom et l'appel nu). L'appeler levait un TypeError
+                   au moment précis où l'utilisateur renonce à créer un événement en
+                   conflit — donc l'écran plantait sur le chemin le plus prudent. */
+                toast('Création annulée', { icon: 'ℹ️' });
                 return;
               }
               break; // Ne demander qu'une fois

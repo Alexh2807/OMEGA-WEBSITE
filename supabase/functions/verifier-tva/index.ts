@@ -14,14 +14,44 @@
   poche en cas de contrôle. Mieux vaut facturer la TVA et régulariser ensuite.
 
   On conserve la date et le nom retourné par VIES : c'est la preuve à produire.
+
+  ## ★ Deux fuites colmatées le 5 août
+  1. **Un appelant anonyme obtenait la réponse de VIES.** La fonction n'exigeait aucun
+     utilisateur : présenter la clé anon — publique, présente dans le bundle du site —
+     suffisait pour interroger le fichier européen à volonté. On exige désormais un compte
+     connecté DÈS L'ENTRÉE (401 sinon) : sans cela il n'y a ni profil à mettre à jour, ni
+     raison sociale à comparer, donc aucun contrôle possible.
+  2. **Le masquage ne s'activait jamais.** L'enregistrement du verdict sortait en
+     `undefined` quand l'appelant n'était pas un vrai utilisateur, et le masquage testait
+     `concord === false` : `undefined` ne déclenchait rien, et le NOM et l'ADRESSE que VIES
+     associe au numéro partaient en clair. Autrement dit, quiconque essayait un numéro
+     trouvé sur une facture apprenait à qui il appartenait — et pouvait ensuite recopier
+     exactement la raison sociale attendue. On masque désormais dès que la concordance
+     n'est pas explicitement `true`.
 */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
+/* CORS restreint : cette fonction n'a aucune raison d'être appelable depuis une page
+   tierce. `CORS_EXTRA_ORIGINS` permet d'ajouter l'origine de développement sans toucher
+   au code. */
+const ORIGINES = [
+  'https://omegasud.fr',
+  'https://www.omegasud.fr',
+  'https://omegasud.netlify.app', // préproduction Netlify
+  ...(Deno.env.get('CORS_EXTRA_ORIGINS') || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+];
+
+const enTetesCors = (req: Request) => ({
+  'Access-Control-Allow-Origin': ORIGINES.includes(req.headers.get('origin') || '')
+    ? (req.headers.get('origin') as string)
+    : ORIGINES[0],
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+  Vary: 'Origin',
+});
 
 /* Formats nationaux, pour écarter une saisie manifestement fausse sans déranger VIES.
    Volontairement permissifs : en cas de doute on laisse VIES trancher, lui seul fait foi. */
@@ -35,16 +65,37 @@ const FORMATS: Record<string, RegExp> = {
   RO: /^\d{2,10}$/, SE: /^\d{12}$/, SI: /^\d{8}$/, SK: /^\d{10}$/,
 };
 
-const reponse = (corps: unknown, statut = 200) =>
-  new Response(JSON.stringify(corps), {
-    status: statut,
-    headers: { ...cors, 'Content-Type': 'application/json' },
-  });
-
 Deno.serve(async (req: Request) => {
+  const cors = enTetesCors(req);
+  const reponse = (corps: unknown, statut = 200) =>
+    new Response(JSON.stringify(corps), {
+      status: statut,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
   try {
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    /* ★ UTILISATEUR OBLIGATOIRE, ET EN TÊTE DE HANDLER.
+       Le verdict de VIES n'a de sens que rapporté à QUELQU'UN : c'est son profil qu'on
+       met à jour et sa raison sociale qu'on compare. Sans compte, il ne reste qu'un
+       service d'annuaire européen gratuit adossé à notre quota — et une fuite du nom
+       associé à n'importe quel numéro présenté. */
+    const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') || '';
+    const { data: u, error: eUser } = await admin.auth.getUser(jwt);
+    const utilisateur = u?.user;
+    if (eUser || !utilisateur?.id) {
+      return reponse(
+        { valide: null, motif: 'Connectez-vous pour vérifier un numéro de TVA.' },
+        401
+      );
+    }
+
     const { vat_number } = await req.json();
 
     // Normalisation : on accepte « FR 74 481 088 722 », « fr74481088722 »…
@@ -68,11 +119,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     let valide: boolean | null = null;
     let nom = '', adresse = '', indisponible = false;
 
@@ -82,23 +128,16 @@ Deno.serve(async (req: Request) => {
        sans cache, on se fait refuser au pire moment. 24 h seulement, pour qu'un numéro
        révoqué ne reste pas « valide » longtemps. */
     /* ★ Le verdict doit être inscrit sur le profil de l'appelant SUR LES DEUX CHEMINS.
-       Défaut trouvé le 3 août : la réponse venue du cache retournait ici même, avant le
-       bloc d'enregistrement plus bas. Résultat : le premier client à vérifier un numéro
-       était enregistré, tous les suivants voyaient « numéro valide » à l'écran mais
-       restaient « non vérifiés » en base — donc facturés 20 % sans comprendre pourquoi.
+       Défaut trouvé le 3 août : la réponse venue du cache retournait avant le bloc
+       d'enregistrement. Résultat : le premier client à vérifier un numéro était
+       enregistré, tous les suivants voyaient « numéro valide » à l'écran mais restaient
+       « non vérifiés » en base — donc facturés 20 % sans comprendre pourquoi.
        Le cache ne doit accélérer que l'interrogation de VIES, jamais sauter l'écriture. */
     const inscrireVerdict = async (
       verdictValide: boolean | null,
       nomSociete: string,
       dateVerif: string
-    ) => {
-      const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') || '';
-      if (!jwt) return;
-      const { data: u, error: eUser } = await admin.auth.getUser(jwt);
-      if (eUser || !u?.user?.id) {
-        console.error('verifier-tva : appelant non identifié', eUser?.message);
-        return;
-      }
+    ): Promise<boolean | null> => {
       /* ★ CONCORDANCE DU NOM. Un numéro intracommunautaire est PUBLIC : n'importe qui
          peut reprendre celui d'une autre société et VIES le confirmera. Le seul
          rattachement possible entre le numéro et l'acheteur, c'est le nom que VIES y
@@ -106,13 +145,13 @@ Deno.serve(async (req: Request) => {
          ⚠ Certains États membres (l'Allemagne au premier chef) ne divulguent aucun nom :
          la comparaison rend NULL, et le contrôle repose alors sur les autres verrous. */
       const { data: profilActuel } = await admin
-        .from('profiles').select('company_name').eq('id', u.user.id).single();
+        .from('profiles').select('company_name').eq('id', utilisateur.id).maybeSingle();
       const { data: concordance } = await admin.rpc('noms_concordent', {
         p_declare: profilActuel?.company_name ?? null,
         p_vies: nomSociete || null,
       });
 
-      /* ★ On n'écrit le nom du titulaire sur le profil QUE s'il concorde.
+      /* ★ On n'écrit le nom du titulaire sur le profil QUE s'il concorde formellement.
          `profiles` est lisible par son propriétaire : y déposer le nom d'une société
          tierce, c'est le livrer à celui-là même qui essayait d'usurper le numéro. La
          preuve complète reste dans `vies_checks`, réservée aux administrateurs. */
@@ -120,13 +159,27 @@ Deno.serve(async (req: Request) => {
         vat_number: brut,
         vat_number_valid: verdictValide,
         vat_checked_at: dateVerif,
-        vat_checked_name: concordance === false ? null : (nomSociete || null),
+        vat_checked_name: concordance === true ? (nomSociete || null) : null,
         vat_name_match: concordance ?? null,
-      }).eq('id', u.user.id);
+      }).eq('id', utilisateur.id);
       // ⚠ Ne PAS avaler l'erreur en silence : c'est ce qui a caché ce défaut.
       if (error) console.error('verifier-tva : profil non mis à jour', error.message);
       return concordance ?? null;
     };
+
+    /* ★ RÈGLE DE SORTIE UNIQUE, appliquée aux DEUX chemins (cache et VIES direct).
+       On ne divulgue le titulaire que si la concordance est explicitement `true`.
+       `null` (l'État membre ne publie pas de nom) et `false` (ce n'est pas la société
+       déclarée) masquent tous les deux : dans les deux cas, rien ne prouve que l'appelant
+       a le droit de savoir à qui appartient ce numéro. */
+    const divulgable = (concord: boolean | null) => concord === true;
+
+    const motifSortie = (v: boolean | null, concord: boolean | null) =>
+      v
+        ? (concord === false
+            ? "Ce numéro de TVA n'est pas enregistré au nom que vous avez indiqué. La TVA sera facturée."
+            : null)
+        : "Ce numéro n'est pas reconnu par le service européen VIES. Vérifiez-le, ou commandez en tant que particulier.";
 
     try {
       const { data: cache } = await admin
@@ -135,17 +188,12 @@ Deno.serve(async (req: Request) => {
         const concord = await inscrireVerdict(cache.valid, cache.company_name || '', cache.checked_at);
         return reponse({
           valide: cache.valid, numero: brut, pays,
-          // ⚠ Nom et adresse du titulaire NE SORTENT PAS quand la concordance échoue :
-          // les renvoyer donnerait la réponse à qui teste un numéro trouvé en ligne.
-          nom: concord === false ? '' : (cache.company_name || ''),
-          adresse: concord === false ? '' : (cache.company_address || ''),
+          // ⚠ Nom et adresse du titulaire NE SORTENT PAS sans concordance formelle.
+          nom: divulgable(concord) ? (cache.company_name || '') : '',
+          adresse: divulgable(concord) ? (cache.company_address || '') : '',
           verifie_le: cache.checked_at, depuis_cache: true,
           nom_concordant: concord,
-          motif: cache.valid
-            ? (concord === false
-                ? "Ce numéro de TVA n'est pas enregistré au nom que vous avez indiqué. La TVA sera facturée."
-                : null)
-            : "Ce numéro n'est pas reconnu par le service européen VIES.",
+          motif: motifSortie(cache.valid, concord),
         });
       }
     } catch (_e) { /* pas de cache : on interroge VIES */ }
@@ -210,24 +258,22 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- Conservation de la preuve sur le profil de l'appelant ----
-    const concord = await inscrireVerdict(valide, nom, new Date().toISOString());
+    const verifieLe = new Date().toISOString();
+    const concord = await inscrireVerdict(valide, nom, verifieLe);
 
     return reponse({
       valide,
       numero: brut,
       pays,
       // ⚠ Même règle que sur le chemin du cache : rien qui désigne le titulaire.
-      nom: concord === false ? '' : nom,
-      adresse: concord === false ? '' : adresse,
-      verifie_le: new Date().toISOString(),
+      nom: divulgable(concord) ? nom : '',
+      adresse: divulgable(concord) ? adresse : '',
+      verifie_le: verifieLe,
       nom_concordant: concord,
-      motif: valide
-        ? (concord === false
-            ? "Ce numéro de TVA n'est pas enregistré au nom que vous avez indiqué. La TVA sera facturée."
-            : null)
-        : "Ce numéro n'est pas reconnu par le service européen VIES. Vérifiez-le, ou commandez en tant que particulier.",
+      motif: motifSortie(valide, concord),
     });
   } catch (e) {
+    console.error('verifier-tva', e);
     return reponse({ valide: null, indisponible: true, motif: 'Vérification impossible' }, 200);
   }
 });

@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -17,6 +18,8 @@ import {
   MapPin,
   FileText,
   Download,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EURO } from '../utils/prix';
@@ -48,7 +51,10 @@ interface Order {
 }
 
 const OrdersPage = () => {
-  const { user } = useAuth();
+  /* `loading` du contexte d'authentification : sans lui, `!user` vaut vrai pendant la
+     restauration de session et le client — connecté — lisait « Accès non autorisé ».
+     C'est le pire endroit pour ce message : on arrive ici depuis l'e-mail de suivi. */
+  const { user, loading: sessionEnCours } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -149,16 +155,28 @@ const OrdersPage = () => {
     setExpandedOrders(newExpanded);
   };
 
+  /* ── STATUTS DE COMMANDE, VUS PAR LE CLIENT ──────────────────────────────────
+     La liste était incomplète : `paid`, `processing` et `refunded` — tous trois
+     écrits en base (le back-office pose `paid`, la migration du 5 août ajoute
+     `refunded` au remboursement) — tombaient dans le `default` et s'affichaient
+     « En attente ». Une commande remboursée était donc annoncée « En attente », en
+     bleu, avec la mention « Payé » à côté du montant. */
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'paid':
+        return <CreditCard className="text-emerald-400" size={20} />;
       case 'confirmed':
         return <CheckCircle className="text-green-400" size={20} />;
+      case 'processing':
+        return <Package className="text-blue-400" size={20} />;
       case 'shipped':
         return <Truck className="text-blue-400" size={20} />;
       case 'delivered':
         return <Package className="text-green-500" size={20} />;
       case 'cancelled':
         return <XCircle className="text-red-400" size={20} />;
+      case 'refunded':
+        return <RotateCcw className="text-amber-400" size={20} />;
       default:
         return <Clock className="text-blue-400" size={20} />;
     }
@@ -166,14 +184,20 @@ const OrdersPage = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
+      case 'paid':
+        return 'Payée';
       case 'confirmed':
         return 'Confirmée';
+      case 'processing':
+        return 'En préparation';
       case 'shipped':
         return 'Expédiée';
       case 'delivered':
         return 'Livrée';
       case 'cancelled':
         return 'Annulée';
+      case 'refunded':
+        return 'Remboursée';
       default:
         return 'En attente';
     }
@@ -181,14 +205,20 @@ const OrdersPage = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'paid':
+        return 'text-emerald-400';
       case 'confirmed':
         return 'text-green-400';
+      case 'processing':
+        return 'text-blue-400';
       case 'shipped':
         return 'text-blue-400';
       case 'delivered':
         return 'text-green-500';
       case 'cancelled':
         return 'text-red-400';
+      case 'refunded':
+        return 'text-amber-400';
       default:
         return 'text-blue-400';
     }
@@ -196,30 +226,71 @@ const OrdersPage = () => {
 
   const getStatusProgress = (status: string) => {
     switch (status) {
+      case 'paid':
       case 'confirmed':
         return 25;
+      case 'processing':
+        return 50;
       case 'shipped':
         return 75;
       case 'delivered':
         return 100;
       case 'cancelled':
+      case 'refunded':
         return 0;
       default:
         return 0;
     }
   };
 
-  if (!user) {
+  /* Ce que le client a réellement payé, ou non.
+     ⚠ « Payé » s'affichait sur TOUTE commande non annulée — donc aussi sur une commande
+     REMBOURSÉE : le client lisait « Payé » sur de l'argent qu'on venait de lui rendre,
+     et rappelait le support pour comprendre. */
+  const libellePaiement = (status: string) => {
+    switch (status) {
+      case 'cancelled':
+        return 'Annulée';
+      case 'refunded':
+        return 'Remboursée';
+      case 'pending':
+        return 'En attente de paiement';
+      default:
+        return 'Payé';
+    }
+  };
+
+  /* AVANT le test `!user` : tant que la session n'est pas restaurée, on ne sait rien —
+     et « Accès non autorisé » est un verdict, pas une attente. */
+  if (sessionEnCours) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-24 flex items-center justify-center">
         <div className="text-center">
+          <Loader2 className="text-blue-400 mx-auto mb-4 animate-spin" size={40} />
+          <p className="text-gray-300">Chargement de vos commandes…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-24 flex items-center justify-center px-6">
+        <div className="text-center">
           <Package className="text-gray-400 mx-auto mb-4" size={64} />
           <h2 className="text-2xl font-bold text-white mb-4">
-            Accès non autorisé
+            Connectez-vous pour voir vos commandes
           </h2>
-          <p className="text-gray-400">
-            Veuillez vous connecter pour voir vos commandes
+          <p className="text-gray-400 mb-6">
+            Vos commandes et vos factures sont rattachées à votre compte.
           </p>
+          <Link
+            to="/connexion"
+            state={{ from: '/commandes' }}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+          >
+            Se connecter
+          </Link>
         </div>
       </div>
     );
@@ -267,14 +338,17 @@ const OrdersPage = () => {
               className="bg-gradient-to-br from-gray-900/50 to-gray-800/50 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden"
             >
               {/* Order Header */}
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-lg p-3">
+              <div className="p-4 sm:p-6">
+                {/* 375 px : l'en-tête portait la vignette, le numéro, la date, le statut,
+                    le montant et le chevron sur UNE seule ligne — le numéro de commande
+                    et le montant se chevauchaient. On empile en dessous de `sm`. */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-lg p-3 shrink-0">
                       <Package className="text-blue-400" size={24} />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-white">
+                    <div className="min-w-0">
+                      <h3 className="text-lg sm:text-xl font-bold text-white truncate">
                         Commande #{order.id.slice(0, 8)}
                       </h3>
                       <div className="flex items-center gap-2 text-gray-400 text-sm">
@@ -291,23 +365,23 @@ const OrdersPage = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-between sm:justify-end gap-4 flex-wrap">
                     <div
                       className={`flex items-center gap-2 ${getStatusColor(order.status)}`}
                     >
                       {getStatusIcon(order.status)}
-                      <span className="font-semibold">
+                      <span className="font-semibold whitespace-nowrap">
                         {getStatusText(order.status)}
                       </span>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-white">
+                      <div className="text-xl sm:text-2xl font-bold text-white whitespace-nowrap">
                         {order.total.toLocaleString('fr-FR', EURO)}
                       </div>
                       <div className="text-gray-400 text-sm flex items-center gap-1">
                         <CreditCard size={14} />
-                        {order.status === 'cancelled' ? 'Annulée' : 'Payé'}
+                        {libellePaiement(order.status)}
                       </div>
                     </div>
                     <button
@@ -505,18 +579,28 @@ const OrdersPage = () => {
                         </div>
                         <div className="flex justify-between text-xl font-bold text-white border-t border-white/20 pt-2">
                           <span>Total:</span>
+                          {/* Une commande remboursée conserve un montant : c'est celui
+                              qui a été rendu. L'effacer laissait le client sans aucun
+                              chiffre au moment de vérifier son relevé bancaire. */}
                           <span
                             className={
                               order.status === 'cancelled'
                                 ? 'text-red-400'
-                                : 'text-white'
+                                : order.status === 'refunded'
+                                  ? 'text-amber-400'
+                                  : 'text-white'
                             }
                           >
                             {order.status === 'cancelled'
-                              ? 'Commande Annulée'
+                              ? 'Commande annulée'
                               : `${order.total.toLocaleString('fr-FR', EURO)}`}
                           </span>
                         </div>
+                        {order.status === 'refunded' && (
+                          <p className="text-amber-300 text-xs text-right">
+                            Montant remboursé sur votre moyen de paiement.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/optimize-images.cjs && node scripts/scan-images.cjs && vite build",
+    "build": "node scripts/optimize-images.cjs && node scripts/scan-images.cjs && tsc -p tsconfig.app.json --noEmit && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "format:staged": "prettier --write $(git diff --cached --name-only --diff-filter=ACMR | grep -E '\\.(js|jsx|ts|tsx|json|css|md)$' | xargs)",
     "scan-images": "node scripts/optimize-images.cjs && node scripts/scan-images.cjs",
-    "optimize-images": "node scripts/optimize-images.cjs"
+    "optimize-images": "node scripts/optimize-images.cjs",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.18",
@@ -30,7 +31,7 @@
     "date-fns": "^4.1.0",
     "html2canvas": "^1.4.1",
     "imapflow": "^1.6.5",
-    "jspdf": "^3.0.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.344.0",
     "mailparser": "^3.9.14",
     "nodemailer": "^9.0.3",
@@ -51,6 +52,7 @@
     "@types/mailparser": "^3.4.6",
     "@types/node": "^24.1.0",
     "@types/nodemailer": "^8.0.1",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

@@ -21,18 +21,33 @@
  */
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+/* CORS restreint à nos propres origines — voir le commentaire détaillé dans
+   `admin-delete-user`. `CORS_EXTRA_ORIGINS` ajoute l'origine de développement. */
+const ORIGINES = [
+  'https://omegasud.fr',
+  'https://www.omegasud.fr',
+  'https://omegasud.netlify.app', // préproduction Netlify
+  ...(Deno.env.get('CORS_EXTRA_ORIGINS') || '').split(',').map(o => o.trim()).filter(Boolean),
+];
+const corsPour = (req: Request) => ({
+  'Access-Control-Allow-Origin': ORIGINES.includes(req.headers.get('origin') || '')
+    ? (req.headers.get('origin') as string)
+    : ORIGINES[0],
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+  Vary: 'Origin',
+});
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+/* ⚠ Fabrique, et non constante : les en-têtes dépendent désormais de l'origine de LA
+   requête. Une constante de module partagée entre deux requêtes concurrentes renverrait
+   à l'une l'origine autorisée pour l'autre. Les appels à `json(...)` restent inchangés. */
+const faireJson = (corsHeaders: Record<string, string>) =>
+  (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -132,6 +147,8 @@ const base64ToBytes = (b64: string): Uint8Array => {
 };
 
 Deno.serve(async req => {
+  const corsHeaders = corsPour(req);
+  const json = faireJson(corsHeaders);
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

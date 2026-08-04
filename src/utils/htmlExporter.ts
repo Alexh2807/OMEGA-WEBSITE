@@ -442,6 +442,15 @@ export const exportCalendarAsHTML = async (
       `;
     }).join('');
 
+    /* ⚠ `allStyles` et `elementHTML` étaient RÉFÉRENCÉS plus bas sans jamais être
+       définis dans cette fonction (copiés depuis `exportElementAsHTML` sans leurs deux
+       déclarations) : l'export du planning levait un ReferenceError à chaque clic, et
+       `eventsListHTML` — le corps même du document — n'était utilisé nulle part.
+       On rétablit les deux, en branchant le contenu sur la liste réellement construite
+       ci-dessus. */
+    const allStyles = getAllStyles();
+    const elementHTML = eventsListHTML;
+
     // Construire le document HTML optimisé pour impression A4 Portrait - VUE LISTE
     const htmlContent = `<!DOCTYPE html>
 <html lang="fr">
@@ -1148,7 +1157,8 @@ export const exportCalendarAsJPEG = async (
       foreignObjectRendering: false,
       imageTimeout: 15000,
       // Callback de clonage
-      onclone: (clonedDoc, clonedElement) => {
+      // Seul l'élément cloné est retouché ; le document ne sert pas ici.
+      onclone: (_clonedDoc: Document, clonedElement: HTMLElement) => {
         // Forcer tout en visible dans le clone aussi
         clonedElement.style.overflow = 'visible';
         clonedElement.style.position = 'relative';

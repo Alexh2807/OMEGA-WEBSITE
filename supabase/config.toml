@@ -339,3 +339,13 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # --no-verify-jwt réactiverait la vérification et la base se ferait refuser en 401.
 [functions.send-notification]
 verify_jwt = false
+
+# Appelée par STRIPE, qui n'a évidemment aucun JWT Supabase à présenter : avec la
+# vérification active, chaque événement recevrait un 401 et Stripe finirait par désactiver
+# l'endpoint — on en reviendrait exactement à la situation d'avant, où une commande payée
+# pouvait n'exister nulle part.
+# L'authentification est assurée autrement, et mieux : la SIGNATURE de l'événement
+# (`stripe-signature` + STRIPE_WEBHOOK_SECRET), vérifiée par constructEventAsync().
+# Sans cette ligne, un `functions deploy` sans --no-verify-jwt refermerait la porte.
+[functions.stripe-webhook]
+verify_jwt = false

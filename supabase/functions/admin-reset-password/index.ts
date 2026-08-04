@@ -1,14 +1,26 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+/* CORS restreint à nos propres origines — voir le commentaire détaillé dans
+   `admin-delete-user`. `CORS_EXTRA_ORIGINS` ajoute l'origine de développement. */
+const ORIGINES = [
+  'https://omegasud.fr',
+  'https://www.omegasud.fr',
+  'https://omegasud.netlify.app', // préproduction Netlify
+  ...(Deno.env.get('CORS_EXTRA_ORIGINS') || '').split(',').map(o => o.trim()).filter(Boolean),
+];
+const corsPour = (req: Request) => ({
+  'Access-Control-Allow-Origin': ORIGINES.includes(req.headers.get('origin') || '')
+    ? (req.headers.get('origin') as string)
+    : ORIGINES[0],
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+  Vary: 'Origin',
+});
 
 serve(async req => {
+  const corsHeaders = corsPour(req);
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

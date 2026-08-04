@@ -163,7 +163,8 @@ const createSimplifiedCalendarForExport = (originalCalendar: HTMLElement): HTMLE
   // Largeur égale pour chaque jour (7 jours)
   const dayWidth = 100 / 7;
   
-  headerCells.forEach((cell, index) => {
+  // Le rang n'est pas utilisé : toutes les colonnes ont la même largeur.
+  headerCells.forEach(cell => {
     const th = document.createElement('th');
     th.style.cssText = `
       width: ${dayWidth}%;
@@ -191,7 +192,8 @@ const createSimplifiedCalendarForExport = (originalCalendar: HTMLElement): HTMLE
   const organizedWeeks: HTMLElement[][] = [];
   let currentWeek: HTMLElement[] = [];
   
-  dayCells.forEach((dayCell, index) => {
+  // Idem : le découpage en semaines se fait par comptage, pas par indice.
+  dayCells.forEach(dayCell => {
     currentWeek.push(dayCell);
     
     // Si on a 7 jours, créer une semaine

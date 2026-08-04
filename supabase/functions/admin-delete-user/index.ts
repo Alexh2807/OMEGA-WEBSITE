@@ -1,13 +1,29 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+/* CORS restreint à nos propres origines. `*` autorisait n'importe quelle page du web à
+   appeler cette fonction avec la clé anon — publique par nature, puisqu'elle est dans le
+   bundle du site. Le JWT administrateur reste indispensable, mais on n'a aucune raison
+   d'offrir la surface. `CORS_EXTRA_ORIGINS` (liste séparée par des virgules) ajoute
+   l'origine de développement sans toucher au code. */
+const ORIGINES = [
+  'https://omegasud.fr',
+  'https://www.omegasud.fr',
+  'https://omegasud.netlify.app', // préproduction Netlify
+  ...(Deno.env.get('CORS_EXTRA_ORIGINS') || '').split(',').map(o => o.trim()).filter(Boolean),
+];
+const corsPour = (req: Request) => ({
+  'Access-Control-Allow-Origin': ORIGINES.includes(req.headers.get('origin') || '')
+    ? (req.headers.get('origin') as string)
+    : ORIGINES[0],
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+  // Sans `Vary`, un cache intermédiaire servirait l'en-tête calculé pour une AUTRE origine.
+  Vary: 'Origin',
+});
 
 Deno.serve(async req => {
+  const corsHeaders = corsPour(req);
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

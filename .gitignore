@@ -30,3 +30,6 @@ db_cluster*
 
 # Netlify
 .netlify
+
+# Dossier de travail temporaire de l audit (a supprimer)
+_audit_tmp/

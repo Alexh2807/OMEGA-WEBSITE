@@ -115,37 +115,63 @@ const AdminAccounting = () => {
     });
   };
 
+  /**
+   * Enveloppe commune à TOUS les exports.
+   *
+   * ⚠ Aucun de ces boutons n'était protégé. Le journal des ventes faisait
+   * `invoice.customer_id.slice(0, 8)` alors que la colonne est en `ON DELETE SET NULL` :
+   * une seule facture dont le compte client avait été supprimé suffisait à faire lever un
+   * TypeError. L'utilisateur voyait alors un BOUTON MORT — aucun fichier, aucun message,
+   * rien dans l'écran. On attrape, on dit ce qui s'est passé, et on trace en console pour
+   * le diagnostic.
+   */
+  const exporter = (libelle: string, action: () => void) => {
+    try {
+      action();
+      toast.success(`Export ${libelle} réalisé avec succès`);
+    } catch (e) {
+      console.error(`Export ${libelle} impossible :`, e);
+      toast.error(
+        `Export ${libelle} impossible : ${
+          e instanceof Error ? e.message : 'erreur inattendue'
+        }`,
+        { duration: 9000 }
+      );
+    }
+  };
+
+  /** Période demandée, bornes incluses. `null` si elle n'est pas renseignée. */
+  const periode = (): { start: Date; end: Date } | null => {
+    if (!startDate || !endDate) {
+      toast.error('Veuillez sélectionner une période');
+      return null;
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  };
+
   const handleExportAllInvoices = () => {
     if (invoices.length === 0) {
       toast.error('Aucune facture à exporter');
       return;
     }
-    exportInvoicesToCSV(invoices);
-    toast.success('Export des factures réalisé avec succès');
+    exporter('des factures', () => exportInvoicesToCSV(invoices));
   };
 
   const handleExportSalesJournal = () => {
-    if (!startDate || !endDate) {
-      toast.error('Veuillez sélectionner une période');
-      return;
-    }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    exportSalesJournalFEC(invoices, start, end);
-    toast.success('Export du journal des ventes (FEC) réalisé avec succès');
+    const p = periode();
+    if (!p) return;
+    exporter('du journal des ventes (FEC)', () =>
+      exportSalesJournalFEC(invoices, p.start, p.end)
+    );
   };
 
   const handleExportVATReport = () => {
-    if (!startDate || !endDate) {
-      toast.error('Veuillez sélectionner une période');
-      return;
-    }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    exportVATReport(invoices, start, end);
-    toast.success('Export du rapport de TVA réalisé avec succès');
+    const p = periode();
+    if (!p) return;
+    exporter('du rapport de TVA', () => exportVATReport(invoices, p.start, p.end));
   };
 
   const handleExportCustomerLedger = () => {
@@ -153,20 +179,13 @@ const AdminAccounting = () => {
       toast.error('Aucune facture à exporter');
       return;
     }
-    exportCustomerLedger(invoices);
-    toast.success('Export du grand livre clients réalisé avec succès');
+    exporter('du grand livre clients', () => exportCustomerLedger(invoices));
   };
 
   const handleExportPayments = () => {
-    if (!startDate || !endDate) {
-      toast.error('Veuillez sélectionner une période');
-      return;
-    }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    exportPaymentRecords(invoices, start, end);
-    toast.success('Export des paiements réalisé avec succès');
+    const p = periode();
+    if (!p) return;
+    exporter('des paiements', () => exportPaymentRecords(invoices, p.start, p.end));
   };
 
   const setPeriod = (type: string) => {
@@ -470,8 +489,12 @@ const AdminAccounting = () => {
             et tous les logiciels comptables
           </li>
           <li>
-            • <strong>Format FEC :</strong> Normalisé pour l'administration
-            fiscale (article A47 A-1 du LPF)
+            • <strong>Format FEC :</strong> Fichier à plat séparé par
+            TABULATIONS, extension <code>.txt</code> — c'est ce qu'impose
+            l'article A47 A-1 du LPF. Les avoirs y figurent en écritures
+            inversées, et le compte de produits dépend du régime (707100
+            France · 707200 intracommunautaire · 707300 export · 707400
+            outre-mer · 708500 port).
           </li>
           <li>
             • <strong>Encodage UTF-8 :</strong> Garantit l'affichage correct
@@ -479,7 +502,8 @@ const AdminAccounting = () => {
           </li>
           <li>
             • <strong>Séparateur point-virgule (;) :</strong> Standard français
-            pour les fichiers CSV
+            pour les fichiers CSV — les autres exports, destinés à Excel. Le FEC
+            fait exception : il n'admet pas ce séparateur.
           </li>
           <li>
             • <strong>Confidentialité :</strong> Les exports sont générés

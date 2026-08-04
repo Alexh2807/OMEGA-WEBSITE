@@ -21,6 +21,14 @@ import { getAllAvailableImages } from '../../utils/imageManager';
 import { useSiteSettings } from '../../contexts/SiteSettingsContext';
 import { COMPANY_INFO } from '../../config/legalInfo';
 import { supabase } from '../../lib/supabase';
+import type { ShippingConfig, ModeLivraison } from '../../utils/shipping';
+
+/* Un seuil de franco `null` (« pas de franco sur cette zone ») et un seuil à 0 €
+   (« port offert à partir du premier euro ») sont DEUX réglages différents. Un champ
+   texte vide porte le premier, jamais le second. */
+const seuilVersTexte = (v: number | null): string => (v === null ? '' : String(v));
+const texteVersSeuil = (s: string): number | null =>
+  s.trim() === '' ? null : parseFloat(s.replace(',', '.'));
 
 /**
  * Les types d'e-mails, dans l'ordre d'affichage.
@@ -114,6 +122,35 @@ const AdminSettings = () => {
     near_km: '',
     mid_km: '',
     delay_days: '',
+    /* ── Réglages v3 du moteur de livraison (`src/utils/shipping.ts`) ──────────
+       Ils EXISTAIENT en base et pilotaient déjà les prix, mais aucun écran ne les
+       exposait : l'exploitant ne pouvait ni voir ni changer le mode par défaut, les
+       suppléments palette ou les seuils de franco. Un réglage invisible est un
+       réglage que personne ne corrige. */
+    utiliser_bareme_personnalise: false,
+    signature_domicile: true,
+    service_express: 'chrono18',
+    service_relais: 'mondial_relay',
+    service_outre_mer: 'prioritaire',
+    mode_par_defaut: 'domicile',
+    retrait_actif: true,
+    retrait_delai_j: '',
+    diviseur_volumetrique: '',
+    sup_hayon: '',
+    sup_rdv: '',
+    sup_particulier: '',
+    sup_zone_difficile: '',
+    sup_corse_iles: '',
+    sup_carburant_pct: '',
+    sup_hors_gabarit: '',
+    /* Franco : chaîne VIDE = pas de franco sur cette zone (et non « franco à 0 € »,
+       qui offrirait le port à tout le monde). La distinction est portée jusqu'en base
+       par un `null`. */
+    franco_metropole: '',
+    franco_corse_iles: '',
+    franco_ue: '',
+    franco_outre_mer: '',
+    franco_modes: [] as string[],
   });
 
   // Recharge le formulaire quand la config arrive de la base.
@@ -134,6 +171,33 @@ const AdminSettings = () => {
       near_km: String(shippingConfig.near_km_max),
       mid_km: String(shippingConfig.mid_km_max),
       delay_days: String(shippingConfig.delay_days),
+
+      utiliser_bareme_personnalise: shippingConfig.utiliser_bareme_personnalise,
+      signature_domicile: shippingConfig.signature_domicile,
+      service_express: shippingConfig.service_express,
+      service_relais: shippingConfig.service_relais,
+      service_outre_mer: shippingConfig.service_outre_mer,
+      mode_par_defaut: shippingConfig.mode_par_defaut,
+      retrait_actif: shippingConfig.retrait_actif,
+      retrait_delai_j: String(shippingConfig.retrait_delai_j),
+      diviseur_volumetrique: String(shippingConfig.diviseur_volumetrique),
+      sup_hayon: String(shippingConfig.supplements_palette.hayon_ht),
+      sup_rdv: String(shippingConfig.supplements_palette.rdv_ht),
+      sup_particulier: String(shippingConfig.supplements_palette.particulier_ht),
+      sup_zone_difficile: String(shippingConfig.supplements_palette.zone_difficile_ht),
+      sup_corse_iles: String(shippingConfig.supplements_palette.corse_iles_ht),
+      sup_carburant_pct: String(
+        shippingConfig.supplements_palette.surcharge_carburant_pct
+      ),
+      sup_hors_gabarit: String(
+        shippingConfig.supplements_palette.hors_gabarit_colissimo_ht
+      ),
+      // `null` (pas de franco) → chaîne vide dans le formulaire.
+      franco_metropole: seuilVersTexte(shippingConfig.franco.metropole),
+      franco_corse_iles: seuilVersTexte(shippingConfig.franco.corse_iles),
+      franco_ue: seuilVersTexte(shippingConfig.franco.ue),
+      franco_outre_mer: seuilVersTexte(shippingConfig.franco.outre_mer),
+      franco_modes: [...shippingConfig.franco_modes],
     });
   }, [shippingConfig]);
 
@@ -180,6 +244,45 @@ const AdminSettings = () => {
       return;
     }
 
+    /* Les suppléments palette et le diviseur volumétrique sont eux aussi contrôlés :
+       un diviseur à 0 ferait une division par zéro dans le poids volumétrique, et un
+       supplément négatif offrirait de l'argent au client. */
+    const avances = {
+      retrait_delai_j: parseInt(shipForm.retrait_delai_j, 10),
+      diviseur_volumetrique: num(shipForm.diviseur_volumetrique),
+      sup_hayon: num(shipForm.sup_hayon),
+      sup_rdv: num(shipForm.sup_rdv),
+      sup_particulier: num(shipForm.sup_particulier),
+      sup_zone_difficile: num(shipForm.sup_zone_difficile),
+      sup_corse_iles: num(shipForm.sup_corse_iles),
+      sup_carburant_pct: num(shipForm.sup_carburant_pct),
+      sup_hors_gabarit: num(shipForm.sup_hors_gabarit),
+    };
+    if (Object.values(avances).some(v => isNaN(v) || v < 0)) {
+      toast.error('Suppléments palette, délai de retrait ou diviseur invalides.');
+      return;
+    }
+    if (avances.diviseur_volumetrique <= 0) {
+      toast.error(
+        'Le diviseur du poids volumétrique doit être strictement positif (5000 chez tous les transporteurs).'
+      );
+      return;
+    }
+
+    // Franco : vide = pas de franco. Une valeur saisie doit être un nombre positif.
+    const francos = {
+      metropole: texteVersSeuil(shipForm.franco_metropole),
+      corse_iles: texteVersSeuil(shipForm.franco_corse_iles),
+      ue: texteVersSeuil(shipForm.franco_ue),
+      outre_mer: texteVersSeuil(shipForm.franco_outre_mer),
+    };
+    if (Object.values(francos).some(v => v !== null && (isNaN(v) || v < 0))) {
+      toast.error(
+        'Seuil de franco invalide : laissez la case VIDE pour désactiver le franco sur une zone.'
+      );
+      return;
+    }
+
     setSavingShipping(true);
     const { error } = await setShippingConfig({
       ...shippingConfig, // préserve depot & champs avancés
@@ -197,6 +300,28 @@ const AdminSettings = () => {
       near_km_max: values.near_km,
       mid_km_max: values.mid_km,
       delay_days: values.delay_days || 7,
+
+      utiliser_bareme_personnalise: shipForm.utiliser_bareme_personnalise,
+      signature_domicile: shipForm.signature_domicile,
+      service_express: shipForm.service_express as ShippingConfig['service_express'],
+      service_relais: shipForm.service_relais as ShippingConfig['service_relais'],
+      service_outre_mer:
+        shipForm.service_outre_mer as ShippingConfig['service_outre_mer'],
+      mode_par_defaut: shipForm.mode_par_defaut as ModeLivraison,
+      retrait_actif: shipForm.retrait_actif,
+      retrait_delai_j: avances.retrait_delai_j || 2,
+      diviseur_volumetrique: avances.diviseur_volumetrique,
+      supplements_palette: {
+        hayon_ht: avances.sup_hayon,
+        rdv_ht: avances.sup_rdv,
+        particulier_ht: avances.sup_particulier,
+        zone_difficile_ht: avances.sup_zone_difficile,
+        corse_iles_ht: avances.sup_corse_iles,
+        surcharge_carburant_pct: avances.sup_carburant_pct,
+        hors_gabarit_colissimo_ht: avances.sup_hors_gabarit,
+      },
+      franco: francos,
+      franco_modes: shipForm.franco_modes as ModeLivraison[],
     });
     setSavingShipping(false);
     if (error) {
@@ -553,6 +678,301 @@ const AdminSettings = () => {
               className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
             />
           </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            MODES D'EXPÉDITION (moteur v3)
+            Ces réglages pilotaient DÉJÀ les prix affichés au client, mais aucun
+            écran ne les montrait : impossible de savoir quel mode était proposé
+            par défaut, ni de le changer sans redéployer le site.
+            ═══════════════════════════════════════════════════════════════════ */}
+        <h3 className="text-white font-semibold mb-1 mt-8">Modes d'expédition</h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Quatre modes sont proposés au client — <b>domicile</b>, <b>express</b>,{' '}
+          <b>relais</b>, <b>palette</b> — plus le <b>retrait</b> au dépôt de{' '}
+          {shippingConfig.depot.label}. Au-delà de 30 kg ou hors gabarit, la bascule
+          en palette est automatique.
+        </p>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Mode proposé par défaut
+            </label>
+            <select
+              value={shipForm.mode_par_defaut}
+              onChange={e =>
+                setShipForm({ ...shipForm, mode_par_defaut: e.target.value })
+              }
+              className="w-full dark-select rounded-lg px-3 py-2"
+            >
+              <option value="domicile">Domicile</option>
+              <option value="express">Express</option>
+              <option value="relais">Point relais</option>
+              <option value="palette">Palette / encombrant</option>
+              <option value="retrait">Retrait au dépôt</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Offre express
+            </label>
+            <select
+              value={shipForm.service_express}
+              onChange={e =>
+                setShipForm({ ...shipForm, service_express: e.target.value })
+              }
+              className="w-full dark-select rounded-lg px-3 py-2"
+            >
+              <option value="chrono18">Chronopost 18 (avant 18 h) — moins cher</option>
+              <option value="chrono13">Chronopost 13 (avant 13 h)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Réseau de points relais
+            </label>
+            <select
+              value={shipForm.service_relais}
+              onChange={e =>
+                setShipForm({ ...shipForm, service_relais: e.target.value })
+              }
+              className="w-full dark-select rounded-lg px-3 py-2"
+            >
+              <option value="mondial_relay">Mondial Relay</option>
+              <option value="colissimo_point_retrait">Colissimo point de retrait</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Offre outre-mer
+            </label>
+            <select
+              value={shipForm.service_outre_mer}
+              onChange={e =>
+                setShipForm({ ...shipForm, service_outre_mer: e.target.value })
+              }
+              className="w-full dark-select rounded-lg px-3 py-2"
+            >
+              <option value="prioritaire">Prioritaire (6 à 18 jours)</option>
+              <option value="economique">Économique maritime (13 à 31 jours)</option>
+            </select>
+            <p className="text-gray-500 text-xs mt-1">
+              Grille Colissimo OM1/OM2 — jamais le tarif métropole
+            </p>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <label className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-lg p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={shipForm.signature_domicile}
+              onChange={e =>
+                setShipForm({ ...shipForm, signature_domicile: e.target.checked })
+              }
+              className="mt-1"
+            />
+            <span className="text-sm text-gray-300">
+              <b className="text-white">Signature à la livraison</b>
+              <br />
+              <span className="text-gray-500 text-xs">
+                Recommandé : le matériel expédié a de la valeur, et sans signature la
+                preuve de remise n'existe pas.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 bg-white/5 border border-white/10 rounded-lg p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={shipForm.retrait_actif}
+              onChange={e =>
+                setShipForm({ ...shipForm, retrait_actif: e.target.checked })
+              }
+              className="mt-1"
+            />
+            <span className="text-sm text-gray-300">
+              <b className="text-white">Retrait au dépôt</b>
+              <br />
+              <span className="text-gray-500 text-xs">
+                Gratuit, {shippingConfig.depot.label}
+              </span>
+            </span>
+          </label>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Délai de retrait (jours ouvrés)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={shipForm.retrait_delai_j}
+              onChange={e =>
+                setShipForm({ ...shipForm, retrait_delai_j: e.target.value })
+              }
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Diviseur du poids volumétrique
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={shipForm.diviseur_volumetrique}
+              onChange={e =>
+                setShipForm({ ...shipForm, diviseur_volumetrique: e.target.value })
+              }
+              className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+            />
+            <p className="text-gray-500 text-xs mt-1">
+              (L × l × h en cm) ÷ ce nombre. 5000 chez tous les transporteurs. On
+              facture le plus élevé des deux poids.
+            </p>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 mb-6 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={shipForm.utiliser_bareme_personnalise}
+            onChange={e =>
+              setShipForm({
+                ...shipForm,
+                utiliser_bareme_personnalise: e.target.checked,
+              })
+            }
+            className="mt-1"
+          />
+          <span className="text-sm text-gray-300">
+            <b className="text-white">
+              Utiliser mes barèmes ci-dessus au lieu des grilles transporteurs 2026
+            </b>
+            <br />
+            <span className="text-gray-500 text-xs">
+              Décoché (recommandé) : les prix viennent des grilles réelles Colissimo,
+              Chronopost, Mondial Relay et messagerie. Coché : les tranches saisies
+              plus haut reprennent la main sur la métropole et l'Europe. Les
+              corrections de zone (outre-mer, Corse, code postal invalide) restent
+              actives dans les deux cas — c'est ce qui empêchait de vendre à perte
+              jusqu'à 135 € par colis vers l'outre-mer.
+            </span>
+          </span>
+        </label>
+
+        {/* ═══ Suppléments palette ═══ */}
+        <h3 className="text-white font-semibold mb-1">Suppléments palette (€ HT)</h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Facturés en plus du transport quand la situation l'exige. Les valeurs par
+          défaut sont les médianes des fourchettes publiées par les transporteurs
+          (référentiel 2026) ; la surcharge carburant est indexée mensuellement et se
+          révise chaque mois.
+        </p>
+        <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+          {(
+            [
+              ['sup_hayon', 'Hayon élévateur', 'Camion sans quai de déchargement'],
+              ['sup_rdv', 'Prise de rendez-vous', 'Livraison sur créneau convenu'],
+              ['sup_particulier', 'Livraison à particulier', 'Palette hors adresse professionnelle'],
+              ['sup_zone_difficile', 'Zone difficile', 'Montagne, centre-ville'],
+              ['sup_corse_iles', 'Corse et îles', 'Jamais le tarif métropole nu'],
+              ['sup_carburant_pct', 'Surcharge carburant (%)', 'Indexée chaque mois'],
+              ['sup_hors_gabarit', 'Hors gabarit Colissimo', 'L+l+h de 150 à 200 cm'],
+            ] as const
+          ).map(([field, label, aide]) => (
+            <div key={field}>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {label}
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={shipForm[field]}
+                onChange={e =>
+                  setShipForm({ ...shipForm, [field]: e.target.value })
+                }
+                className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center focus:border-blue-400 focus:outline-none"
+              />
+              <p className="text-gray-500 text-xs mt-1">{aide}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ═══ Franco de port ═══ */}
+        <h3 className="text-white font-semibold mb-1">Franco de port (€ HT)</h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Montant de commande à partir duquel le port est offert.{' '}
+          <b>Laissez la case VIDE pour ne pas offrir le port sur une zone</b> — une
+          case vide et un zéro ne disent pas la même chose : zéro offrirait le port
+          dès le premier euro. Le franco est une décision commerciale : hors
+          métropole, le transport coûte 2 à 10 fois plus cher, d'où des cases vides
+          par défaut.
+        </p>
+        <div className="grid md:grid-cols-4 gap-4 mb-4">
+          {(
+            [
+              ['franco_metropole', 'France métropolitaine'],
+              ['franco_corse_iles', 'Corse et îles'],
+              ['franco_ue', 'Union européenne'],
+              ['franco_outre_mer', 'Outre-mer'],
+            ] as const
+          ).map(([field, label]) => (
+            <div key={field}>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {label}
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="pas de franco"
+                value={shipForm[field]}
+                onChange={e =>
+                  setShipForm({ ...shipForm, [field]: e.target.value })
+                }
+                className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-center placeholder-gray-600 focus:border-blue-400 focus:outline-none"
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mb-6">
+          <span className="block text-sm font-medium text-gray-300 mb-2">
+            Modes éligibles au franco
+          </span>
+          <div className="flex flex-wrap gap-3">
+            {(
+              [
+                ['domicile', 'Domicile'],
+                ['relais', 'Point relais'],
+                ['express', 'Express'],
+                ['palette', 'Palette'],
+              ] as const
+            ).map(([mode, label]) => (
+              <label
+                key={mode}
+                className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 cursor-pointer text-sm text-gray-300"
+              >
+                <input
+                  type="checkbox"
+                  checked={shipForm.franco_modes.includes(mode)}
+                  onChange={e =>
+                    setShipForm({
+                      ...shipForm,
+                      franco_modes: e.target.checked
+                        ? [...shipForm.franco_modes, mode]
+                        : shipForm.franco_modes.filter(m => m !== mode),
+                    })
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <p className="text-gray-500 text-xs mt-2">
+            Offrir un envoi express ou une palette revient à payer 40 à 280 € de
+            transport sur une commande qui vient d'atteindre le seuil : les deux sont
+            décochés par défaut.
+          </p>
         </div>
 
         <button

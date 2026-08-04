@@ -215,16 +215,23 @@ const Header = () => {
               Contact
             </Link>
 
-            {/* Interrupteur d'AFFICHAGE des prix. Il en avait l'apparence mais se
-                contentait de renvoyer vers « Mon compte », où il fallait encore cliquer
-                « Modifier » puis « Enregistrer » — d'où l'impression que rien ne se
-                passait. Il bascule maintenant vraiment, et son état est mémorisé.
-                ⚠ Il ne change QUE l'affichage. Le taux réellement facturé est décidé par
-                le serveur d'après l'adresse de livraison, jamais par ce bouton. */}
+            {/* Interrupteur d'AFFICHAGE des prix — CONFORT DE LECTURE, RIEN D'AUTRE.
+                Il en avait l'apparence mais se contentait de renvoyer vers « Mon compte » :
+                on cliquait, rien ne se passait. Il bascule maintenant vraiment.
+
+                ⚠ NE PAS LE CONFONDRE AVEC LE STATUT FISCAL. Il portait « Prix HT » /
+                « Prix TTC » et le panier annonçait juste en dessous « Prix HT
+                (Professionnel) » : le client croyait déclarer ici s'il achetait en
+                entreprise, et se demandait pourquoi on le lui redemandait dans le panier.
+                Le libellé dit désormais qu'il s'agit d'un AFFICHAGE ; la déclaration
+                « particulier / entreprise » n'a qu'un seul endroit, le bloc « J'achète en
+                tant que » du panier, et c'est elle — avec l'adresse de livraison — qui
+                décide du taux réellement facturé. */}
             <button
               type="button"
               onClick={() => setAffichagePrix(affichagePrix === 'ht' ? 'ttc' : 'ht')}
-              title="Afficher les prix hors taxes ou toutes taxes comprises. N'affecte pas le montant facturé, qui dépend de votre adresse de livraison."
+              title="Confort de lecture : afficher les prix hors taxes ou toutes taxes comprises. Ne change ni votre statut (particulier / entreprise) ni le montant facturé, qui dépend de votre adresse de livraison."
+              aria-label={`Afficher les prix ${affichagePrix === 'ht' ? 'toutes taxes comprises' : 'hors taxes'}`}
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full px-3 py-2 transition-colors"
             >
               {affichagePrix === 'ht' ? (
@@ -232,8 +239,8 @@ const Header = () => {
               ) : (
                 <ToggleLeft size={18} className="text-gray-300" />
               )}
-              <span className="text-xs font-medium text-white">
-                {affichagePrix === 'ht' ? 'Prix HT' : 'Prix TTC'}
+              <span className="text-xs font-medium text-white whitespace-nowrap">
+                Affichage&nbsp;: {affichagePrix === 'ht' ? 'HT' : 'TTC'}
               </span>
             </button>
 
@@ -308,12 +315,15 @@ const Header = () => {
                         </span>
                       )}
                     </Link>
-                    <Settings size={16} />
+                    {/* L'engrenage traînait ici SEUL, sans lien ni intitulé : un
+                        pictogramme cliquable en apparence qui ne menait nulle part. Il
+                        est rendu à sa fonction — l'accès à l'administration. */}
                     {isAdmin && (
                       <Link
                         to="/admin"
-                        className="block text-white hover:text-blue-400 py-1"
+                        className="flex items-center gap-2 text-white hover:text-blue-400 py-1"
                       >
+                        <Settings size={16} />
                         Administration
                       </Link>
                     )}
@@ -329,8 +339,12 @@ const Header = () => {
               </div>
             ) : (
               <div className="flex items-center gap-4">
+                {/* On transmet la page courante : après connexion, le client revient
+                    LÀ OÙ IL ÉTAIT. `navigate('/')` systématique renvoyait tout le monde
+                    à l'accueil, y compris depuis le panier au moment de payer. */}
                 <Link
                   to="/connexion"
+                  state={{ from: location.pathname + location.search }}
                   className="text-white hover:text-blue-400 transition-colors duration-300"
                 >
                   Connexion
@@ -362,19 +376,26 @@ const Header = () => {
           } mobile-menu-container`}
         >
           <div className="flex flex-col space-y-4 p-6">
-            {/* Même règle qu'en version bureau : on indique le mode, on ne le bascule
-                pas. Il découle du statut entreprise déclaré dans le compte. */}
+            {/* Même interrupteur qu'en version bureau, et de vraie nature : il renvoyait
+                vers « Mon compte » comme si le choix se faisait là-bas — alors qu'il ne
+                s'agit que du format d'affichage. Il bascule ici aussi, et le libellé
+                énonce ce qu'il fait. */}
             {user && (
-              <Link
-                to="/compte"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center justify-between p-3 bg-white/10 rounded-lg"
+              <button
+                type="button"
+                onClick={() => setAffichagePrix(affichagePrix === 'ht' ? 'ttc' : 'ht')}
+                className="flex items-center justify-between p-3 bg-white/10 rounded-lg w-full"
               >
-                <span className="text-white text-sm">Prix affichés :</span>
-                <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white">
+                <span className="text-white text-sm text-left">
+                  Affichage des prix
+                  <span className="block text-gray-400 text-xs">
+                    Confort de lecture — ne change pas le montant facturé
+                  </span>
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white shrink-0">
                   {affichagePrix === 'ht' ? 'HT' : 'TTC'}
                 </span>
-              </Link>
+              </button>
             )}
 
             <Link
@@ -476,6 +497,7 @@ const Header = () => {
               <>
                 <Link
                   to="/connexion"
+                  state={{ from: location.pathname + location.search }}
                   className="text-white hover:text-blue-400 transition-colors duration-300"
                 >
                   Connexion

@@ -11,6 +11,8 @@ import {
   X,
   Package,
   MessageSquare,
+  KeyRound,
+  Loader2,
 } from 'lucide-react';
 import AddressManager from '../components/AddressManager';
 import toast from 'react-hot-toast';
@@ -38,12 +40,36 @@ interface Profile {
 }
 
 const AccountPage = () => {
-  const { user } = useAuth();
+  /* `loading` du contexte : sans lui, `!user` vaut vrai le temps que la session soit
+     relue et le client lisait « Accès non autorisé » sur SON PROPRE compte. */
+  const { user, loading: sessionEnCours, demanderReinitialisation } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [envoiMotDePasse, setEnvoiMotDePasse] = useState(false);
+
+  /* ★ CHANGER SON MOT DE PASSE DEPUIS L'ESPACE CLIENT.
+     Il n'existait aucun moyen de le faire : ni ici, ni ailleurs. On passe par le même
+     chemin que « mot de passe oublié » — un lien envoyé par e-mail — et c'est volontaire.
+     Modifier le mot de passe directement depuis une session ouverte permettrait à
+     quiconque trouve un poste déverrouillé de s'approprier le compte ; le passage par la
+     boîte e-mail prouve que la personne est bien le titulaire. */
+  const changerMotDePasse = async () => {
+    if (!user?.email || envoiMotDePasse) return;
+    setEnvoiMotDePasse(true);
+    const { error } = await demanderReinitialisation(user.email);
+    setEnvoiMotDePasse(false);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    toast.success(
+      `Un lien de changement de mot de passe vient de partir vers ${user.email}.`,
+      { duration: 8000 }
+    );
+  };
 
   useEffect(() => {
     if (user) {
@@ -194,17 +220,36 @@ const AccountPage = () => {
     }
   };
 
-  if (!user) {
+  /* AVANT le test `!user` : « Accès non autorisé » est un refus, pas un chargement. */
+  if (sessionEnCours) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-24 flex items-center justify-center">
         <div className="text-center">
+          <Loader2 className="text-blue-400 mx-auto mb-4 animate-spin" size={40} />
+          <p className="text-gray-300">Chargement de votre compte…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 pt-24 flex items-center justify-center px-6">
+        <div className="text-center">
           <User className="text-gray-400 mx-auto mb-4" size={64} />
           <h2 className="text-2xl font-bold text-white mb-4">
-            Accès non autorisé
+            Connectez-vous pour accéder à votre compte
           </h2>
-          <p className="text-gray-400">
-            Veuillez vous connecter pour accéder à votre compte
+          <p className="text-gray-400 mb-6">
+            Vos informations, vos adresses et vos factures vous y attendent.
           </p>
+          <Link
+            to="/connexion"
+            state={{ from: '/compte' }}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+          >
+            Se connecter
+          </Link>
         </div>
       </div>
     );
@@ -300,6 +345,32 @@ const AccountPage = () => {
                       disabled
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-gray-400 cursor-not-allowed"
                     />
+                  </div>
+
+                  {/* ★ SÉCURITÉ DU COMPTE — le bloc qui manquait entièrement.
+                      Aucun écran du site ne permettait de changer son mot de passe. */}
+                  <div className="border border-white/10 rounded-lg p-4 bg-white/5">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-white font-medium flex items-center gap-2">
+                          <KeyRound size={16} className="text-blue-400" />
+                          Mot de passe
+                        </div>
+                        <p className="text-gray-400 text-sm mt-1 leading-relaxed">
+                          Nous vous envoyons un lien sécurisé par e-mail : c'est lui qui
+                          prouve que la demande vient bien de vous.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={changerMotDePasse}
+                        disabled={envoiMotDePasse}
+                        className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white font-semibold hover:bg-white/20 transition-colors disabled:opacity-50"
+                      >
+                        {envoiMotDePasse && <Loader2 size={16} className="animate-spin" />}
+                        {envoiMotDePasse ? 'Envoi…' : 'Changer mon mot de passe'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Prénom */}

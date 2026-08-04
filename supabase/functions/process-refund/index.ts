@@ -1,24 +1,69 @@
+/*
+  REMBOURSEMENT — Stripe rend l'argent, la comptabilité suit.
+
+  ## Ce qui a été corrigé le 5 août
+  1. **Aucune clé d'idempotence.** Deux onglets ouverts sur la même facture, un double clic
+     ou un simple rejeu réseau créaient DEUX remboursements Stripe. L'argent partait deux
+     fois et rien ne s'y opposait. La clé est désormais déterministe : même facture, même
+     charge, même montant, même rang ⇒ Stripe reconnaît la demande et rend le PREMIER
+     remboursement au lieu d'en créer un second.
+  2. **TVA à 20 % en dur.** `invoiced_item_vat_rate: 0.2` et `amount / 1.2` étaient écrits
+     dans le code. Sur une facture exonérée — livraison intracommunautaire, exportation,
+     outre-mer — on déclarait ainsi à la comptabilité une TVA qui n'avait JAMAIS été
+     collectée : TVA déduite à tort, redressement assuré. Le taux, le régime et la mention
+     sont maintenant relus SUR LA FACTURE D'ORIGINE, où ils ont été figés à la vente.
+  3. **Aucun statut mis à jour.** `refunded` est lu partout — `declaration_tva`,
+     `declaration_des`, l'écran Facturation — mais n'était écrit nulle part. Une commande
+     remboursée restait « payée » et continuait d'alimenter la TVA collectée.
+  4. **Pas d'avoir.** Une facture émise est inaltérable (migration 20260805020000) : la
+     seule correction régulière est un AVOIR. On appelle donc `creer_avoir_depuis_facture()`
+     dès que le remboursement solde la facture, et c'est CET AVOIR qui part en comptabilité,
+     par le même constructeur de payload que les factures — pas une seconde version.
+
+  ## Ce qui n'a pas bougé, et pourquoi
+  · Le contrôle du rôle administrateur (il n'existait pas : n'importe quel client connecté
+    pouvait se faire rembourser après réception de la marchandise).
+  · L'ordre de priorité : l'argent d'abord, la trace ensuite. Un échec du webhook comptable
+    ne fait JAMAIS échouer le remboursement — il est déjà acquis chez Stripe.
+*/
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import Stripe from 'npm:stripe@14.24.0'; // Version mise à jour
+import Stripe from 'npm:stripe@14.24.0';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+const ORIGINES = [
+  'https://omegasud.fr',
+  'https://www.omegasud.fr',
+  'https://omegasud.netlify.app', // préproduction Netlify
+  ...(Deno.env.get('CORS_EXTRA_ORIGINS') || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+];
+
+const enTetesCors = (req: Request) => ({
+  'Access-Control-Allow-Origin': ORIGINES.includes(req.headers.get('origin') || '')
+    ? (req.headers.get('origin') as string)
+    : ORIGINES[0],
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
+    'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+  Vary: 'Origin',
+});
 
-// Interface alignée avec les données envoyées par le nouveau frontend
+/** Interface alignée sur ce qu'envoient AdminOrders et AdminBilling (les deux appelants). */
 interface RefundRequest {
   invoiceId: string;
   amount: number;
   reason: string;
   adminNotes?: string;
+  /** Envoyé par AdminBilling — indice de dernier recours, jamais une autorisation. */
+  chargeId?: string;
+  orderId?: string;
 }
 
-// Initialisez les clients en dehors du handler pour la performance et la réutilisabilité
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2024-06-20', // ⭐ Version LTS la plus récente
+  // ★ Version d'API UNIFIÉE sur les cinq fonctions Stripe du projet : deux versions
+  // différentes, ce sont deux formes de réponse possibles pour un même objet.
+  apiVersion: '2024-06-20',
   httpClient: Stripe.createFetchHttpClient(), // Nécessaire pour Deno
 });
 
@@ -27,32 +72,47 @@ const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 );
 
-Deno.serve(async req => {
+/** Date du jour à Paris, `AAAA-MM-JJ` — jamais `toISOString()` sur un `timestamptz`. */
+const jourParis = (d: Date = new Date()) =>
+  new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+
+const cts = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
+/**
+ * Code de catégorie de TVA (UNCL 5305, repris par EN 16931 / Factur-X).
+ * Déduit du RÉGIME et du TERRITOIRE, jamais du seul taux : quatre régimes différents
+ * donnent 0 % et ne se déclarent pas au même endroit.
+ */
+function codeCategorieTva(regime: string | null, territoire: string | null): string {
+  if (regime === 'ue_b2b') return 'K';                        // 262 ter I — intracommunautaire
+  if (territoire === 'FR-DOM' || territoire === 'FR-COM') return 'G'; // 294 — outre-mer
+  if (regime === 'export') return 'G';                        // 262 I — exportation
+  return 'S';
+}
+
+Deno.serve(async (req: Request) => {
+  const corsHeaders = enTetesCors(req);
+  const json = (corps: unknown, statut = 200) =>
+    new Response(JSON.stringify(corps), {
+      status: statut,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // --- 1. Sécurité et Authentification ---
-    // (Votre code existant pour vérifier le token et le rôle admin est conservé, il est excellent)
+    // --- 1. Sécurité et authentification ---
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Non autorisé' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Token invalide' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (!authHeader) return json({ error: 'Non autorisé' }, 401);
+
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) return json({ error: 'Token invalide' }, 401);
+
     /* ★★ CONTRÔLE DU RÔLE — IL N'EXISTAIT PAS.
        Il ne restait qu'un commentaire « Ajoutez ici votre vérification de rôle admin si
        nécessaire ». La fonction se contentait donc de vérifier que l'appelant était
@@ -63,86 +123,79 @@ Deno.serve(async req => {
       .from('profiles').select('role').eq('id', user.id).maybeSingle();
     if (profilAppelant?.role !== 'admin') {
       console.error(`process-refund : tentative par un non-administrateur (${user.id})`);
-      return new Response(
-        JSON.stringify({ error: 'Le remboursement est réservé aux administrateurs.' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return json({ error: 'Le remboursement est réservé aux administrateurs.' }, 403);
     }
 
-    // --- 2. Validation de la Requête ---
-    const { invoiceId, amount, reason, adminNotes }: RefundRequest =
-      await req.json();
+    // --- 2. Validation de la requête ---
+    const { invoiceId, amount, reason, adminNotes, chargeId }: RefundRequest = await req.json();
 
     if (!invoiceId || !amount || amount <= 0 || !reason) {
-      return new Response(
-        JSON.stringify({
-          error:
-            'Données manquantes ou invalides : invoiceId, amount, et reason sont requis.',
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+      return json({
+        error: 'Données manquantes ou invalides : invoiceId, amount, et reason sont requis.',
+      }, 400);
     }
+    const montant = cts(amount);
 
-    // Récupérer l'order_id (fallback) + les infos nécessaires à l'avoir Tiime
-    const { data: invoiceData, error: invoiceError } = await supabaseAdmin
+    /* --- 3. La facture d'origine : c'est elle qui porte la vérité fiscale ---
+       ★ Le régime, le taux, la mention et le territoire ont été FIGÉS à la vente. On les
+       recopie tels quels sur l'avoir — on ne les redéduit jamais, et surtout pas d'un
+       texte libre. */
+    const { data: facture, error: eFacture } = await supabaseAdmin
       .from('invoices')
-      .select('order_id, invoice_number, customer_name, customer_email')
+      .select(
+        'id, order_id, invoice_number, customer_name, customer_email, status, document_type, ' +
+        'subtotal_ht, tax_amount, total_ttc, vat_rate, vat_regime, vat_mention, vat_territory'
+      )
       .eq('id', invoiceId)
-      .single();
+      .maybeSingle();
 
-    if (invoiceError) {
-      console.error('Erreur récupération invoice pour fallback:', invoiceError);
+    if (eFacture) console.error('process-refund : facture illisible', eFacture.message);
+    if (!facture) return json({ error: 'Facture introuvable.' }, 404);
+    if (facture.document_type === 'credit_note') {
+      return json({ error: 'On ne rembourse pas un avoir.' }, 400);
     }
-    const orderId = invoiceData?.order_id || null;
 
-    // --- 3. Recherche de la Charge Stripe (Logique Fiabilisée) ---
-    console.log(`🔍 Recherche de la charge pour la facture: ${invoiceId}`);
+    const orderId = facture.order_id ?? null;
+    const tauxTva = Number(facture.vat_rate ?? 20);
+    const codeTva = codeCategorieTva(facture.vat_regime ?? null, facture.vat_territory ?? null);
+
+    // --- 4. Recherche de la charge Stripe ---
+    console.log(`process-refund : recherche de la charge pour la facture ${invoiceId}`);
     let charge: Stripe.Charge | null = null;
-    let paymentIntentId = '';
+    let enregistrementPaiement: { id: string; invoice_id: string | null } | null = null;
 
-    // Stratégie prioritaire et désormais fiable : utiliser les `payment_records`
-    const { data: paymentRecords, error: recordsError } = await supabaseAdmin
+    /* ⚠ On ne filtre PLUS sur `status = 'succeeded'`. Depuis que `stripe-webhook` fait
+       évoluer ce statut (`refunded`, `partially_refunded`), le filtre historique faisait
+       perdre la trace de la transaction d'origine dès le premier remboursement partiel :
+       un second remboursement devenait impossible. */
+    const { data: paiements } = await supabaseAdmin
       .from('payment_records')
-      .select('reference, stripe_charge_id')
+      .select('id, invoice_id, reference, stripe_charge_id')
       .eq('invoice_id', invoiceId)
-      .eq('status', 'succeeded')
+      .neq('status', 'failed')
       .order('created_at', { ascending: false });
 
-    if (recordsError) throw recordsError;
+    let record = paiements?.[0] ?? null;
 
-    let record = paymentRecords && paymentRecords[0];
-
-    // ⚠️ Fallback : si aucun enregistrement lié à la facture, tenter via l'order_id
+    /* ⚠ Repli par la COMMANDE. Le règlement est écrit par le serveur au moment du
+       paiement (`confirmer-commande` / `stripe-webhook`), c'est-à-dire AVANT que la
+       facture n'existe : `invoice_id` y est donc nul et seul `order_id` est renseigné. */
     if (!record && orderId) {
-      const { data: orderRecords, error: orderRecordsError } =
-        await supabaseAdmin
-          .from('payment_records')
-          .select('reference, stripe_charge_id')
-          .eq('order_id', orderId)
-          .eq('status', 'succeeded')
-          .order('created_at', { ascending: false });
-
-      if (orderRecordsError) throw orderRecordsError;
-      if (orderRecords && orderRecords.length > 0) {
-        record = orderRecords[0];
-      }
+      const { data: parCommande } = await supabaseAdmin
+        .from('payment_records')
+        .select('id, invoice_id, reference, stripe_charge_id')
+        .eq('order_id', orderId)
+        .neq('status', 'failed')
+        .order('created_at', { ascending: false });
+      record = parCommande?.[0] ?? null;
     }
 
     if (record) {
-      console.log('✅ Enregistrement de paiement trouvé:', record);
-
-      // On privilégie le charge_id s'il existe (plus direct)
-      if (
-        record.stripe_charge_id &&
-        record.stripe_charge_id.startsWith('ch_')
-      ) {
+      enregistrementPaiement = { id: record.id, invoice_id: record.invoice_id };
+      // On privilégie le charge_id s'il existe (plus direct).
+      if (record.stripe_charge_id?.startsWith('ch_')) {
         charge = await stripe.charges.retrieve(record.stripe_charge_id);
-      }
-      // Sinon, on utilise le payment intent (reference) pour trouver la charge
-      else if (record.reference && record.reference.startsWith('pi_')) {
+      } else if (record.reference?.startsWith('pi_')) {
         const pi = await stripe.paymentIntents.retrieve(record.reference, {
           expand: ['latest_charge'],
         });
@@ -150,169 +203,285 @@ Deno.serve(async req => {
       }
     }
 
-    // Si aucune charge n'est trouvée, c'est une erreur.
-    if (!charge) {
-      console.error(
-        `❌ Aucune charge Stripe valide trouvée pour la facture ${invoiceId}`
-      );
-      return new Response(
-        JSON.stringify({
-          error:
-            'Impossible de trouver la transaction Stripe associée à cette facture.',
-        }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    /* Repli par la COMMANDE elle-même : les commandes antérieures à l'écriture serveur de
+       `payment_records` n'ont qu'un `stripe_payment_intent_id` sur `orders`. */
+    if (!charge && orderId) {
+      const { data: commande } = await supabaseAdmin
+        .from('orders').select('stripe_payment_intent_id').eq('id', orderId).maybeSingle();
+      if (commande?.stripe_payment_intent_id?.startsWith('pi_')) {
+        const pi = await stripe.paymentIntents.retrieve(commande.stripe_payment_intent_id, {
+          expand: ['latest_charge'],
+        });
+        charge = pi.latest_charge as Stripe.Charge;
+      }
     }
 
-    paymentIntentId = charge.payment_intent as string;
-    console.log(`✅ Charge Stripe ${charge.id} trouvée.`);
-
-    // --- 4. Vérification du Montant Remboursable ---
-    const availableForRefund = (charge.amount - charge.amount_refunded) / 100;
-    if (amount > availableForRefund) {
-      return new Response(
-        JSON.stringify({
-          error: `Montant de remboursement trop élevé. Maximum disponible : ${availableForRefund.toFixed(2)}€`,
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    /* Dernier recours : l'identifiant saisi dans l'écran Facturation. Il vient d'un
+       administrateur — donc d'une personne déjà autorisée à rembourser — mais on ne s'en
+       sert QUE si rien en base n'a permis de retrouver la transaction, et on le trace. */
+    if (!charge && chargeId) {
+      console.warn(`process-refund : recours à l'identifiant saisi à la main (${chargeId})`);
+      if (chargeId.startsWith('ch_')) {
+        charge = await stripe.charges.retrieve(chargeId);
+      } else if (chargeId.startsWith('pi_')) {
+        const pi = await stripe.paymentIntents.retrieve(chargeId, { expand: ['latest_charge'] });
+        charge = pi.latest_charge as Stripe.Charge;
+      }
     }
 
-    // --- 5. Création du Remboursement dans Stripe ---
-    const refund = await stripe.refunds.create({
-      charge: charge.id,
-      amount: Math.round(amount * 100), // Stripe attend des centimes
-      reason: 'requested_by_customer', // Raison standard pour Stripe
-      metadata: {
-        invoice_id: invoiceId,
-        reason_from_user: reason,
-        processed_by: user.id,
-        admin_notes: adminNotes || 'N/A',
+    if (!charge?.id) {
+      console.error(`process-refund : aucune charge Stripe pour la facture ${invoiceId}`);
+      return json({
+        error: 'Impossible de trouver la transaction Stripe associée à cette facture.',
+      }, 404);
+    }
+
+    const paymentIntentId =
+      typeof charge.payment_intent === 'string'
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? '';
+    console.log(`process-refund : charge ${charge.id} trouvée.`);
+
+    /* ★ RÉPARATION AU PASSAGE. Le règlement écrit au moment du paiement n'a pas d'
+       `invoice_id` (la facture n'existait pas encore) : l'écran Facturation ne le voyait
+       donc pas et proposait « aucun paiement enregistré » sur une facture pourtant réglée.
+       On le rattache maintenant qu'on connaît les deux. */
+    if (enregistrementPaiement && !enregistrementPaiement.invoice_id) {
+      await supabaseAdmin
+        .from('payment_records')
+        .update({ invoice_id: invoiceId })
+        .eq('id', enregistrementPaiement.id);
+    }
+
+    // --- 5. Montant remboursable ---
+    const disponible = cts((charge.amount - charge.amount_refunded) / 100);
+    if (montant > disponible) {
+      return json({
+        error: `Montant de remboursement trop élevé. Maximum disponible : ${disponible.toFixed(2)} €`,
+      }, 400);
+    }
+
+    /* --- 6. Le remboursement Stripe, avec CLÉ D'IDEMPOTENCE ---
+       La clé est déterministe et tient compte du RANG du remboursement : deux onglets qui
+       demandent le même montant au même instant lisent le même rang, produisent la même
+       clé, et Stripe ne rembourse qu'une fois. Un second remboursement partiel VOULU, lui,
+       intervient après l'enregistrement du premier : le rang a changé, la clé aussi.
+       ⚠ Sans ce rang, un remboursement légitime de 50 € suivi d'un autre de 50 € sur la
+       même facture serait silencieusement absorbé par le premier (les clés Stripe vivent
+       24 h). */
+    const { count: dejaFaits } = await supabaseAdmin
+      .from('refunds')
+      .select('id', { count: 'exact', head: true })
+      .eq('invoice_id', invoiceId);
+    const cleIdempotence =
+      req.headers.get('idempotency-key') ||
+      `refund:${invoiceId}:${charge.id}:${Math.round(montant * 100)}:${dejaFaits ?? 0}`;
+
+    const refund = await stripe.refunds.create(
+      {
+        charge: charge.id,
+        amount: Math.round(montant * 100), // Stripe attend des centimes
+        reason: 'requested_by_customer',   // valeur normalisée de Stripe
+        metadata: {
+          invoice_id: invoiceId,
+          invoice_number: facture.invoice_number ?? '',
+          reason_from_user: String(reason).slice(0, 400),
+          processed_by: user.id,
+          admin_notes: (adminNotes || 'N/A').slice(0, 400),
+        },
       },
-    });
+      { idempotencyKey: cleIdempotence }
+    );
 
-    console.log(`✅ Remboursement Stripe ${refund.id} créé.`);
+    console.log(`process-refund : remboursement Stripe ${refund.id} créé (clé ${cleIdempotence}).`);
 
-    // --- 6. Enregistrement du Remboursement dans Supabase ---
-    // Note: Il est recommandé de créer la table 'refunds' via une migration SQL plutôt qu'à la volée.
+    /* Un remboursement carte est irrévocable dès sa création : `succeeded` immédiatement,
+       ou `pending` le temps du réseau bancaire. Seul `failed`/`canceled` interdit d'aller
+       plus loin. Le webhook `charge.refunded` réajustera le statut réel de toute façon. */
+    const reussi = refund.status === 'succeeded' || refund.status === 'pending';
+
+    // --- 7. Enregistrement en base ---
     const { error: dbError } = await supabaseAdmin.from('refunds').insert({
       invoice_id: invoiceId,
       order_id: orderId,
       stripe_refund_id: refund.id,
       stripe_payment_intent_id: paymentIntentId,
-      amount: amount,
+      amount: montant,
       reason: reason,
-      status: refund.status, // ex: 'succeeded', 'pending', 'failed'
+      // ★ `succeeded` dès que Stripe l'annonce : le statut restait figé sur la valeur du
+      // jour de la demande, et l'écran Facturation ne décomptait jamais le remboursement.
+      status: refund.status === 'pending' ? 'succeeded' : (refund.status ?? 'succeeded'),
       admin_notes: adminNotes || null,
       processed_by: user.id,
+      created_by: user.id,
     });
 
     if (dbError) {
-      // Si l'enregistrement échoue, il faut le savoir car il y a une désynchronisation
+      // Désynchronisation : l'argent est parti, la trace manque. On le dit franchement.
       console.error(
-        'CRITIQUE : Le remboursement Stripe a été créé mais son enregistrement en base de données a échoué.',
-        dbError
+        'CRITIQUE : remboursement Stripe créé mais non enregistré en base.', dbError
       );
-      // On renvoie quand même un succès partiel à l'utilisateur
-      return new Response(
-        JSON.stringify({
-          message: `Remboursement Stripe de ${amount.toFixed(2)}€ effectué, mais erreur lors de la sauvegarde locale. Contactez le support.`,
-          error: dbError.message,
-        }),
-        {
-          status: 207,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return json({
+        message:
+          `Remboursement Stripe de ${montant.toFixed(2)} € effectué, mais erreur lors de la ` +
+          `sauvegarde locale. Contactez le support (référence ${refund.id}).`,
+        error: dbError.message,
+        stripe_refund_id: refund.id,
+      }, 207);
+    }
+
+    /* --- 8. Le remboursement est-il TOTAL ? ---
+       On raisonne sur la FACTURE (somme des remboursements déjà enregistrés), pas sur la
+       charge : une charge peut couvrir une commande dont la facture a été émise à part. */
+    const { data: tousRemb } = await supabaseAdmin
+      .from('refunds').select('amount, status').eq('invoice_id', invoiceId);
+    const cumul = cts(
+      (tousRemb ?? [])
+        .filter((r) => r.status !== 'failed' && r.status !== 'canceled')
+        .reduce((s, r) => s + Number(r.amount || 0), 0)
+    );
+    const totalFacture = Number(facture.total_ttc || 0);
+    const remboursementTotal = totalFacture > 0 && cumul >= totalFacture - 0.01;
+
+    let avoirId: string | null = null;
+    if (reussi && remboursementTotal) {
+      /* --- 9. ★ UN VRAI AVOIR, pas une facture positive en brouillon ---
+         Une facture émise est inaltérable : l'avoir (type 381 de la norme EN 16931) est la
+         SEULE correction régulière. `creer_avoir_depuis_facture` reprend les lignes avec
+         des quantités négatives, numérote dans la série AV-, référence la facture annulée
+         et passe celle-ci en `refunded` — le tout dans une transaction, et de façon
+         idempotente (un second appel rend l'avoir existant). */
+      if (facture.status === 'draft') {
+        // Un brouillon n'a jamais été remis au client : il se corrige, il ne s'annule pas.
+        await supabaseAdmin.from('invoices').update({ status: 'refunded' }).eq('id', invoiceId);
+      } else {
+        const { data: idAvoir, error: eAvoir } = await supabaseAdmin.rpc(
+          'creer_avoir_depuis_facture',
+          { p_invoice_id: invoiceId, p_motif: `Avoir sur remboursement — ${reason}`.slice(0, 300) }
+        );
+        if (eAvoir) {
+          // On ne fait pas échouer le remboursement pour autant : l'argent est rendu.
+          console.error('process-refund : avoir non émis', eAvoir.message);
+          await supabaseAdmin.from('invoices').update({ status: 'refunded' }).eq('id', invoiceId);
+        } else {
+          avoirId = (idAvoir as string) ?? null;
         }
-      );
+      }
+
+      /* La commande suit. Le statut `refunded` déclenche aussi la restitution du stock
+         (trigger `restaurer_stock_commande`) : c'est voulu, la marchandise revient. */
+      if (orderId) {
+        await supabaseAdmin.from('orders').update({ status: 'refunded' }).eq('id', orderId);
+      }
     }
 
-    console.log('✅ Remboursement enregistré dans la base de données.');
-
-    // --- 6bis. Notification Make.com (création d'avoir dans Tiime) ---
-    // Non bloquant : un échec du webhook ne doit jamais faire échouer le
-    // remboursement (l'argent est déjà rendu au client via Stripe).
-    const makeWebhookUrl = Deno.env.get('MAKE_WEBHOOK_URL');
-    if (makeWebhookUrl) {
+    /* --- 10. Comptabilité (Make → Tiime) — non bloquant ---
+       ★ L'avoir part par le MÊME constructeur de payload que les factures (`send-to-make`).
+       Écrire ici une seconde version du payload, c'est garantir qu'elles divergeront : la
+       précédente codait 20 % en dur et n'a jamais suivi les corrections apportées à
+       l'autre. Un seul chemin, un seul format. */
+    let comptabilite: unknown = { envoye: false, motif: 'aucun avoir à transmettre' };
+    if (avoirId) {
       try {
-        await fetch(makeWebhookUrl, {
+        const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-to-make`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            source: 'omegasud.fr',
-            type: 'refund',
-            invoice_id: invoiceId,
-            invoice_number: invoiceData?.invoice_number ?? null,
-            order_id: orderId,
-            customer: {
-              name: invoiceData?.customer_name ?? null,
-              email: invoiceData?.customer_email ?? null,
-            },
-            refund: {
-              amount: amount,
-              currency: 'EUR',
-              reason: reason,
-              // Format AAAA-MM-JJ attendu par Tiime
-              date: new Date().toISOString().slice(0, 10),
-              stripe_refund_id: refund.id,
-            },
-            // Ligne d'avoir déjà au format du module Make "Tiime — Créer une
-            // facture" (type Avoir 381). Montant HT (TTC / 1,20).
-            tiime_lines: [
-              {
-                invoice_quantity: 1,
-                invoice_quantity_unit_of_measure_code: 'unit',
-                line_vat_information: {
-                  invoiced_item_vat_rate: 0.2,
-                  invoiced_item_vat_category_code: 'S',
-                },
-                price_details: {
-                  item_net_price: Math.round((amount / 1.2) * 100) / 100,
-                },
-                item_information: {
-                  item_name: `Remboursement facture ${
-                    invoiceData?.invoice_number ?? ''
-                  } — ${reason}`.slice(0, 200),
-                  item_attributes: [
-                    { item_attribute_name: 'type', item_attribute_value: 'sale' },
-                  ],
-                },
-              },
-            ],
-          }),
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+          body: JSON.stringify({ invoiceId: avoirId }),
         });
-        console.log('✅ Événement refund envoyé à Make.');
-      } catch (webhookError) {
-        console.error('⚠️ Webhook Make (refund) en échec — sans impact sur le remboursement:', webhookError);
+        comptabilite = await r.json().catch(() => ({ envoye: false }));
+      } catch (e) {
+        console.error('process-refund : avoir non transmis à la comptabilité', e);
+        comptabilite = { envoye: false, motif: 'webhook comptable injoignable' };
+      }
+    } else {
+      /* Remboursement PARTIEL : la fonction SQL n'émet que des avoirs TOTAUX (choisir des
+         lignes suppose une interface, c'est le chantier de F2). On transmet donc un
+         événement `refund` — mais avec le taux, le régime et la mention RÉELS de la
+         facture, et non 20 % en dur. */
+      const webhook = Deno.env.get('MAKE_WEBHOOK_URL');
+      if (webhook) {
+        try {
+          const netHt = cts(montant / (1 + tauxTva / 100));
+          await fetch(webhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              schema_version: '2.0',
+              source: 'omegasud.fr',
+              type: 'refund',
+              event_type: 'invoice.refunded_partially',
+              invoice_id: invoiceId,
+              invoice_number: facture.invoice_number ?? null,
+              order_id: orderId,
+              customer: {
+                name: facture.customer_name ?? null,
+                email: facture.customer_email ?? null,
+              },
+              fiscal: {
+                regime: facture.vat_regime ?? null,
+                territory: facture.vat_territory ?? null,
+                vat_rate: tauxTva,
+                vat_category_code: codeTva,
+                legal_mention: facture.vat_mention ?? null,
+              },
+              refund: {
+                amount: montant,
+                amount_ht: netHt,
+                amount_vat: cts(montant - netHt),
+                currency: 'EUR',
+                reason: reason,
+                date: jourParis(),
+                stripe_refund_id: refund.id,
+                is_partial: true,
+              },
+              tiime_lines: [
+                {
+                  invoice_quantity: 1,
+                  invoice_quantity_unit_of_measure_code: 'C62',
+                  line_vat_information: {
+                    // ★ Le taux RÉEL de la facture. `0.2` en dur déclarait une TVA jamais
+                    // collectée sur toute vente exonérée.
+                    invoiced_item_vat_rate: tauxTva / 100,
+                    invoiced_item_vat_category_code: codeTva,
+                    ...(codeTva !== 'S' && facture.vat_mention
+                      ? { invoiced_item_vat_exemption_reason_text: facture.vat_mention }
+                      : {}),
+                  },
+                  price_details: { item_net_price: netHt },
+                  item_information: {
+                    item_name: `Remboursement partiel facture ${facture.invoice_number ?? ''} — ${reason}`.slice(0, 200),
+                    item_attributes: [
+                      { item_attribute_name: 'type', item_attribute_value: 'sale' },
+                    ],
+                  },
+                },
+              ],
+            }),
+          });
+          comptabilite = { envoye: true, partiel: true };
+        } catch (e) {
+          console.error('process-refund : webhook Make (refund partiel) en échec', e);
+          comptabilite = { envoye: false, motif: 'webhook Make en échec' };
+        }
       }
     }
 
-    // --- 7. Réponse de Succès ---
-    return new Response(
-      JSON.stringify({
-        message: `Remboursement de ${amount.toFixed(2)}€ traité avec succès.`,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    // --- 11. Réponse ---
+    return json({
+      message:
+        `Remboursement de ${montant.toFixed(2)} € traité avec succès.` +
+        (avoirId ? " Un avoir a été émis et transmis à la comptabilité." : ''),
+      stripe_refund_id: refund.id,
+      statut: refund.status,
+      total: remboursementTotal,
+      avoir_id: avoirId,
+      comptabilite,
+    });
   } catch (error) {
-    console.error('❌ Erreur globale dans process-refund:', error);
-    return new Response(
-      JSON.stringify({
-        error: 'Erreur interne du serveur.',
-        details: error.message,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    console.error('process-refund : erreur globale', error);
+    return json({
+      error: 'Erreur interne du serveur.',
+      details: error instanceof Error ? error.message : String(error),
+    }, 500);
   }
 });

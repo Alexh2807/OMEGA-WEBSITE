@@ -23,17 +23,15 @@ import { supabase } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import { EURO } from '../../utils/prix';
 
-/* Mention légale à porter sur la facture selon le régime. Une livraison
-   intracommunautaire ou une exportation exonérée SANS sa mention est une facture
-   irrégulière : c'est elle qui justifie l'absence de TVA en cas de contrôle. */
-const MENTIONS_REGIME: Record<string, string> = {
-  ue_b2b:
-    "Autoliquidation — livraison intracommunautaire exonérée (art. 262 ter I du CGI). TVA due par le preneur.",
-  export:
-    "Exonération de TVA — exportation hors Union européenne (art. 262 I du CGI).",
-};
-const mentionRegime = (regime: string | null | undefined): string | null =>
-  (regime && MENTIONS_REGIME[regime]) || null;
+/* ★ `MENTIONS_REGIME` et `mentionRegime()` ont été SUPPRIMÉS.
+   Ils re-déduisaient la mention légale du seul `vat_regime`, alors que `regime_tva()`
+   renvoie « export » aussi bien pour la Suisse que pour la Guadeloupe : une livraison en
+   outre-mer portait donc « exportation hors Union européenne (art. 262 I) » au lieu de
+   l'art. 294. Mention inexacte sur un document légal, exonération contestable en contrôle,
+   et ventilation comptable fausse (exportations au lieu de livraisons outre-mer).
+   La mention est désormais FIGÉE sur la commande (`orders.vat_mention`, arrêtée par le
+   serveur au moment de la vente) et recopiée telle quelle par
+   `creer_facture_depuis_commande()`. Un fait fiscal ne se re-déduit pas côté React. */
 
 interface Order {
   id: string;
@@ -192,12 +190,18 @@ const AdminOrders = () => {
         updated_at: new Date().toISOString(),
       };
 
-      if (adminNotes !== undefined && adminNotes.trim() !== '')
-        updateData.admin_notes = adminNotes;
-      if (trackingLink !== undefined && trackingLink.trim() !== '')
-        updateData.tracking_link = trackingLink;
-      if (estimatedDelivery !== undefined && estimatedDelivery !== '')
-        updateData.estimated_delivery = estimatedDelivery;
+      /* ⚠ Un champ VIDÉ n'était jamais écrit : la condition exigeait une valeur non vide.
+         Conséquence concrète et signalée : un lien de suivi collé sur la mauvaise
+         commande restait affiché au client INDÉFINIMENT — l'effacer dans le formulaire
+         ne faisait rien, et rien ne le disait. Un champ effacé est une INTENTION, au
+         même titre qu'un champ rempli : on écrit `null`, ce qui vide la colonne.
+         `undefined` (champ non soumis) reste, lui, sans effet. */
+      const vider = (v: string) => (v.trim() === '' ? null : v.trim());
+
+      if (adminNotes !== undefined) updateData.admin_notes = vider(adminNotes);
+      if (trackingLink !== undefined) updateData.tracking_link = vider(trackingLink);
+      if (estimatedDelivery !== undefined)
+        updateData.estimated_delivery = estimatedDelivery === '' ? null : estimatedDelivery;
       if (priority !== undefined) updateData.priority = priority;
 
       const { error } = await supabase
@@ -222,16 +226,28 @@ const AdminOrders = () => {
     }
   };
 
+  /* ── STATUTS DE COMMANDE ────────────────────────────────────────────────────
+     ⚠ `paid`, `processing` et `refunded` manquaient ici alors que la page CLIENT les
+     affiche déjà (OrdersPage.tsx:164-240) et que la base les écrit : le back-office
+     annonçait donc « En attente », en bleu, sur une commande REMBOURSÉE. Les deux écrans
+     racontaient deux histoires différentes de la même commande. La liste est alignée sur
+     celle du client, libellés compris — c'est la même commande, ce doit être le même mot. */
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'paid':
+        return <CheckCircle className="text-emerald-400" size={20} />;
       case 'confirmed':
         return <CheckCircle className="text-green-400" size={20} />;
+      case 'processing':
+        return <Package className="text-blue-400" size={20} />;
       case 'shipped':
         return <Truck className="text-blue-400" size={20} />;
       case 'delivered':
         return <Package className="text-green-500" size={20} />;
       case 'cancelled':
         return <AlertCircle className="text-red-400" size={20} />;
+      case 'refunded':
+        return <RotateCcw className="text-amber-400" size={20} />;
       default:
         return <Clock className="text-blue-400" size={20} />;
     }
@@ -239,14 +255,20 @@ const AdminOrders = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
+      case 'paid':
+        return 'Payée';
       case 'confirmed':
         return 'Confirmée';
+      case 'processing':
+        return 'En préparation';
       case 'shipped':
         return 'Expédiée';
       case 'delivered':
         return 'Livrée';
       case 'cancelled':
         return 'Annulée';
+      case 'refunded':
+        return 'Remboursée';
       default:
         return 'En attente';
     }
@@ -254,14 +276,20 @@ const AdminOrders = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'paid':
+        return 'text-emerald-400 bg-emerald-500/20';
       case 'confirmed':
         return 'text-green-400 bg-green-500/20';
+      case 'processing':
+        return 'text-blue-400 bg-blue-500/20';
       case 'shipped':
         return 'text-blue-400 bg-blue-500/20';
       case 'delivered':
         return 'text-green-500 bg-green-500/20';
       case 'cancelled':
         return 'text-red-400 bg-red-500/20';
+      case 'refunded':
+        return 'text-amber-400 bg-amber-500/20';
       default:
         return 'text-blue-400 bg-blue-500/20';
     }
@@ -282,210 +310,78 @@ const AdminOrders = () => {
     }
   };
 
+  /**
+   * Émettre la facture d'une commande — UN SEUL APPEL, une seule transaction.
+   *
+   * ## Ce que faisait l'ancien code, et pourquoi il coûtait cher
+   * Cinq allers-retours depuis le NAVIGATEUR : (1) consommer un numéro,
+   * (2) insérer la facture, (3) insérer les lignes, (4) insérer le règlement,
+   * (5) passer le statut à « payée ». Trois conséquences, toutes constatées :
+   *
+   *  a) **Aucune ligne de frais de port n'était créée.** Les lignes venaient des seuls
+   *     `order_items`, puis le trigger de totalisation ÉCRASAIT les totaux de la facture
+   *     par la somme de ces lignes. On encaissait 2 036 € et on facturait 1 907 € : le
+   *     chiffre d'affaires ET la TVA du port n'étaient jamais déclarés, et le client
+   *     recevait une facture inférieure à son débit carte (art. 242 nonies A du CGI).
+   *  b) **Des trous permanents dans la séquence de numérotation.** Le numéro était
+   *     consommé EN PREMIER, dans sa propre transaction, alors que CINQ sorties
+   *     anticipées suivaient — dont un `prompt()` que l'utilisateur pouvait annuler.
+   *     Chaque abandon brûlait un numéro, et une séquence de facturation doit être
+   *     continue (art. 289 du CGI).
+   *  c) **La mention légale était re-déduite du régime** au lieu d'être recopiée : une
+   *     livraison en Guadeloupe portait la mention d'exportation hors UE.
+   *
+   * ## Ce qui le remplace
+   * `creer_facture_depuis_commande()` numérote, insère la facture, ses lignes produits ET
+   * sa ligne de port, calcule les totaux en un seul arrondi, RECOPIE la mention et le
+   * territoire figés sur la commande, puis REFUSE d'émettre si le total s'écarte de plus
+   * d'un centime du montant encaissé. Tout ou rien : une erreur en cours de route annule
+   * l'ensemble, numéro compris. La fonction est idempotente — un double clic rend la
+   * facture existante au lieu d'en créer une seconde.
+   *
+   * ⚠ L'e-mail du client vient du profil, lu côté serveur. Le `prompt()` du navigateur a
+   * disparu : demander une saisie au milieu d'une séquence de facturation, c'est offrir
+   * un bouton « Annuler » qui laisse un numéro dans la nature.
+   */
   const createInvoiceFromOrder = async (orderId: string) => {
+    const loadingToast = toast.loading('Création de la facture en cours...');
     try {
-      const loadingToast = toast.loading('Création de la facture en cours...');
-
-      /* Mentions légales de la société, lues dans les RÉGLAGES : SIRET, n° de TVA,
-         pénalités de retard et indemnité de recouvrement (obligatoires entre
-         professionnels). Elles se modifient dans l'administration, jamais dans le code. */
-      const { data: reglagesFact } = await supabase
-        .from('billing_settings')
-        .select('legal_mentions')
-        .limit(1)
-        .maybeSingle();
-      const mentionsSociete = reglagesFact?.legal_mentions || '';
-
-      // Générer le numéro de facture de manière atomique
-      const { data: invoiceNumber, error: numberError } = await supabase
-        .rpc('get_next_invoice_number_atomic');
-
-      if (numberError) {
-        console.error('Erreur génération numéro facture:', numberError);
-        toast.error('Erreur lors de la génération du numéro de facture');
-        return;
-      }
-
-      // Récupérer les détails de la commande avec les items
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .select(
-          `
-          *,
-          order_items (
-            *,
-            product:products (*)
-          ),
-          profiles!orders_user_id_profiles_fkey (
-            first_name,
-            last_name
-          )
-        `
-        )
-        .eq('id', orderId)
-        .single();
-
-      if (orderError) {
-        console.error('Error loading order:', orderError);
-        toast.dismiss(loadingToast);
-        toast.error('Erreur lors du chargement de la commande');
-        return;
-      }
-
-      // Récupérer l'email utilisateur depuis la session courante ou via RPC
-      const { data: userData, error: userError } = await supabase.rpc(
-        'get_user_email',
-        {
-          user_uuid: order.user_id,
-        }
+      /* UN SEUL APPEL. Plus de `get_next_invoice_number_atomic` depuis le navigateur :
+         la numérotation est désormais réservée au serveur, précisément pour qu'un numéro
+         ne puisse plus être consommé sans facture. */
+      const { data: invoiceId, error: rpcError } = await supabase.rpc(
+        'creer_facture_depuis_commande',
+        { p_order_id: orderId }
       );
 
-      let customerEmail = '';
-      if (userError || !userData) {
-        // Fallback : demander l'email si RPC échoue
-        customerEmail =
-          prompt(
-            `Email du client pour la facture (commande #${order.id.slice(0, 8)}) :`
-          ) || '';
-        if (!customerEmail) {
-          toast.dismiss(loadingToast);
-          toast.error('Email requis pour créer la facture');
-          return;
-        }
-      } else {
-        customerEmail = userData;
-      }
-
-      const profile = order.profiles;
-      if (!profile) {
+      if (rpcError || !invoiceId) {
+        console.error('Erreur création facture :', rpcError);
         toast.dismiss(loadingToast);
-        toast.error('Profil client introuvable');
+        /* Le message de la base est REPRIS TEL QUEL : quand la fonction refuse d'émettre
+           parce que le total ne colle pas à la commande, elle dit exactement quel écart
+           elle a trouvé et quoi vérifier. Le masquer derrière un « erreur » générique
+           obligerait à ouvrir les journaux Postgres pour comprendre. */
+        toast.error(
+          rpcError?.message || "La facture n'a pas pu être créée.",
+          { duration: 9000 }
+        );
         return;
       }
 
-      const customerName =
-        `${profile.first_name || ''} ${profile.last_name || ''}`.trim() ||
-        'Client';
-
-      console.log('Création facture pour:', {
-        customerName,
-        customerEmail,
-        orderId,
-      });
-
-      // Créer la facture
-      const { data: invoice, error: invoiceError } = await supabase
+      // Relecture pour l'affichage et pour la suite du parcours.
+      const { data: invoice } = await supabase
         .from('invoices')
-        .insert({
-          invoice_number: invoiceNumber,
-          order_id: orderId,
-          customer_id: order.user_id,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          customer_address: order.shipping_address,
-          billing_address: order.shipping_address,
-          status: 'draft',
-          subtotal_ht: order.sub_total,
-          tax_amount: order.tax,
-          total_ttc: order.total,
-          amount_paid: order.stripe_payment_intent_id ? order.total : 0,
-          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
-          payment_terms: 30,
-          notes: `Facture générée automatiquement depuis la commande #${order.id.slice(0, 8)}`,
-          /* ⚠ Les mentions viennent des RÉGLAGES (Admin → Facturation), pas d'une chaîne
-             en dur : elles contiennent le SIRET, le n° de TVA et les pénalités de retard
-             obligatoires entre professionnels. Une facture sans elles est irrégulière. */
-          legal_mentions: mentionsSociete,
-          /* Régime fiscal RECOPIÉ depuis la commande — jamais recalculé : une facture
-             doit refléter ce qui a été facturé le jour de la vente, même si le taux ou
-             le statut du client change ensuite. */
-          customer_country: order.customer_country,
-          is_company: order.is_company ?? false,
-          company_name: order.company_name,
-          vat_number: order.vat_number,
-          vat_regime: order.vat_regime,
-          vat_rate: order.vat_rate,
-          vat_mention: mentionRegime(order.vat_regime),
-        })
-        .select()
-        .single();
-
-      if (invoiceError) {
-        console.error('Error creating invoice:', invoiceError);
-        toast.dismiss(loadingToast);
-        toast.error(`Erreur création facture: ${invoiceError.message}`);
-        return;
-      }
-
-      console.log('Facture créée:', invoice);
-
-      // Créer les lignes de facture à partir des items de commande
-      const invoiceItems =
-        order.order_items?.map((item: any, index: number) => {
-          /* Les lignes de commande sont désormais enregistrées EN HT par le serveur
-             (`confirmer_commande` recopie `unit_ht` du devis). On ne divise donc plus
-             par 1,2 au hasard selon un `user_type` d'affichage.
-             Le taux est celui du RÉGIME de la commande : 0 % pour une autoliquidation
-             ou un export — écrire 20 % en dur produirait une facture fausse. */
-          return {
-            invoice_id: invoice.id,
-            product_id: item.product_id,
-            description: item.product?.name || 'Produit',
-            quantity: item.quantity,
-            unit_price_ht: item.price,
-            tax_rate: Number(order.vat_rate ?? 20),
-            sort_order: index,
-          };
-        }) || [];
-
-      if (invoiceItems.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('invoice_items')
-          .insert(invoiceItems);
-
-        if (itemsError) {
-          console.error('Error creating invoice items:', itemsError);
-          toast.dismiss(loadingToast);
-          toast.error('Erreur lors de la création des lignes de facture');
-          return;
-        }
-      }
-
-      // Si la commande a été payée (stripe_payment_intent_id existe), créer un enregistrement de paiement
-      if (order.stripe_payment_intent_id) {
-        const { error: paymentError } = await supabase
-          .from('payment_records')
-          .insert({
-            invoice_id: invoice.id,
-            amount: order.total,
-            payment_date: new Date(order.created_at)
-              .toISOString()
-              .split('T')[0],
-            payment_method: 'carte',
-            reference: order.stripe_payment_intent_id,
-            notes: 'Paiement par carte bancaire via Stripe',
-          });
-
-        if (paymentError) {
-          console.error('Error creating payment record:', paymentError);
-          // Ne pas faire échouer la création de facture pour autant
-          toast('⚠️ Facture créée mais enregistrement de paiement échoué');
-        } else {
-          // Mettre à jour le statut de la facture à "payé"
-          await supabase
-            .from('invoices')
-            .update({
-              status: 'paid',
-              paid_at: new Date().toISOString(),
-            })
-            .eq('id', invoice.id);
-        }
-      }
+        .select('id, invoice_number, total_ttc, status')
+        .eq('id', invoiceId as string)
+        .maybeSingle();
 
       toast.dismiss(loadingToast);
-      toast.success(`✅ Facture ${invoice.invoice_number} créée avec succès !`);
+      toast.success(
+        `✅ Facture ${invoice?.invoice_number ?? ''} créée avec succès !`.replace(
+          '  ',
+          ' '
+        )
+      );
 
       /* ENVOI AUTOMATIQUE VERS LA COMPTABILITÉ (Make → Tiime).
          Générer une facture, c'est décider qu'elle existe : elle doit partir en
@@ -496,7 +392,7 @@ const AdminOrders = () => {
          réapparaît simplement comme « non transmise » dans l'écran Facturation. */
       try {
         const { data: envoi } = await supabase.functions.invoke('send-to-make', {
-          body: { invoiceId: invoice.id },
+          body: { invoiceId: invoiceId as string },
         });
         if (envoi?.sent) {
           toast.success('Facture transmise à la comptabilité (Tiime)');
@@ -519,19 +415,17 @@ const AdminOrders = () => {
       }
 
       // Stocker l'ID de la facture et naviguer vers la facturation
-      console.log('💾 Stockage ID facture pour ouverture:', invoice.id);
-      sessionStorage.setItem('openInvoiceId', invoice.id);
+      sessionStorage.setItem('openInvoiceId', invoiceId as string);
 
       // Déclencher l'événement pour changer d'onglet avec un délai
       setTimeout(() => {
-        console.log('🔄 Déclenchement événement switchToBilling');
         window.dispatchEvent(new CustomEvent('switchToBilling'));
-
         // Recharger les factures pour mettre à jour l'état des boutons
         loadOrderInvoices();
       }, 100);
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('Erreur inattendue :', err);
+      toast.dismiss(loadingToast);
       toast.error('Erreur inattendue');
     }
   };
@@ -789,10 +683,13 @@ const AdminOrders = () => {
             >
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
+              <option value="paid">Payées</option>
               <option value="confirmed">Confirmées</option>
+              <option value="processing">En préparation</option>
               <option value="shipped">Expédiées</option>
               <option value="delivered">Livrées</option>
               <option value="cancelled">Annulées</option>
+              <option value="refunded">Remboursées</option>
             </select>
             <select
               value={priorityFilter}
@@ -1358,12 +1255,19 @@ const AdminOrders = () => {
               onSubmit={e => {
                 e.preventDefault();
                 const formData = new FormData(e.target as HTMLFormElement);
+                /* ⚠ `|| undefined` transformait une chaîne VIDE en « champ non soumis » :
+                   effacer un lien de suivi erroné n'avait donc aucun effet, et le client
+                   continuait de suivre le colis de quelqu'un d'autre. On passe la valeur
+                   telle quelle (`?? undefined` ne neutralise que le champ ABSENT) et
+                   c'est `updateOrderStatus` qui traduit « vide » par « effacer ». */
+                const champ = (nom: string) =>
+                  (formData.get(nom) as string | null) ?? undefined;
                 updateOrderStatus(
                   editingOrder.id,
                   formData.get('status') as string,
-                  (formData.get('admin_notes') as string) || undefined,
-                  (formData.get('tracking_link') as string) || undefined,
-                  (formData.get('estimated_delivery') as string) || undefined,
+                  champ('admin_notes'),
+                  champ('tracking_link'),
+                  champ('estimated_delivery'),
                   formData.get('priority') as string
                 );
               }}
@@ -1435,10 +1339,21 @@ const AdminOrders = () => {
                     className="w-full dark-select rounded-lg px-4 py-3 focus:border-blue-400 focus:outline-none"
                   >
                     <option value="pending">En attente</option>
+                    <option value="paid">Payée</option>
                     <option value="confirmed">Confirmée</option>
+                    {/* « En préparation » : l'étape entre la confirmation et l'expédition,
+                        que le client voit déjà sur sa page « Mes commandes ». Sans elle au
+                        menu, l'exploitant ne pouvait pas la poser. */}
+                    <option value="processing">En préparation</option>
                     <option value="shipped">Expédiée</option>
                     <option value="delivered">Livrée</option>
                     <option value="cancelled">Annulée</option>
+                    {/* ⚠ « Remboursée » est posé automatiquement par le remboursement
+                        Stripe ; il figure ici pour les cas traités hors ligne (virement de
+                        retour, geste commercial) — et pour que l'exploitant puisse au
+                        moins remettre une commande dans le bon état. Poser ce statut REND
+                        LE STOCK (trigger `restaurer_stock_commande_trg`). */}
+                    <option value="refunded">Remboursée</option>
                   </select>
                 </div>
                 <div>

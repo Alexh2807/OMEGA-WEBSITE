@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Bug,
   Search,
@@ -38,10 +38,12 @@ interface BugReport {
   status: string;
   severity: string;
   admin_note: string | null;
-  /* Show joint par le client (facultatif). `show_data` = JSON gzip+base64 — voir la
-     migration 20260803090000. Sert à REJOUER le problème avec sa configuration réelle
-     plutôt qu'à le deviner. */
-  show_data: string | null;
+  /* Show joint par le client (facultatif). Voir la migration 20260803090000 : sert à
+     REJOUER le problème avec sa configuration réelle plutôt qu'à le deviner.
+     ⚠ `show_data` (le JSON gzip+base64, jusqu'à 3 Mo par ticket) n'est VOLONTAIREMENT
+     pas dans la liste : le charger pour 300 signalements représentait des dizaines de
+     mégaoctets à chaque lecture, alors qu'on ne l'ouvre que sur un clic. Il est lu à la
+     demande par `telechargerShow`. `show_encoding` suffit à savoir qu'il y en a un. */
   show_name: string | null;
   show_bytes: number | null;
   show_encoding: string | null;
@@ -83,10 +85,20 @@ const poids = (o: number | null) => {
    en ~80 Ko), le fichier serait illisible. `show_encoding` dit quel cas on a — on ne
    devine pas, un client sur une WebView sans CompressionStream envoie du JSON brut. */
 async function telechargerShow(r: BugReport) {
-  if (!r.show_data) return;
-  const bin = Uint8Array.from(atob(r.show_data), (c) => c.charCodeAt(0));
+  // Le contenu n'est PAS en mémoire (cf. l'interface) : on va le chercher pour ce
+  // ticket-là, au moment où on en a besoin.
+  const { data, error } = await supabase
+    .from('bug_reports')
+    .select('show_data, show_encoding, show_name')
+    .eq('id', r.id)
+    .single();
+  if (error || !data?.show_data) {
+    toast.error('Show indisponible' + (error ? ' : ' + error.message : ''));
+    return;
+  }
+  const bin = Uint8Array.from(atob(data.show_data as string), (c) => c.charCodeAt(0));
   let texte: string;
-  if (r.show_encoding === 'gzip+base64') {
+  if ((data.show_encoding || r.show_encoding) === 'gzip+base64') {
     const flux = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
     texte = await new Response(flux).text();
   } else {
@@ -101,6 +113,18 @@ async function telechargerShow(r: BugReport) {
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
 }
+
+/* Un show est joint ? On le sait sans avoir chargé les 3 Mo : l'encodage est renseigné
+   à l'envoi dès qu'il y a une pièce jointe. */
+const aUnShow = (r: BugReport) => !!(r.show_encoding || r.show_bytes);
+
+/* Toutes les colonnes SAUF `show_data` : voir l'interface. Le `*` d'origine ramenait la
+   pièce jointe de CHAQUE ticket (jusqu'à 3 Mo pièce), ce qui interdisait matériellement
+   toute relève régulière — et pesait déjà lourd au simple chargement de la page. */
+const COLONNES =
+  'id, created_at, updated_at, user_id, contact_email, track_code, title, body, ' +
+  'app_version, platform, diagnostics, status, severity, admin_note, ' +
+  'show_name, show_bytes, show_encoding, fixed_in_version, is_public, public_title';
 
 const couleurStatut = (s: string) =>
   s === 'nouveau' ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
@@ -122,21 +146,15 @@ const AdminBugReports: React.FC = () => {
   const [severiteFiltre, setSeveriteFiltre] = useState<string>('toutes');
   const [tri, setTri] = useState<string>('priorite');
 
-  const charger = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('bug_reports')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(300);
-    if (error) toast.error('Lecture impossible : ' + error.message);
-    else setReports((data as BugReport[]) || []);
-    setLoading(false);
-  }, []);
+  /* Dernier message de chaque signalement, pour savoir d'un coup d'œil lesquels
+     attendent une réponse. Alimenté par la relève. */
+  const [dernier, setDernier] = useState<Record<string, { at: string; admin: boolean }>>({});
+  const [aJour, setAJour] = useState<Date | null>(null);
+  // Le fil déplié, lisible depuis les relèves sans les faire dépendre de l'état React.
+  const ouvertRef = useRef<string | null>(null);
+  ouvertRef.current = ouvert;
 
-  useEffect(() => { charger(); }, [charger]);
-
-  const chargerMessages = async (id: string) => {
+  const chargerMessages = useCallback(async (id: string) => {
     const { data, error } = await supabase
       .from('bug_report_messages')
       .select('id, created_at, is_admin, body')
@@ -144,13 +162,116 @@ const AdminBugReports: React.FC = () => {
       .order('created_at', { ascending: true });
     if (error) { toast.error(error.message); return; }
     setMessages((m) => ({ ...m, [id]: (data as ReportMessage[]) || [] }));
-  };
+  }, []);
+
+  /* ⚠ « RAFRAÎCHIR » DOIT RECHARGER LA CONVERSATION, PAS SEULEMENT LA LISTE.
+     Retour user (4 août) : « ni même quand j'appuie sur rafraîchir… ça n'actualise pas
+     le message, mais ça actualise bien la date ». C'était exact : ce bouton ne relisait
+     que `bug_reports`. La conversation affichée vient de `messages[id]`, qui n'était
+     rempli qu'à l'ouverture du fil — donc le message du client, déjà en base, restait
+     invisible tant qu'on ne repliait pas puis redépliait le ticket. */
+  const charger = useCallback(async (silencieux?: boolean) => {
+    if (!silencieux) setLoading(true);
+    const { data, error } = await supabase
+      .from('bug_reports')
+      .select(COLONNES)
+      .order('updated_at', { ascending: false })
+      .limit(300);
+    // ⚠ Une relève de fond qui échoue (réseau, jeton) ne doit PAS jeter une alerte
+    // rouge en travers de l'écran toutes les 15 secondes : elle réessaiera.
+    if (error) { if (!silencieux) toast.error('Lecture impossible : ' + error.message); }
+    else setReports((data as unknown as BugReport[]) || []);
+    if (ouvertRef.current) chargerMessages(ouvertRef.current);
+    if (!silencieux) setLoading(false);
+    setAJour(new Date());
+  }, [chargerMessages]);
+
+  useEffect(() => { charger(); }, [charger]);
+
+  /* ============================================================
+     LA PAGE SE MET À JOUR TOUTE SEULE
+     ============================================================
+     Retour user (4 août 2026) : « quand le client me répond, obligé d'actualiser pour
+     voir le message ». Une conversation qui n'arrive qu'à condition de penser à appuyer
+     sur un bouton n'est pas une conversation.
+     ⚠ Le temps réel de Supabase N'EST PAS une option ici : vérifié en base le 4 août,
+     la publication `supabase_realtime` de ce projet ne contient AUCUNE table —
+     `postgres_changes` ne délivrerait jamais rien (c'est aussi le cas des abonnements
+     déjà écrits ailleurs dans le site : planning, contact). On relève.
+
+     ★★ LA SIGNATURE PORTE SUR LES MESSAGES AUTANT QUE SUR LES TICKETS, et ce n'est pas
+     une précaution : `bug_reports.updated_at` NE BOUGE PAS quand un CLIENT répond.
+     Le trigger `bug_reports_touch()` n'était pas `SECURITY DEFINER` et la seule policy
+     d'UPDATE est `is_admin()` : chez un client l'UPDATE ne touchait aucune ligne, EN
+     SILENCE. Corrigé en base le 4 août (migration 20260804080000), mais l'affichage ne
+     doit pas dépendre d'une horodate dénormalisée : on regarde les messages eux-mêmes. */
+  const RELEVE_MS = 15000;
+  // `null` = pas encore mesuré. Ne PAS utiliser '' : une base vide donne aussi '',
+  // et on annoncerait un changement au tout premier passage.
+  const sigTickets = useRef<string | null>(null);
+  const sigMessages = useRef<string | null>(null);
+
+  const relever = useCallback(async () => {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const [etats, msgs] = await Promise.all([
+      supabase.from('bug_reports').select('id, updated_at, status')
+        .order('updated_at', { ascending: false }).limit(300),
+      /* Les messages les plus récents, tous signalements confondus : le premier
+         rencontré pour un ticket est forcément le sien le plus récent (PostgREST ne
+         sait pas faire un DISTINCT ON). Au-delà de cette fenêtre, un vieux ticket n'a
+         simplement PAS de pastille : absence de pastille = on ne sait pas, ce n'est
+         jamais affiché comme « répondu ». */
+      supabase.from('bug_report_messages').select('report_id, created_at, is_admin')
+        .order('created_at', { ascending: false }).limit(500),
+    ]);
+    if (etats.error) return;                     // silencieux : on retentera dans 15 s
+    const lignes = (etats.data as { id: string; updated_at: string; status: string }[]) || [];
+    const listeMsgs = (!msgs.error && msgs.data)
+      ? (msgs.data as { report_id: string; created_at: string; is_admin: boolean }[])
+      : null;
+    setAJour(new Date());
+
+    if (listeMsgs) {
+      const d: Record<string, { at: string; admin: boolean }> = {};
+      listeMsgs.forEach((m) => { if (!d[m.report_id]) d[m.report_id] = { at: m.created_at, admin: m.is_admin }; });
+      setDernier(d);
+    }
+
+    // Deux signatures indépendantes : un échec de l'une ne doit pas faire passer l'autre
+    // pour « ça a changé ».
+    const premiere = sigTickets.current === null;
+    let bouge = false;
+    const sigT = lignes.map((r) => `${r.id}:${r.updated_at}:${r.status}`).join('|');
+    if (sigT !== sigTickets.current) { sigTickets.current = sigT; bouge = true; }
+    if (listeMsgs) {
+      const sigM = listeMsgs.map((m) => `${m.report_id}:${m.created_at}`).join('|');
+      if (sigM !== sigMessages.current) { sigMessages.current = sigM; bouge = true; }
+    }
+    if (premiere || !bouge) return;              // première mesure : rien à comparer
+    charger(true);                               // recharge aussi le fil déplié
+  }, [charger]);
+
+  useEffect(() => {
+    relever();
+    const t = setInterval(relever, RELEVE_MS);
+    const reveil = () => { if (!document.hidden) relever(); };
+    document.addEventListener('visibilitychange', reveil);
+    window.addEventListener('focus', reveil);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', reveil);
+      window.removeEventListener('focus', reveil);
+    };
+  }, [relever]);
 
   const basculer = (id: string) => {
     if (ouvert === id) { setOuvert(null); return; }
     setOuvert(id);
     setReponse('');
-    if (!messages[id]) chargerMessages(id);
+    // Toujours relire : un fil déjà ouvert plus tôt dans la session peut avoir reçu une
+    // réponse du client entre-temps. L'affichage garde l'ancienne version le temps de
+    // la requête, donc aucun clignotement.
+    chargerMessages(id);
   };
 
   const majChamp = async (
@@ -338,10 +459,15 @@ const AdminBugReports: React.FC = () => {
           <option value="anciennete">Tri : plus anciens</option>
           <option value="activite">Tri : dernière activité</option>
         </select>
+        {/* La page se met à jour seule : on le DIT, sinon on continue de cliquer sur
+            « rafraîchir » par méfiance — et on ne saurait pas si elle a décroché. */}
+        <span className="text-[11px] text-gray-500 whitespace-nowrap" title={'Relève automatique toutes les ' + RELEVE_MS / 1000 + ' secondes'}>
+          {aJour ? 'à jour · ' + aJour.toLocaleTimeString('fr-FR') : '…'}
+        </span>
         <button
-          onClick={charger}
+          onClick={() => charger()}
           className="p-2 rounded-lg bg-gray-800 border border-gray-700 hover:border-cyan-500 transition"
-          title="Rafraîchir"
+          title="Rafraîchir maintenant"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -402,6 +528,15 @@ const AdminBugReports: React.FC = () => {
                     )}
                   </div>
                 </div>
+                {/* Le dernier mot est au client : la balle est dans notre camp. Ce n'est
+                    pas un « non lu » (rien ne mémorise ce qu'on a lu) mais un ÉTAT du
+                    fil, toujours vrai, y compris après un rechargement de page. */}
+                {dernier[r.id] && !dernier[r.id].admin && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-amber-500/15 text-amber-300 border-amber-500/40 whitespace-nowrap"
+                        title={'Dernier message : le client, le ' + new Date(dernier[r.id].at).toLocaleString('fr-FR')}>
+                    Réponse du client
+                  </span>
+                )}
                 <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${couleurStatut(r.status)}`}>
                   {STATUTS[r.status] || r.status}
                 </span>
@@ -434,7 +569,7 @@ const AdminBugReports: React.FC = () => {
                         {voirDiag === r.id ? 'Masquer' : 'Infos techniques'}
                       </button>
                     )}
-                    {r.show_data && (
+                    {aUnShow(r) && (
                       <button
                         onClick={() => telechargerShow(r)}
                         className="px-2 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/40 text-xs text-cyan-300 hover:border-cyan-400 transition font-semibold"

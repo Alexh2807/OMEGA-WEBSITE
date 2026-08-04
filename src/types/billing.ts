@@ -20,6 +20,11 @@ export interface BillingSettings {
     bank_name: string;
   };
   legal_mentions: string;
+  /* Séquence d'AVOIRS, distincte de celle des factures : mélanger les deux rend la
+     séquence de facturation incompréhensible à un contrôleur, alors que chacune doit
+     être continue (art. 289 du CGI). Le tiret est DANS le préfixe (« AV- »). */
+  credit_note_prefix?: string;
+  next_credit_note_number?: number;
   created_at: string;
   updated_at: string;
 }
@@ -95,8 +100,30 @@ export interface Invoice {
   sent_at?: string;
   paid_at?: string;
   /* Transmission vers la comptabilité (Make → Tiime). Non nul = déjà partie :
-     la renvoyer créerait un doublon, donc un second envoi doit être forcé. */
+     la renvoyer créerait un doublon, donc un second envoi doit être forcé.
+     ⚠ `tiime_sent_at` ne vaut QUE « posté » : un webhook Make répond 200 dès la mise en
+     file. Seul `tiime_ack_at` prouve que Tiime a reçu le document. */
   tiime_sent_at?: string | null;
+  tiime_invoice_id?: string | null;
+  tiime_invoice_number?: string | null;
+  tiime_ack_at?: string | null;
+  /* ── Avoir (migration 20260805020000) ─────────────────────────────────────
+     Un avoir est un document à part entière (code 381 de la norme EN 16931), pas une
+     facture négative déguisée : il porte son propre numéro, des montants négatifs, et
+     référence obligatoirement la facture qu'il annule. */
+  document_type?: 'invoice' | 'credit_note';
+  credit_note_of?: string | null;
+  /* Date de LIVRAISON. C'est elle qui fixe l'exigibilité de la TVA sur les biens, pas
+     la date d'édition — et elle est une mention obligatoire (art. 242 nonies A ann. II
+     du CGI) dès qu'elle diffère de la date de facture. */
+  delivery_date?: string | null;
+  /* Territoire fiscal FIGÉ ('FR' | 'FR-DOM' | 'FR-COM' | 'MC' | 'UE' | 'HORS-UE' |
+     'UE-EXCLU'). Jamais re-déduit d'une expression régulière sur la mention légale :
+     c'est ce qui distinguait une livraison en Guadeloupe d'une exportation en Suisse. */
+  vat_territory?: string | null;
+  /* Archivage du document REMIS au client, et son empreinte (art. 286 I 3° bis). */
+  pdf_storage_path?: string | null;
+  pdf_sha256?: string | null;
   /* Identité fiscale de la vente, recopiée depuis la commande : c'est elle qui
      décide de la ligne de déclaration et de la mention portée sur la facture. */
   customer_country?: string | null;
@@ -127,6 +154,11 @@ export interface InvoiceItem {
   total_ht: number;
   total_ttc: number;
   sort_order: number;
+  /* goods | shipping | discount | other. Pilote le compte comptable (707x pour les
+     ventes, 708x pour le port) et le champ `line_kind` du payload Tiime.
+     ⚠ Ne JAMAIS le déduire du libellé de la ligne : reconnaître le texte « Frais de
+     port » casse à la première reformulation. */
+  line_kind?: 'goods' | 'shipping' | 'discount' | 'other';
   product?: {
     name: string;
     sku?: string;

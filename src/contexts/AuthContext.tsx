@@ -30,6 +30,80 @@ interface AuthContextType {
   ) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
+  /* MOT DE PASSE OUBLIÉ — il n'existait AUCUN chemin de récupération : un client qui
+     perdait son mot de passe perdait son compte, ses commandes et ses factures.
+     `demanderReinitialisation` envoie le lien, `changerMotDePasse` l'applique une fois
+     que Supabase a ouvert la session de récupération depuis ce lien. */
+  demanderReinitialisation: (email: string) => Promise<{ error: string | null }>;
+  changerMotDePasse: (motDePasse: string) => Promise<{ error: string | null }>;
+}
+
+/**
+ * Origine réelle du site.
+ *
+ * ⚠ On NE se sert PAS de `VITE_SITE_URL` en premier : elle vaut
+ * `https://www.omegasud.fr` alors que le domaine principal est `https://omegasud.fr`.
+ * Un lien de confirmation ou de réinitialisation renvoyant sur l'autre hôte n'y
+ * retrouve pas la session (le stockage local est cloisonné par origine), et le client
+ * atterrit sur un formulaire qui ne sait plus qui il est. `window.location.origin`
+ * renvoie TOUJOURS l'hôte d'où le client est parti : localhost en développement,
+ * l'aperçu Netlify sur une branche, le domaine réel en production.
+ * La variable d'environnement ne sert que de repli hors navigateur (rendu serveur,
+ * tests) où `window` n'existe pas.
+ */
+export function origineSite(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return import.meta.env.VITE_SITE_URL || '';
+}
+
+/**
+ * Traduit les messages d'erreur de Supabase, qui arrivent EN ANGLAIS.
+ *
+ * « Invalid login credentials » affiché tel quel à un client francophone ne lui dit
+ * ni ce qui s'est passé, ni quoi faire. On reconnaît les cas courants et on répond en
+ * français, en indiquant l'action suivante. Un message inconnu est repris tel quel :
+ * mieux vaut une phrase en anglais qu'un « Une erreur est survenue » qui n'aide
+ * personne à comprendre.
+ */
+export function traduireErreurAuth(message?: string | null): string {
+  const m = (message || '').toLowerCase();
+
+  if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
+    return 'Adresse e-mail ou mot de passe incorrect. Vérifiez votre saisie, ou utilisez « Mot de passe oublié ? ».';
+  }
+  if (m.includes('email not confirmed')) {
+    return "Votre adresse e-mail n'est pas encore confirmée. Ouvrez le message que nous vous avons envoyé et cliquez sur le lien de confirmation (pensez à regarder dans vos indésirables).";
+  }
+  if (m.includes('user already registered') || m.includes('already been registered')) {
+    return 'Un compte existe déjà avec cette adresse e-mail. Connectez-vous, ou utilisez « Mot de passe oublié ? ».';
+  }
+  if (m.includes('password should be at least')) {
+    return 'Mot de passe trop court : 6 caractères au minimum.';
+  }
+  if (m.includes('new password should be different')) {
+    return "Le nouveau mot de passe doit être différent de l'ancien.";
+  }
+  if (m.includes('unable to validate email address') || m.includes('invalid email')) {
+    return "Cette adresse e-mail n'est pas valide.";
+  }
+  if (m.includes('email rate limit') || m.includes('over_email_send_rate_limit')) {
+    return 'Trop de messages demandés coup sur coup. Patientez quelques minutes avant de réessayer.';
+  }
+  if (m.includes('for security purposes') || m.includes('rate limit')) {
+    return 'Trop de tentatives rapprochées. Patientez une minute avant de réessayer.';
+  }
+  if (m.includes('token has expired') || m.includes('expired')) {
+    return 'Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.';
+  }
+  if (m.includes('auth session missing') || m.includes('session_not_found')) {
+    return 'Votre session a expiré. Reconnectez-vous.';
+  }
+  if (m.includes('failed to fetch') || m.includes('network')) {
+    return 'Connexion au serveur impossible. Vérifiez votre accès à Internet et réessayez.';
+  }
+  return message || 'Une erreur est survenue.';
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -146,16 +220,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       };
     }
 
-    // Déterminer l'URL de base selon l'environnement
-    const getBaseUrl = () => {
-      // L'origine réelle du site (localhost en dev, omegasud.netlify.app ou
-      // www.omegasud.fr en prod) ; VITE_SITE_URL en secours hors navigateur.
-      if (typeof window !== 'undefined' && window.location?.origin) {
-        return window.location.origin;
-      }
-      return import.meta.env.VITE_SITE_URL;
-    };
-
     // Configuration avec email de confirmation Supabase et données utilisateur
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -167,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           last_name: lastName,
           phone: phone || null,
         },
-        emailRedirectTo: `${getBaseUrl()}/email-confirmation`,
+        emailRedirectTo: `${origineSite()}/email-confirmation`,
       },
     });
 
@@ -190,6 +254,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsAdmin(false);
   };
 
+  /* Envoie le lien de réinitialisation.
+     ⚠ L'appelant ne doit PAS révéler si l'adresse existe : répondre « compte inconnu »
+     transformerait ce formulaire en annuaire des clients d'OMEGA. Supabase renvoie
+     d'ailleurs le même succès dans les deux cas — on garde ce comportement. */
+  const demanderReinitialisation = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${origineSite()}/nouveau-mot-de-passe`,
+    });
+    return { error: error ? traduireErreurAuth(error.message) : null };
+  };
+
+  /* Applique le nouveau mot de passe.
+     Fonctionne parce que le lien reçu par e-mail a DÉJÀ ouvert une session de
+     récupération (`detectSessionInUrl` du client Supabase) : `updateUser` s'applique
+     donc au bon compte, sans jamais avoir à transmettre l'ancien mot de passe. */
+  const changerMotDePasse = async (motDePasse: string) => {
+    const { error } = await supabase.auth.updateUser({ password: motDePasse });
+    return { error: error ? traduireErreurAuth(error.message) : null };
+  };
+
   /* Relit le statut en base. Utilisé après une déclaration d'entreprise faite depuis
      le panier : sans cela l'en-tête affichait encore « Particulier · Prix TTC » alors
      que le client venait de se déclarer société et voyait sa TVA passer à 0 %. */
@@ -208,6 +292,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     signUp,
     signIn,
     signOut,
+    demanderReinitialisation,
+    changerMotDePasse,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

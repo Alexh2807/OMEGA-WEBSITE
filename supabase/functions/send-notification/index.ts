@@ -254,6 +254,43 @@ const p = (html: string) =>
 const citation = (html: string) =>
   `<div style="margin:0 0 22px 0;padding:16px 18px;background-color:#161622;border-left:3px solid #00c2ff;border-radius:0 8px 8px 0;color:#c9c9de;font-size:14px;line-height:1.7;">${html}</div>`;
 
+/* ---------------------------------------------------------------------------
+   ÉTATS DE COMMANDE — en français, et une seule fois
+
+   ⚠ Les e-mails clients annonçaient « Votre commande OMEGA — shipped ». Le statut est un
+   identifiant TECHNIQUE : il n'a jamais été destiné à être lu par un acheteur. Il partait
+   pourtant tel quel dans l'objet ET dans le corps du message. Le back-office, lui,
+   traduisait déjà (`AdminOrders.getStatusText`) : c'est le seul endroit qui ne le faisait
+   pas — celui que le client voit.
+   Un statut inconnu retombe sur son propre code plutôt que sur du vide : mieux vaut un mot
+   anglais qu'une phrase amputée, et cela se repère tout de suite.
+   --------------------------------------------------------------------------- */
+const ETATS: Record<string, string> = {
+  pending: 'en attente de traitement',
+  processing: 'en préparation',
+  confirmed: 'confirmée',
+  paid: 'payée',
+  shipped: 'expédiée',
+  delivered: 'livrée',
+  cancelled: 'annulée',
+  canceled: 'annulée',
+  refunded: 'remboursée',
+  failed: 'en échec de paiement',
+};
+const etatFr = (statut: unknown) => ETATS[String(statut ?? '')] ?? String(statut ?? '—');
+
+/** Titre et sous-titre du message, adaptés à l'état — un client ne lit pas « avance »
+    quand sa commande vient d'être annulée. */
+const TITRES: Record<string, { titre: string; sujet: string }> = {
+  shipped: { titre: 'Votre commande est en route', sujet: 'Votre commande OMEGA est expédiée' },
+  delivered: { titre: 'Votre commande est livrée', sujet: 'Votre commande OMEGA est livrée' },
+  cancelled: { titre: 'Votre commande a été annulée', sujet: 'Votre commande OMEGA a été annulée' },
+  canceled: { titre: 'Votre commande a été annulée', sujet: 'Votre commande OMEGA a été annulée' },
+  refunded: { titre: 'Votre commande a été remboursée', sujet: 'Remboursement de votre commande OMEGA' },
+  processing: { titre: 'Votre commande est en préparation', sujet: 'Votre commande OMEGA est en préparation' },
+  confirmed: { titre: 'Votre commande est confirmée', sujet: 'Votre commande OMEGA est confirmée' },
+};
+
 /** Liste « intitulé : valeur ». */
 const details = (lignes: [string, string][]) =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;">` +
@@ -500,7 +537,8 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
             details([
               ['Client', e(nom)],
               ['Montant', euros(c.total)],
-              ['État', e(c.status ?? 'en attente')],
+              // Même règle que pour le client : un statut technique ne se lit pas.
+              ['État', e(etatFr(c.status ?? 'pending'))],
               ['Référence', e(String(c.id).slice(0, 8))],
             ]) + p('Le détail complet est dans le back-office.'),
           bouton: { libelle: 'Ouvrir le back-office', url: `${SITE}/admin` },
@@ -610,25 +648,75 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
     case 'order_status': {
       const { data: c } = await supabaseAdmin
         .from('orders')
-        .select('id, total, status, user_id, tracking_link')
+        .select(
+          'id, total, status, user_id, tracking_link, shipping_method, ' +
+            'shipping_carrier, shipping_relay'
+        )
         .eq('id', data.id)
         .single();
       if (!c) return null;
       const adresse = await adresseDe(c.user_id);
       if (!adresse) return null;
+
+      const etat = String(c.status ?? '');
+      const libelle = etatFr(etat);
+      // `suivi_ajoute` est posé par le trigger quand SEUL le lien de suivi a changé :
+      // l'exploitant colle souvent le numéro de colis des heures après l'expédition, et
+      // répéter « votre commande est expédiée » n'apprendrait rien de nouveau au client.
+      const suiviSeul = data?.suivi_ajoute === true && data?.avant === data?.apres;
+      const entete = TITRES[etat] ?? {
+        titre: 'Votre commande avance',
+        sujet: `Votre commande OMEGA est ${libelle}`,
+      };
+
+      /* ★ LE LIEN DE SUIVI, EN CLAIR ET CLIQUABLE.
+         Il existait en base et n'apparaissait qu'en petit, sous le mot « colis » — un
+         client qui cherche son colis ne doit pas avoir à deviner que ce mot est un lien.
+         C'est LA raison pour laquelle on envoie un e-mail d'expédition. */
+      const blocSuivi = c.tracking_link
+        ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;"><tr>
+             <td align="center" bgcolor="#00c2ff" style="background-color:#00c2ff;border-radius:10px;">
+               <a href="${e(c.tracking_link)}" style="display:inline-block;padding:13px 34px;color:#06060c;font-size:15px;font-weight:700;text-decoration:none;">Suivre mon colis</a>
+             </td></tr></table>` +
+          p(
+            `<span style="color:#8b8ba3;font-size:12px;">Si le bouton ne fonctionne pas, ` +
+              `copiez cette adresse&nbsp;:<br>${e(c.tracking_link)}</span>`
+          )
+        : '';
+
+      const relais = c.shipping_relay as Record<string, string> | null;
+      const blocRelais =
+        relais && relais.nom
+          ? p(
+              `<span style="color:#8b8ba3;font-size:13px;">Votre colis vous attend au point relais&nbsp;:</span><br>` +
+                [relais.nom, relais.adresse, [relais.code_postal, relais.ville].filter(Boolean).join(' ')]
+                  .filter(Boolean)
+                  .map((l) => e(l))
+                  .join('<br>')
+            )
+          : '';
+
       return {
         destinataires: [adresse],
-        sujet: `Votre commande OMEGA — ${c.status}`,
+        // ⚠ Plus jamais de statut technique dans l'objet : « — shipped » partait tel quel.
+        sujet: `${entete.sujet} — ${String(c.id).slice(0, 8)}`,
         html: gabarit({
-          titre: 'Votre commande avance',
+          titre: suiviSeul ? 'Votre numéro de suivi est disponible' : entete.titre,
           sousTitre: `Référence ${String(c.id).slice(0, 8)}`,
           corps:
-            p(`Votre commande est désormais&nbsp;: <strong style="color:#ffffff;">${e(c.status)}</strong>.`) +
+            p(
+              suiviSeul
+                ? 'Le transporteur nous a transmis le numéro de suivi de votre colis.'
+                : `Votre commande est désormais&nbsp;: <strong style="color:#ffffff;">${e(libelle)}</strong>.`
+            ) +
+            blocSuivi +
+            blocRelais +
             details([
               ['Montant', euros(c.total)],
-              ...((c.tracking_link
-                ? [['Suivi', `<a href="${e(c.tracking_link)}" style="color:#00c2ff;">colis</a>`]]
+              ...((c.shipping_method
+                ? [['Livraison', e(c.shipping_method)]]
                 : []) as [string, string][]),
+              ['État', e(libelle)],
             ]),
           bouton: { libelle: 'Voir mes commandes', url: `${SITE}/commandes` },
           pied: 'Vous recevez ce message car une commande est enregistrée à votre nom sur omegasud.fr.',
@@ -693,7 +781,10 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
     case 'order_ack': {
       const { data: c } = await supabaseAdmin
         .from('orders')
-        .select('id, total, sub_total, shipping_cost, user_id, shipping_address')
+        .select(
+          'id, total, sub_total, tax, vat_rate, vat_mention, shipping_cost, ' +
+            'shipping_cost_ht, shipping_method, user_id, shipping_address'
+        )
         .eq('id', data.id)
         .single();
       if (!c) return null;
@@ -726,6 +817,15 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
         )
         .join('');
 
+      /* Port HT : colonne dédiée depuis la migration 20260805020000 ; repli sur la
+         conversion du barème TTC pour les commandes antérieures — c'est exactement le
+         calcul qu'avait fait `devis-commande` pour composer `sub_total`. */
+      const tauxTva = Number(c.vat_rate ?? 20);
+      const portHt =
+        c.shipping_cost_ht !== null && c.shipping_cost_ht !== undefined
+          ? Number(c.shipping_cost_ht)
+          : Math.round((Number(c.shipping_cost ?? 0) / 1.2) * 100) / 100;
+
       const ad = c.shipping_address as Record<string, string> | null;
       const livraison = ad
         ? [
@@ -753,11 +853,34 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
               ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px 0;">${lignesHtml}</table>
                  <div style="border-top:1px solid #23233a;margin:8px 0 16px 0;"></div>`
               : '') +
-            details([
-              ['Sous-total', euros(c.sub_total)],
-              ['Livraison', euros(c.shipping_cost)],
-              ['Total payé', euros(c.total)],
-            ]) +
+            /* ⚠ RÉCAPITULATIF FAUX AVANT CORRECTION. `orders.sub_total` est le total HT
+               PORT COMPRIS (c'est `subtotal_ht` du devis serveur). L'afficher en
+               « Sous-total » puis ajouter une ligne « Livraison » comptait le port DEUX
+               fois, et le client lisait trois montants qui ne s'additionnaient pas au
+               total payé. On ventile donc correctement — et on montre la TVA, dont le
+               taux dépend du pays de livraison et n'apparaissait nulle part. */
+            details(
+              [
+                ['Marchandises HT', euros(Number(c.sub_total ?? 0) - Number(portHt))],
+                /* ⚠ L'INTITULÉ est échappé par `details()` lui-même (`e(k)`) : l'échapper
+                   ici aussi produirait « &amp;amp; ». Seule la VALEUR doit arriver déjà
+                   échappée. */
+                ...((Number(portHt) > 0
+                  ? [[
+                      `Livraison HT${c.shipping_method ? ` (${c.shipping_method})` : ''}`,
+                      euros(portHt),
+                    ]]
+                  : [['Livraison', 'offerte']]) as [string, string][]),
+                ['Total HT', euros(c.sub_total)],
+                [`TVA (${tauxTva.toLocaleString('fr-FR')} %)`, euros(c.tax)],
+                ['Total payé', euros(c.total)],
+              ] as [string, string][]
+            ) +
+            // La mention d'exonération figée à la vente : un acheteur professionnel doit
+            // savoir tout de suite pourquoi il n'y a pas de TVA.
+            (c.vat_mention
+              ? p(`<span style="color:#8b8ba3;font-size:13px;">${e(c.vat_mention)}</span>`)
+              : '') +
             (livraison
               ? p(`<span style="color:#8b8ba3;font-size:13px;">Livraison à&nbsp;:</span><br>${livraison}`)
               : ''),

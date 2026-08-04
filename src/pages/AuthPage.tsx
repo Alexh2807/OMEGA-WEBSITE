@@ -2,8 +2,8 @@
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useAuth, traduireErreurAuth } from '../contexts/AuthContext';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Eye,
   EyeOff,
@@ -43,6 +43,25 @@ const registerSchema = yup.object({
     .required('Confirmation requise'),
 });
 
+/* Le formulaire sert DEUX schémas différents (connexion et inscription) selon la page.
+   TypeScript, lui, ne voit qu'un seul `useForm` : il déduisait donc le type du schéma de
+   connexion, et considérait `firstName`, `phone` ou `countryCode` comme inexistants —
+   une vingtaine d'erreurs de compilation, qui empêchaient d'activer la vérification de
+   types dans le build (c'est précisément ce qui a laissé passer en production cinq
+   variables non déclarées ailleurs dans le code).
+   On déclare donc l'union des deux jeux de champs : les champs propres à l'inscription
+   sont optionnels au sens du type, et c'est `yup` qui les rend obligatoires à
+   l'exécution, sur la seule page d'inscription. */
+type ChampsFormulaireAuth = {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  countryCode?: string;
+  phone?: string;
+  confirmPassword?: string;
+};
+
 interface AuthPageProps {
   mode: 'login' | 'register';
 }
@@ -54,6 +73,25 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
   const [emailSent, setEmailSent] = useState(false);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  /* PAGE D'ORIGINE. `navigate('/')` était systématique : un client qui cliquait
+     « Passer la commande » depuis son panier, se connectait, puis se retrouvait sur la
+     page d'accueil devait refaire tout le chemin — et beaucoup abandonnaient là.
+     Les pages qui exigent une connexion transmettent leur adresse dans `location.state`
+     (voir CartPage) ; à défaut, l'accueil.
+     ⚠ On n'accepte QU'un chemin interne commençant par « / » et pas « // » : une valeur
+     venue de l'extérieur pourrait sinon nous faire rebondir vers un autre site. */
+  const etat = location.state as { from?: string } | null;
+  /* Les pages du parcours d'authentification sont exclues : y revenir après s'être
+     connecté renverrait le client sur un formulaire de connexion. */
+  const PAGES_AUTH = ['/connexion', '/inscription', '/mot-de-passe-oublie', '/nouveau-mot-de-passe'];
+  const retour =
+    etat?.from &&
+    /^\/(?!\/)/.test(etat.from) &&
+    !PAGES_AUTH.some(p => etat.from!.startsWith(p))
+      ? etat.from
+      : '/';
 
   const countryCodes = [
     { code: '+33', country: 'France', flag: '🇫🇷' },
@@ -74,8 +112,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
     formState: { errors },
     watch,
     setValue,
-  } = useForm({
-    resolver: yupResolver(schema),
+  } = useForm<ChampsFormulaireAuth>({
+    // `yup` ne peut pas décrire l'union des deux schémas : on assume la conversion ici,
+    // en un seul point, plutôt que de la disséminer sur chaque champ.
+    resolver: yupResolver(schema) as never,
     defaultValues: {
       countryCode: '+33',
     },
@@ -117,7 +157,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const formatted = formatPhoneNumber(value, selectedCountryCode);
+    const formatted = formatPhoneNumber(value, selectedCountryCode || '+33');
     setValue('phone', formatted);
   };
 
@@ -142,10 +182,13 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
       if (mode === 'login') {
         const { error } = await signIn(data.email, data.password);
         if (error) {
-          toast.error('Erreur de connexion: ' + error.message);
+          /* ⚠ Le message de Supabase arrive EN ANGLAIS : « Invalid login credentials »,
+             « Email not confirmed »… Affiché tel quel, il ne dit rien au client et ne
+             lui indique surtout pas quoi faire. On traduit ET on oriente. */
+          toast.error(traduireErreurAuth(error.message), { duration: 7000 });
         } else {
-          toast.success('Connexion réussie!');
-          navigate('/');
+          toast.success('Connexion réussie !');
+          navigate(retour, { replace: true });
         }
       } else {
         // Inscription avec Supabase
@@ -163,7 +206,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
         );
 
         if (error) {
-          toast.error("Erreur d'inscription: " + error.message);
+          toast.error(traduireErreurAuth(error.message), { duration: 7000 });
         } else {
           setEmailSent(true);
           toast.success('Inscription réussie ! Vérifiez votre email.');
@@ -373,7 +416,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                     <p className="text-gray-400 text-xs mt-1">
                       Numéro complet:{' '}
                       {getFullPhoneNumber(
-                        selectedCountryCode,
+                        selectedCountryCode || '+33',
                         phoneValue || ''
                       )}
                     </p>
@@ -431,6 +474,23 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                   <p className="text-red-400 text-sm mt-1">
                     {errors.password.message}
                   </p>
+                )}
+
+                {/* ★ LE LIEN QUI MANQUAIT. Sans lui, un client qui oubliait son mot de
+                    passe n'avait AUCUN moyen de revenir dans son compte : ni ici, ni
+                    dans l'espace client, ni ailleurs sur le site.
+                    L'adresse déjà tapée est transmise à la page suivante — l'oubli du
+                    mot de passe n'est pas une raison de retaper son e-mail. */}
+                {mode === 'login' && (
+                  <div className="text-right mt-2">
+                    <Link
+                      to="/mot-de-passe-oublie"
+                      state={{ email: watch('email') || '' }}
+                      className="text-sm text-blue-400 hover:text-blue-300 font-medium"
+                    >
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
                 )}
               </div>
 

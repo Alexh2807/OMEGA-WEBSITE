@@ -14,10 +14,22 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting */
+    /* Contrôles de type.
+
+       `strict` reste actif : c'est lui qui attrape les vraies fautes — variable
+       inexistante, propriété absente, valeur potentiellement nulle. Le build les refuse
+       désormais (`tsc -b` dans le script `build`), et c'est exactement ce qui manquait :
+       cinq variables jamais déclarées étaient parties en production, dont l'écran
+       « TVA à déclarer » qui plantait en écran blanc le jour d'une déclaration DES.
+
+       `noUnusedLocals` / `noUnusedParameters` sont en revanche DÉSACTIVÉS ici. Un import
+       inutilisé est une question de propreté, pas de correction : le laisser bloquer le
+       build reviendrait à ne jamais pouvoir activer le contrôle de types, puisque le
+       dépôt en compte plus de cent. C'est `eslint` qui les signale (`npm run lint`),
+       sans empêcher la mise en ligne. */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"]

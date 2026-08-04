@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Check, Truck } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,7 +8,8 @@ import { supabase } from '../lib/supabase';
 import AddressManager from '../components/AddressManager';
 import AchatEntreprise from '../components/AchatEntreprise';
 import StripeCheckout, { type RecapitulatifDevis } from '../components/StripeCheckout';
-import { computeShipping } from '../utils/shipping';
+import { computeShipping, listerOffresLivraison, type OffreLivraison } from '../utils/shipping';
+import ChoixLivraison from '../components/ChoixLivraison';
 import { EURO } from '../utils/prix';
 import toast from 'react-hot-toast';
 
@@ -30,11 +31,20 @@ const CheckoutPage = () => {
   const { user } = useAuth();
   const { vitrineMode, shippingConfig } = useSiteSettings();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [adresse, setAdresse] = useState<any>(null);
+  /* Mode de livraison choisi par le client. Le panier le transmet à la navigation :
+     celui qu'il vient de sélectionner là-bas doit être celui qu'il retrouve ici, sinon
+     il choisit deux fois — et il paierait le mode par défaut sans le voir. */
+  const [serviceLivraison, setServiceLivraison] = useState<string | null>(
+    (location.state as { service?: string } | null)?.service ?? null
+  );
   const [choixAdresse, setChoixAdresse] = useState(false);
   const [recap, setRecap] = useState<RecapitulatifDevis | null>(null);
-  const [express, setExpress] = useState(false);
+  const [express, setExpress] = useState<boolean>(
+    (location.state as { express?: boolean } | null)?.express ?? false
+  );
   const [cleCheckout, setCleCheckout] = useState(0);
   const [finalisation, setFinalisation] = useState(false);
 
@@ -68,6 +78,32 @@ const CheckoutPage = () => {
     { express }
   );
 
+  /* Les 5 modes proposables pour CE panier vers CETTE adresse. Même source que le
+     panier (`listerOffresLivraison`), donc mêmes prix : le client ne doit pas voir un
+     tarif ici et un autre là. */
+  const lignesLivraison = items.map(i => {
+    const p = i.product as { shipping_class?: string; weight_kg?: number | null } | undefined;
+    return { shipping_class: p?.shipping_class, weight_kg: p?.weight_kg, quantity: i.quantity };
+  });
+  const destination = adresse ? { country: adresse.country, postal_code: adresse.postal_code } : null;
+  const offres: OffreLivraison[] = listerOffresLivraison(
+    lignesLivraison, destination, shippingConfig, { express }
+  );
+  const offresChiffrables = offres.filter(o => !o.sur_devis);
+  const offreChoisie = offresChiffrables.find(o => o.service === serviceLivraison) ?? null;
+
+  /* Présélection — ⚠ on ne retient QUE l'offre que `computeShipping` choisirait, jamais
+     « la première chiffrable » : sans adresse, la seule offre chiffrable est le retrait
+     au dépôt (gratuit), et la page annoncerait « livraison offerte » à quelqu'un qui
+     attend un colis. On resélectionne aussi quand l'offre retenue disparaît (changement
+     d'adresse ou de poids), sinon le total affiché ne serait plus celui débité. */
+  useEffect(() => {
+    if (serviceLivraison && offresChiffrables.some(o => o.service === serviceLivraison)) return;
+    const defaut = offresChiffrables.find(o => o.service === port.offre?.service);
+    setServiceLivraison(defaut ? defaut.service : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offresChiffrables.map(o => o.service).join('|'), port.offre?.service]);
+
   /* Le récapitulatif vient du SERVEUR, en mode aperçu : il calcule le régime de TVA, le
      taux, le port et le total, sans créer ni devis ni paiement. Le navigateur ne
      recalcule rien — il ne pourrait pas : le taux dépend du pays et du statut vérifié. */
@@ -84,6 +120,11 @@ const CheckoutPage = () => {
           body: JSON.stringify({
             items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
             address_id: adresse.id, express, apercu: true,
+            /* ⚠ LE NOM DU CHAMP EST `shipping_service`, comme dans StripeCheckout.
+               `devis-commande` ne lit que `service` ou `shipping_service` ; tout autre
+               nom est ignoré EN SILENCE et le devis retombe sur le mode par défaut —
+               le client verrait un mode et paierait l'autre. */
+            shipping_service: serviceLivraison || null,
           }),
         }
       );
@@ -92,7 +133,7 @@ const CheckoutPage = () => {
       else if (j?.error) toast.error(j.error);
     } catch { /* l'aperçu qui échoue ne bloque rien */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, adresse?.id, express, items.map(i => `${i.product_id}x${i.quantity}`).join('|')]);
+  }, [user?.id, adresse?.id, express, serviceLivraison, items.map(i => `${i.product_id}x${i.quantity}`).join('|')]);
 
   useEffect(() => { demanderApercu(); }, [demanderApercu]);
 
@@ -175,9 +216,37 @@ const CheckoutPage = () => {
                   vous répondons sous 24 h ouvrées.
                 </p>
               )}
+              {/* ---------- Mode de livraison ----------
+                  Cette page n'offrait qu'une case « Express » : le client ne pouvait
+                  ni prendre un point relais moins cher, ni le retrait gratuit au dépôt,
+                  alors que le moteur les calcule. Le serveur chiffre toujours lui-même —
+                  ici on ne fait que transmettre le choix. */}
+              {adresse && offres.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
+                    <Truck size={16} className="text-blue-400" />
+                    Mode de livraison
+                  </h3>
+                  <ChoixLivraison
+                    offres={offres}
+                    valeur={serviceLivraison}
+                    onChange={offre => {
+                      /* Changer de mode change le port, donc le total ET le devis
+                         serveur : on invalide le récapitulatif et on force une nouvelle
+                         préparation de paiement, sinon le client paierait le port du
+                         mode précédent. */
+                      setServiceLivraison(offre.service);
+                      setRecap(null);
+                      setCleCheckout(k => k + 1);
+                    }}
+                    chargement={!!adresse && offres.length === 0}
+                  />
+                </div>
+              )}
+
               {adresse && port.expressAvailable && (
                 <label className="mt-3 flex items-center gap-2 text-sm text-gray-300 cursor-pointer bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                  <input type="checkbox" checked={express} onChange={e => setExpress(e.target.checked)} className="accent-blue-500" />
+                  <input type="checkbox" checked={express} onChange={e => { setExpress(e.target.checked); setRecap(null); setCleCheckout(k => k + 1); }} className="accent-blue-500" />
                   Livraison Express Europe
                 </label>
               )}
@@ -207,6 +276,7 @@ const CheckoutPage = () => {
                   items={items.map(i => ({ product_id: i.product_id, quantity: i.quantity }))}
                   addressId={adresse.id}
                   express={express}
+                  serviceLivraison={serviceLivraison}
                   onQuote={setRecap}
                   onSuccess={paiementReussi}
                   onError={m => toast.error(m)}

@@ -475,8 +475,13 @@ const AdminTva: React.FC = () => {
                         <td className="py-1.5 pr-4 text-white font-mono">{l.numero_tva}</td>
                         <td className="py-1.5 pr-4 text-gray-300">{l.client}</td>
                         <td className="py-1.5 pr-4 text-gray-300">{l.pays}</td>
+                        {/* ⚠ Ce montant appelait un `EURO` jamais importé : l'écran levait
+                            un ReferenceError et devenait blanc DÈS QU'une livraison
+                            intracommunautaire apparaissait — c'est-à-dire exactement le
+                            jour où il y a une DES à déposer. Le formateur du fichier
+                            (`eur`, ligne 70) fait déjà ce travail partout ailleurs. */}
                         <td className="py-1.5 pr-4 text-right text-white">
-                          {Number(l.montant_ht).toLocaleString('fr-FR', EURO)}
+                          {eur(l.montant_ht)}
                         </td>
                         <td className="py-1.5 text-gray-400 text-xs">
                           {l.verifie_le

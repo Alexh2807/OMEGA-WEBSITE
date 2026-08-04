@@ -63,6 +63,12 @@ interface CheckoutFormProps {
   items: LigneDevis[];
   addressId: string;
   express?: boolean;
+  /* IDENTIFIANT de l'offre de livraison choisie par le client (`OffreLivraison.service`,
+     ex. `colissimo_domicile`, `chronopost_chrono18`, `retrait_depot`).
+     ⚠ JAMAIS un prix : le serveur relit lui-même le barème pour ce service. Envoyer le
+     montant depuis le navigateur reviendrait à laisser le client choisir ses frais de
+     port — exactement l'invariant n° 1 du contrat. */
+  serviceLivraison?: string | null;
   onQuote?: (recap: RecapitulatifDevis) => void;
   onSuccess: (paymentIntentId: string, quoteId: string) => void;
   onError: (error: string) => void;
@@ -72,6 +78,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
   items,
   addressId,
   express,
+  serviceLivraison,
   onQuote,
   onSuccess,
   onError,
@@ -128,7 +135,16 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
               Authorization: `Bearer ${session.access_token}`,
               'Idempotency-Key': idempotencyKey,
             },
-            body: JSON.stringify({ items, address_id: addressId, express: !!express }),
+            body: JSON.stringify({
+              items,
+              address_id: addressId,
+              express: !!express,
+              /* Le mode de livraison retenu par le client. Tant que `devis-commande`
+                 ne le lit pas (voir le rapport F1 : dépendance déclarée à E), le
+                 serveur retient son mode par défaut — le champ est ignoré, jamais
+                 interprété de travers. */
+              shipping_service: serviceLivraison || null,
+            }),
           }
         );
 
@@ -169,7 +185,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
     // à chaque ouverture). On ne dépend pas de `items` : une variation de référence
     // relancerait la préparation en boucle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addressId]);
+  }, [addressId, express, serviceLivraison]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -440,6 +456,7 @@ interface StripeCheckoutProps {
   items: LigneDevis[];
   addressId: string;
   express?: boolean;
+  serviceLivraison?: string | null;
   onQuote?: (recap: RecapitulatifDevis) => void;
   onSuccess: (paymentIntentId: string, quoteId: string) => void;
   onError: (error: string) => void;
@@ -449,6 +466,7 @@ const StripeCheckout: React.FC<StripeCheckoutProps> = ({
   items,
   addressId,
   express,
+  serviceLivraison,
   onQuote,
   onSuccess,
   onError,
@@ -459,6 +477,7 @@ const StripeCheckout: React.FC<StripeCheckoutProps> = ({
         items={items}
         addressId={addressId}
         express={express}
+        serviceLivraison={serviceLivraison}
         onQuote={onQuote}
         onSuccess={onSuccess}
         onError={onError}

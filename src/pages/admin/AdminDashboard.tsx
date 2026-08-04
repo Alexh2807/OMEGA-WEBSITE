@@ -10,8 +10,13 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import toast from 'react-hot-toast';
 import { RecentActivity } from '../../types'; // Assurez-vous que ce type est bien défini
 import { EURO } from '../../utils/prix';
+
+/* ⚠ `toast` n'était PAS importé alors que le `catch` du chargement l'appelle : la moindre
+   erreur de lecture faisait planter l'écran EN AFFICHANT l'erreur — double faute, puisque
+   le rattrapage prévu tuait le tableau de bord au lieu de le sauver. */
 
 const AdminDashboard = () => {
   const [statsData, setStatsData] = useState({
@@ -92,12 +97,15 @@ const AdminDashboard = () => {
         .limit(3);
 
       // --- Mettre à jour l'état ---
+      /* ⚠ `count` vaut `number | null` : le défaut de déstructuration `= 0` ne joue QUE
+         sur `undefined`, jamais sur `null`. Un compteur nul se serait donc propagé tel
+         quel dans un état typé `number`. On le ramène explicitement à 0. */
       setStatsData({
-        users: usersCount,
+        users: usersCount ?? 0,
         validOrders: validOrdersCount,
         netRevenue,
-        pendingMessages: pendingMessagesCount,
-        products: productsCount,
+        pendingMessages: pendingMessagesCount ?? 0,
+        products: productsCount ?? 0,
         totalRefunded,
       });
 
@@ -105,7 +113,14 @@ const AdminDashboard = () => {
       (recentOrdersData || []).forEach(o =>
         activities.push({
           type: 'order',
-          message: `Nouvelle commande de ${o.profiles?.first_name || 'un client'} (${o.total.toLocaleString('fr-FR', EURO)})`,
+          /* PostgREST rend la jointure `profiles` comme un TABLEAU quand la relation
+             n'est pas déclarée « to-one ». On accepte les deux formes plutôt que de
+             parier sur l'une : la mauvaise supposition affichait « un client » pour
+             tout le monde, sans erreur visible. */
+          message: `Nouvelle commande de ${
+            (Array.isArray(o.profiles) ? o.profiles[0] : o.profiles)?.first_name ||
+            'un client'
+          } (${(o.total || 0).toLocaleString('fr-FR', EURO)})`,
           time: new Date(o.created_at).toLocaleString('fr-FR'),
           icon: ShoppingCart,
           color: 'text-green-400',
