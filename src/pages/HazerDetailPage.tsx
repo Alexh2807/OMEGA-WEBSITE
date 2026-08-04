@@ -36,7 +36,7 @@ const HazerDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
   const { addToCart } = useCart();
-  const { user, userType } = useAuth();
+  const { user, affichagePrix } = useAuth();
   const { vitrineMode } = useSiteSettings();
 
   const heroRef = useRef<HTMLDivElement>(null);
@@ -131,7 +131,7 @@ const HazerDetailPage = () => {
   };
 
   const getDisplayPrice = (product: Product) => {
-    if (userType === 'pro' && product.price_ht) {
+    if (affichagePrix === 'ht' && product.price_ht) {
       return {
         price: product.price_ht,
         label: 'HT',
@@ -581,7 +581,7 @@ const HazerDetailPage = () => {
                     <div className="text-2xl font-bold text-blue-400">
                       {product.price.toLocaleString('fr-FR', EURO)}
                       <span className="text-sm text-gray-400 ml-1">
-                        {userType === 'pro' && product.price_ht ? 'HT' : 'TTC'}
+                        {affichagePrix === 'ht' && product.price_ht ? 'HT' : 'TTC'}
                       </span>
                     </div>
 

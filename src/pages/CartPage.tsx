@@ -28,7 +28,7 @@ import { EURO } from '../utils/prix';
 const CartPage = () => {
   const { items, updateQuantity, removeFromCart, totalItems, clearCart } =
     useCart();
-  const { user, userType } = useAuth();
+  const { user, affichagePrix } = useAuth();
   const { vitrineMode, shippingConfig } = useSiteSettings();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -255,10 +255,10 @@ const CartPage = () => {
   };
 
   const getItemPrice = (item: any) => {
-    if (userType === 'pro' && item.product?.price_ht) {
+    if (affichagePrix === 'ht' && item.product?.price_ht) {
       return item.product.price_ht;
     }
-    return userType === 'pro'
+    return affichagePrix === 'ht'
       ? (item.product?.price || 0) / 1.2
       : item.product?.price || 0;
   };
@@ -269,7 +269,7 @@ const CartPage = () => {
       0
     );
 
-    if (userType === 'pro') {
+    if (affichagePrix === 'ht') {
       const subTotal = itemsTotal;
       const tax = subTotal * 0.2;
       const total = subTotal + tax;
@@ -388,7 +388,7 @@ const CartPage = () => {
           </h1>
           <div className="mt-2 text-gray-400">
             Affichage:{' '}
-            {userType === 'pro'
+            {affichagePrix === 'ht'
               ? 'Prix HT (Professionnel)'
               : 'Prix TTC (Particulier)'}
           </div>

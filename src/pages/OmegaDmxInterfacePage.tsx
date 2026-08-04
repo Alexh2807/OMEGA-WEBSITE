@@ -312,7 +312,7 @@ const OmegaDmxInterfacePage = () => {
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [dbProduct, setDbProduct] = useState<Product | null>(null);
   const { addToCart } = useCart();
-  const { user, userType } = useAuth();
+  const { user, affichagePrix } = useAuth();
   const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
 
@@ -338,7 +338,7 @@ const OmegaDmxInterfacePage = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const isPro = userType === 'pro';
+  const isPro = affichagePrix === 'ht';
   const mainPrice = isPro ? PRICE_HT : PRICE_TTC;
   const mainLabel = isPro ? 'HT' : 'TTC';
   const altPrice = isPro

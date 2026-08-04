@@ -170,9 +170,16 @@ Deno.serve(async (req: Request) => {
        L'adresse enregistrée par VIES est conservée dans `vies_checks`, table réservée aux
        administrateurs — elle ne transite jamais par le navigateur du client. */
     let adresseOk: boolean | null = null;
+    let preuveVies: { checked_at?: string; company_name?: string; company_address?: string } | null = null;
     if (estEntreprise && tvaValide && profil?.vat_number) {
       const { data: fiche } = await admin
-        .from('vies_checks').select('company_address').eq('vat_number', profil.vat_number).maybeSingle();
+        .from('vies_checks').select('company_name, company_address, checked_at')
+        .eq('vat_number', profil.vat_number).maybeSingle();
+      /* ★ On FIGE la réponse de VIES sur le devis, donc sur la commande. Le cache est
+         rafraîchi toutes les 24 h : sans cette copie, on ne pourrait plus prouver dans
+         deux ans ce que le fichier européen répondait le jour de la vente — c'est
+         pourtant ce qui établit la bonne foi du vendeur en cas de contrôle. */
+      preuveVies = fiche as any;
       const { data: concordanceAdr } = await admin.rpc('adresses_concordent', {
         p_adresse_vies: fiche?.company_address ?? null,
         p_code_postal: cp,
@@ -256,6 +263,9 @@ Deno.serve(async (req: Request) => {
       vat_validated: profil?.vat_number_valid ?? null,
       vat_regime: regime,
       vat_rate: taux,
+      vies_checked_at: preuveVies?.checked_at ?? null,
+      vies_name: preuveVies?.company_name ?? null,
+      vies_address: preuveVies?.company_address ?? null,
       subtotal_ht: baseHt,
       tax_amount: tva,
       total_ttc: totalTtc,

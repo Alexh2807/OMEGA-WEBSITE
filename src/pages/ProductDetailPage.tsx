@@ -34,7 +34,7 @@ const ProductDetailPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const { addToCart } = useCart();
-  const { user, userType } = useAuth();
+  const { user, affichagePrix } = useAuth();
   const { vitrineMode } = useSiteSettings();
 
   useEffect(() => {
@@ -91,7 +91,7 @@ const ProductDetailPage = () => {
   };
 
   const getDisplayPrice = (product: Product) => {
-    if (userType === 'pro' && product.price_ht) {
+    if (affichagePrix === 'ht' && product.price_ht) {
       return {
         price: product.price_ht,
         originalPrice: product.original_price

@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { paysPresume, codePostalPresume } from '../utils/paysVisiteur';
 import {
   MapPin,
   Plus,
@@ -54,8 +55,8 @@ const AddressManager: React.FC<AddressManagerProps> = ({
     address_line_1: '',
     address_line_2: '',
     city: '',
-    postal_code: '',
-    country: 'France',
+    postal_code: codePostalPresume(),
+    country: paysPresume(),
     phone: '',
     is_default: false,
   });
@@ -184,8 +185,8 @@ const AddressManager: React.FC<AddressManagerProps> = ({
       address_line_1: '',
       address_line_2: '',
       city: '',
-      postal_code: '',
-      country: 'France',
+      postal_code: codePostalPresume(),
+      country: paysPresume(),
       phone: '',
       is_default: false,
     });

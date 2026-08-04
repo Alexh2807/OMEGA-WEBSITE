@@ -25,6 +25,18 @@ interface Bloc {
   tva_collectee?: number;
   nb: number;
 }
+/** Une ligne de l'état récapitulatif (DES) : un client, son numéro, son montant. */
+interface LigneDes {
+  numero_tva: string;
+  client: string;
+  pays: string;
+  montant_ht: number;
+  nb_lignes: number;
+  verifie_le: string | null;
+  nom_vies: string | null;
+  adresse_vies: string | null;
+}
+
 interface Declaration {
   periode: { du: string; au: string };
   ventes_france: Bloc;
@@ -100,18 +112,25 @@ const AdminTva: React.FC = () => {
   const [au, setAu] = useState(periodes[0].au);
   const [decl, setDecl] = useState<Declaration | null>(null);
   const [oss, setOss] = useState<SeuilOss | null>(null);
+  /* DES : état récapitulatif des livraisons intracommunautaires, à déposer chaque mois.
+     Une ligne par client avec son numéro de TVA — c'est ce que l'administration recoupe
+     avec la déclaration de l'acheteur. Il vit ICI, dans le même écran et la même période
+     que la déclaration de TVA : un seul endroit à ouvrir, un seul à gérer. */
+  const [des, setDes] = useState<LigneDes[]>([]);
   const [loading, setLoading] = useState(false);
 
   const charger = useCallback(async () => {
     setLoading(true);
     try {
-      const [d, o] = await Promise.all([
+      const [d, o, e] = await Promise.all([
         supabase.rpc('declaration_tva', { p_du: du, p_au: au }),
         supabase.rpc('seuil_oss', {}),
+        supabase.rpc('declaration_des', { p_du: du, p_au: au }),
       ]);
       if (d.error) throw d.error;
       setDecl(d.data as unknown as Declaration);
       if (!o.error) setOss(o.data as unknown as SeuilOss);
+      setDes(!e.error && Array.isArray(e.data) ? (e.data as unknown as LigneDes[]) : []);
     } catch (e) {
       toast.error(
         'Lecture impossible : ' + (e instanceof Error ? e.message : 'erreur')
@@ -164,6 +183,10 @@ const AdminTva: React.FC = () => {
         decl.livraisons_outre_mer?.nb ?? 0,
       ],
       ['TOTAL', decl.total_ht, decl.total_tva_collectee, ''],
+      ['', '', '', ''],
+      ['Etat recapitulatif DES (livraisons intracommunautaires)', '', '', ''],
+      ['N TVA client', 'Client', 'Pays', 'Montant HT'],
+      ...des.map(l => [l.numero_tva, l.client, l.pays, l.montant_ht]),
       ['', '', '', ''],
       ['Detail par pays', 'Regime', 'Base HT', 'TVA'],
       ...(decl.par_pays || []).map(p => [p.pays, p.regime || '?', p.base_ht, p.tva]),
@@ -413,6 +436,62 @@ const AdminTva: React.FC = () => {
               </table>
             </div>
           )}
+
+          {/* ÉTAT RÉCAPITULATIF (DES) — à déposer chaque mois quand il n'est pas vide.
+              Il montre aussi la preuve VIES figée le jour de la vente : c'est elle qui
+              établit votre bonne foi si l'acheteur n'a pas auto-liquidé sa TVA. */}
+          <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 mt-5">
+            <div className="flex items-baseline justify-between mb-1">
+              <h3 className="text-white font-semibold">
+                État récapitulatif (DES) — livraisons intracommunautaires
+              </h3>
+              <span className="text-xs text-gray-400">
+                {des.length} client{des.length > 1 ? 's' : ''} sur la période
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">
+              À déposer sur douane.gouv.fr avant le 10 du mois suivant. Inclus dans
+              l'export comptable.
+            </p>
+            {des.length === 0 ? (
+              <div className="text-gray-400 text-sm">
+                Aucune livraison intracommunautaire sur cette période — rien à déclarer.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-400 text-left">
+                      <th className="py-1 pr-4">N° TVA client</th>
+                      <th className="py-1 pr-4">Client</th>
+                      <th className="py-1 pr-4">Pays</th>
+                      <th className="py-1 pr-4 text-right">Montant HT</th>
+                      <th className="py-1">Vérifié auprès de VIES</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {des.map(l => (
+                      <tr key={l.numero_tva} className="border-t border-gray-800">
+                        <td className="py-1.5 pr-4 text-white font-mono">{l.numero_tva}</td>
+                        <td className="py-1.5 pr-4 text-gray-300">{l.client}</td>
+                        <td className="py-1.5 pr-4 text-gray-300">{l.pays}</td>
+                        <td className="py-1.5 pr-4 text-right text-white">
+                          {Number(l.montant_ht).toLocaleString('fr-FR', EURO)}
+                        </td>
+                        <td className="py-1.5 text-gray-400 text-xs">
+                          {l.verifie_le
+                            ? `le ${new Date(l.verifie_le).toLocaleDateString('fr-FR')}${
+                                l.nom_vies ? ` — ${l.nom_vies}` : ''
+                              }`
+                            : 'preuve non conservée'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </>
       )}
 

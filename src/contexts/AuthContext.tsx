@@ -15,6 +15,13 @@ interface AuthContextType {
      vient de se déclarer société — incohérence relevée à l'usage.
      ⚠ Ne prend AUCUN paramètre : on ne choisit pas son statut, on le relit. */
   rafraichirStatut: () => Promise<void>;
+  /* PRÉFÉRENCE D'AFFICHAGE, à ne pas confondre avec le statut fiscal.
+     Le pictogramme « Pro (HT) » de l'en-tête ressemblait à un interrupteur mais se
+     contentait de renvoyer vers la page Compte : on cliquait, il ne se passait rien.
+     Il bascule maintenant réellement l'affichage HT/TTC — et RIEN D'AUTRE : le taux
+     réellement facturé reste décidé par le serveur d'après l'adresse de livraison. */
+  affichagePrix: 'ht' | 'ttc';
+  setAffichagePrix: (v: 'ht' | 'ttc') => void;
   signUp: (
     email: string,
     password: string,
@@ -44,6 +51,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     'particulier'
   );
   const [isAdmin, setIsAdmin] = useState(false);
+  /* Par défaut TTC : c'est ce qu'impose l'affichage aux consommateurs. Un compte
+     déclaré entreprise passe en HT, et le choix manuel du visiteur prime ensuite. */
+  const [affichagePrix, setAffichageBrut] = useState<'ht' | 'ttc'>(() => {
+    try {
+      const v = localStorage.getItem('omega:affichage_prix');
+      return v === 'ht' || v === 'ttc' ? v : 'ttc';
+    } catch { return 'ttc'; }
+  });
+  const setAffichagePrix = (v: 'ht' | 'ttc') => {
+    setAffichageBrut(v);
+    try { localStorage.setItem('omega:affichage_prix', v); } catch { /* navigation privée */ }
+  };
   /* Le résolveur est défini dans l'effet ; on le garde sous la main pour pouvoir le
      rejouer à la demande sans dupliquer la requête. */
   const resolveRef = useRef<((u: User | null) => Promise<void>) | null>(null);
@@ -73,7 +92,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           .eq('id', u.id)
           .single();
         setIsAdmin(!error && data?.role === 'admin');
-        setUserType(!error && data?.is_company ? 'pro' : 'particulier');
+        const pro = !error && data?.is_company;
+        setUserType(pro ? 'pro' : 'particulier');
+        // Un compte entreprise voit le HT par défaut — sauf s'il a déjà choisi.
+        try {
+          if (!localStorage.getItem('omega:affichage_prix')) {
+            setAffichageBrut(pro ? 'ht' : 'ttc');
+          }
+        } catch { /* ignoré */ }
       } catch (err) {
         console.error('Error checking user role:', err);
         setIsAdmin(false);
@@ -177,6 +203,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     isAdmin,
     userType,
     rafraichirStatut,
+    affichagePrix,
+    setAffichagePrix,
     signUp,
     signIn,
     signOut,

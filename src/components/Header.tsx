@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Bell,
   Settings,
+  ToggleLeft,
   ToggleRight,
   ChevronDown,
 } from 'lucide-react';
@@ -44,7 +45,7 @@ const Header = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isGammeOpen, setIsGammeOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const { user, signOut, isAdmin, userType } = useAuth();
+  const { user, signOut, isAdmin, affichagePrix, setAffichagePrix } = useAuth();
   const { totalItems } = useCart();
   const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
@@ -214,20 +215,27 @@ const Header = () => {
               Contact
             </Link>
 
-            {/* ⚠ PLUS DE BASCULE LIBRE : l'affichage HT n'est plus un choix, c'est la
-                conséquence du statut déclaré dans le compte. Une bascule libre affichait
-                −20 % à qui cliquait, et le vrai prix n'apparaissait qu'au paiement.
-                Ici on se contente d'INDIQUER le mode ; il se change dans « Mon compte ». */}
-            {user && userType === 'pro' && (
-              <Link
-                to="/compte"
-                title="Vous êtes enregistré comme entreprise : les prix sont affichés hors taxes. Modifiable dans votre compte."
-                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full px-3 py-2 transition-colors"
-              >
+            {/* Interrupteur d'AFFICHAGE des prix. Il en avait l'apparence mais se
+                contentait de renvoyer vers « Mon compte », où il fallait encore cliquer
+                « Modifier » puis « Enregistrer » — d'où l'impression que rien ne se
+                passait. Il bascule maintenant vraiment, et son état est mémorisé.
+                ⚠ Il ne change QUE l'affichage. Le taux réellement facturé est décidé par
+                le serveur d'après l'adresse de livraison, jamais par ce bouton. */}
+            <button
+              type="button"
+              onClick={() => setAffichagePrix(affichagePrix === 'ht' ? 'ttc' : 'ht')}
+              title="Afficher les prix hors taxes ou toutes taxes comprises. N'affecte pas le montant facturé, qui dépend de votre adresse de livraison."
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 rounded-full px-3 py-2 transition-colors"
+            >
+              {affichagePrix === 'ht' ? (
                 <ToggleRight size={18} className="text-blue-400" />
-                <span className="text-xs font-medium text-white">Pro (HT)</span>
-              </Link>
-            )}
+              ) : (
+                <ToggleLeft size={18} className="text-gray-300" />
+              )}
+              <span className="text-xs font-medium text-white">
+                {affichagePrix === 'ht' ? 'Prix HT' : 'Prix TTC'}
+              </span>
+            </button>
 
             {/* Panier (vente en ligne) — ou téléphone en MODE VITRINE */}
             {vitrineMode ? (
@@ -364,7 +372,7 @@ const Header = () => {
               >
                 <span className="text-white text-sm">Prix affichés :</span>
                 <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white">
-                  {userType === 'pro' ? 'Pro (HT)' : 'Particulier (TTC)'}
+                  {affichagePrix === 'ht' ? 'HT' : 'TTC'}
                 </span>
               </Link>
             )}

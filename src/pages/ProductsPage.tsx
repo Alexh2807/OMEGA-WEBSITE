@@ -26,7 +26,7 @@ const ProductsPage = () => {
   const [sortBy, setSortBy] = useState('name');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { addToCart } = useCart();
-  const { user, userType } = useAuth();
+  const { user, affichagePrix } = useAuth();
   const { vitrineMode } = useSiteSettings();
 
   useEffect(() => {
@@ -86,7 +86,7 @@ const ProductsPage = () => {
   };
 
   const getDisplayPrice = (product: Product) => {
-    if (userType === 'pro' && product.price_ht) {
+    if (affichagePrix === 'ht' && product.price_ht) {
       return {
         price: product.price_ht,
         originalPrice: product.original_price
@@ -147,7 +147,7 @@ const ProductsPage = () => {
           </p>
           <div className="mt-4 text-gray-400">
             Affichage:{' '}
-            {userType === 'pro'
+            {affichagePrix === 'ht'
               ? 'Prix HT (Professionnel)'
               : 'Prix TTC (Particulier)'}
           </div>
