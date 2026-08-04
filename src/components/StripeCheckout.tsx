@@ -54,6 +54,9 @@ export interface RecapitulatifDevis {
   regime: string;
   mention: string | null;
   territoire: string | null;
+  /** Pourquoi l'exonération n'a pas été accordée (numéro d'un autre pays, nom qui ne
+      correspond pas…). Null quand il n'y a rien à expliquer. */
+  refus_exoneration?: string | null;
 }
 
 interface CheckoutFormProps {

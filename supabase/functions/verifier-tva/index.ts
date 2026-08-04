@@ -99,26 +99,46 @@ Deno.serve(async (req: Request) => {
         console.error('verifier-tva : appelant non identifié', eUser?.message);
         return;
       }
+      /* ★ CONCORDANCE DU NOM. Un numéro intracommunautaire est PUBLIC : n'importe qui
+         peut reprendre celui d'une autre société et VIES le confirmera. Le seul
+         rattachement possible entre le numéro et l'acheteur, c'est le nom que VIES y
+         associe. On le compare à la raison sociale déclarée.
+         ⚠ Certains États membres (l'Allemagne au premier chef) ne divulguent aucun nom :
+         la comparaison rend NULL, et le contrôle repose alors sur les autres verrous. */
+      const { data: profilActuel } = await admin
+        .from('profiles').select('company_name').eq('id', u.user.id).single();
+      const { data: concordance } = await admin.rpc('noms_concordent', {
+        p_declare: profilActuel?.company_name ?? null,
+        p_vies: nomSociete || null,
+      });
+
       const { error } = await admin.from('profiles').update({
         vat_number: brut,
         vat_number_valid: verdictValide,
         vat_checked_at: dateVerif,
         vat_checked_name: nomSociete || null,
+        vat_name_match: concordance ?? null,
       }).eq('id', u.user.id);
       // ⚠ Ne PAS avaler l'erreur en silence : c'est ce qui a caché ce défaut.
       if (error) console.error('verifier-tva : profil non mis à jour', error.message);
+      return concordance ?? null;
     };
 
     try {
       const { data: cache } = await admin
         .from('vies_checks').select('*').eq('vat_number', brut).maybeSingle();
       if (cache && Date.now() - new Date(cache.checked_at).getTime() < 86400000) {
-        await inscrireVerdict(cache.valid, cache.company_name || '', cache.checked_at);
+        const concord = await inscrireVerdict(cache.valid, cache.company_name || '', cache.checked_at);
         return reponse({
           valide: cache.valid, numero: brut, pays,
           nom: cache.company_name || '', adresse: cache.company_address || '',
           verifie_le: cache.checked_at, depuis_cache: true,
-          motif: cache.valid ? null : "Ce numéro n'est pas reconnu par le service européen VIES.",
+          nom_concordant: concord,
+          motif: cache.valid
+            ? (concord === false
+                ? "Ce numéro est valide, mais il est enregistré au nom d'une autre société que celle que vous avez indiquée. La TVA sera facturée."
+                : null)
+            : "Ce numéro n'est pas reconnu par le service européen VIES.",
         });
       }
     } catch (_e) { /* pas de cache : on interroge VIES */ }
@@ -183,7 +203,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ---- Conservation de la preuve sur le profil de l'appelant ----
-    await inscrireVerdict(valide, nom, new Date().toISOString());
+    const concord = await inscrireVerdict(valide, nom, new Date().toISOString());
 
     return reponse({
       valide,
@@ -192,8 +212,11 @@ Deno.serve(async (req: Request) => {
       nom,
       adresse,
       verifie_le: new Date().toISOString(),
+      nom_concordant: concord,
       motif: valide
-        ? null
+        ? (concord === false
+            ? "Ce numéro est valide, mais il est enregistré au nom d'une autre société que celle que vous avez indiquée. La TVA sera facturée."
+            : null)
         : "Ce numéro n'est pas reconnu par le service européen VIES. Vérifiez-le, ou commandez en tant que particulier.",
     });
   } catch (e) {

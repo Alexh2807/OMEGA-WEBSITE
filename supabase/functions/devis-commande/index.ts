@@ -114,7 +114,9 @@ Deno.serve(async (req: Request) => {
 
     // ---- 4. Statut fiscal : lu SUR LE PROFIL, pas déclaré par le client ----
     const { data: profil } = await admin
-      .from('profiles').select('is_company, company_name, vat_number, vat_number_valid').eq('id', user.id).maybeSingle();
+      .from('profiles')
+      .select('is_company, company_name, vat_number, vat_number_valid, vat_name_match, vat_checked_name')
+      .eq('id', user.id).maybeSingle();
     const estEntreprise = profil?.is_company === true;
     // ⚠ La validité vient de la vérification VIES enregistrée côté serveur. Un client qui
     // prétendrait avoir un numéro valide n'obtiendrait rien : ce champ n'est écrit que par
@@ -136,11 +138,35 @@ Deno.serve(async (req: Request) => {
     }
     const cp = String((adresse as any).postal_code || '');
 
+    /* ★ IDENTITÉ DE L'ACQUÉREUR — le numéro de TVA ne suffit pas.
+       Les numéros intracommunautaires sont PUBLICS : reprendre celui d'une autre société
+       passait la vérification VIES et donnait 0 %. Et si l'exonération est appliquée à
+       tort, c'est le VENDEUR qui doit la TVA à l'État, sur une somme jamais encaissée.
+       Deux rattachements possibles, l'un suffit :
+         · le nom que VIES associe au numéro correspond à la raison sociale déclarée ;
+         · la livraison est adressée à cette société (nom porté sur le colis).
+       `null` = on n'a pas pu contrôler (État membre qui ne divulgue pas de nom ET pas de
+       société sur l'adresse) : on n'invente pas de refus, les autres verrous jouent. */
+    const societeLivraison = String((adresse as any).company || '').trim();
+    const { data: memeSociete } = societeLivraison && profil?.company_name
+      ? await admin.rpc('noms_concordent', {
+          p_declare: societeLivraison, p_vies: profil.company_name,
+        })
+      : { data: null };
+    const identiteOk =
+      profil?.vat_name_match === true ? true
+      : memeSociete === true ? true
+      : profil?.vat_name_match === false ? false
+      : null;
+
     const { data: reg } = await admin.rpc('regime_tva', {
       p_pays: pays, p_entreprise: estEntreprise, p_vat_valide: tvaValide, p_code_postal: cp,
+      p_vat_number: profil?.vat_number ?? null, p_identite_ok: identiteOk,
     });
     const regime = reg?.[0]?.regime || 'fr';
     const taux = Number(reg?.[0]?.taux ?? 20);
+    // Motif du refus d'exonération : le client doit savoir POURQUOI on lui facture la TVA.
+    const refusExoneration = reg?.[0]?.refus ?? null;
 
     // ---- 5. Frais de port : MÊME code que l'affichage, jamais une seconde version ----
     // ⚠ La clé est `shipping_config` (et le format stocké peut être l'ancien :
@@ -244,6 +270,9 @@ Deno.serve(async (req: Request) => {
         regime,
         mention: reg?.[0]?.mention ?? null,
         territoire: reg?.[0]?.territoire ?? null,
+        // Pourquoi l'exonération n'a PAS été accordée. Sans ce motif, un client
+        // professionnel voit 20 % sans comprendre et appelle le support.
+        refus_exoneration: refusExoneration,
       },
     });
   } catch (e) {

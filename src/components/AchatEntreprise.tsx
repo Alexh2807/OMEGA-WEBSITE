@@ -32,6 +32,9 @@ interface Profil {
   vat_number: string | null;
   vat_number_valid: boolean | null;
   vat_checked_name: string | null;
+  /** La raison sociale déclarée correspond-elle au titulaire du numéro ?
+      NULL = l'État membre ne divulgue pas de nom (Allemagne…). */
+  vat_name_match: boolean | null;
 }
 
 const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
@@ -53,7 +56,7 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
     if (!user) return;
     const { data } = await supabase
       .from('profiles')
-      .select('is_company, company_name, vat_number, vat_number_valid, vat_checked_name')
+      .select('is_company, company_name, vat_number, vat_number_valid, vat_checked_name, vat_name_match')
       .eq('id', user.id)
       .single();
     if (data) {
@@ -118,7 +121,18 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
         }
       );
       const j = await r.json();
-      if (j.valide === true) {
+      if (j.valide === true && j.nom_concordant === false) {
+        /* Le numéro existe mais il est enregistré au nom d'une AUTRE société. On le dit
+           franchement : c'est le cas d'un client qui a repris un numéro trouvé en ligne,
+           mais aussi celui d'un honnête client qui a mal orthographié sa raison sociale.
+           On lui montre le nom officiel pour qu'il puisse corriger. */
+        toast.error(
+          `Ce numéro est enregistré au nom de « ${j.nom} ». Saisissez cette raison ` +
+            'sociale exacte, ou commandez en tant que particulier.',
+          { duration: 10000 }
+        );
+        if (j.nom) setSociete(j.nom);
+      } else if (j.valide === true) {
         toast.success(`Numéro vérifié : ${j.nom || 'entreprise reconnue'}`);
       } else if (j.indisponible) {
         // On ne suppose jamais la validité : la TVA sera facturée, et on le dit.
@@ -201,7 +215,20 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
           </div>
 
           {/* État RÉEL, écrit par le serveur — jamais une supposition du navigateur. */}
-          {profil.vat_number_valid === true && (
+          {/* Numéro valide MAIS enregistré à une autre société : l'exonération est
+              refusée, et on dit pourquoi plutôt que d'afficher un vert trompeur. */}
+          {profil.vat_number_valid === true && profil.vat_name_match === false && (
+            <p className="text-amber-300 text-xs flex items-start gap-1.5">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>
+                Ce numéro est valide, mais il est enregistré au nom de
+                {profil.vat_checked_name ? ` « ${profil.vat_checked_name} »` : ' une autre société'}.
+                Indiquez cette raison sociale exacte pour bénéficier de l'exonération —
+                sinon la TVA sera facturée.
+              </span>
+            </p>
+          )}
+          {profil.vat_number_valid === true && profil.vat_name_match !== false && (
             <p className="text-emerald-300 text-xs flex items-start gap-1.5">
               <CheckCircle size={14} className="flex-shrink-0 mt-0.5" />
               <span>

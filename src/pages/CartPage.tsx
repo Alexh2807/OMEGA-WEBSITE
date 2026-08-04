@@ -669,6 +669,13 @@ const CartPage = () => {
                     {recapServeur.mention}
                   </div>
                 )}
+                {/* Un professionnel qui voit 20 % alors qu'il attendait 0 % doit savoir
+                    POURQUOI, sinon il abandonne son panier ou appelle le support. */}
+                {recapServeur?.refus_exoneration && (
+                  <div className="text-amber-300 text-sm mb-2 leading-relaxed">
+                    {recapServeur.refus_exoneration}
+                  </div>
+                )}
                 {/* La mention « paiement sécurisé » est portée UNE SEULE FOIS, sous le
                     bouton de paiement. Elle était répétée ici et deux lignes plus bas. */}
                 <div className="text-gray-400 text-sm">
