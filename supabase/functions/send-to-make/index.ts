@@ -645,6 +645,18 @@ Deno.serve(async (req: Request) => {
 
       document: {
         type_code: estAvoir ? 381 : 380,
+        /* ★ BROUILLON OU VRAIE FACTURE — décidé par le MODE DE PAIEMENT DU SITE.
+           Tant que Stripe est en test, tout arrive en brouillon dans Tiime : on peut
+           essayer, se tromper, supprimer. Le jour où la clé passe en `sk_live_`, la
+           facture est émise pour de bon, numérotée par Tiime, et transmise par son
+           agrément — sans qu'il y ait un réglage à penser ce jour-là, donc sans risque
+           de l'oublier.
+           ⚠ LA DÉCISION EST PRISE ICI, PAS DANS MAKE. Une formule Make renvoyant
+           `false` produit facilement la CHAÎNE "false", qui est vraie : la facture
+           partirait en réel alors qu'on est en test. Un booléen JSON traverse sans
+           interprétation. (C'est la même famille d'erreur que le « [400] Cette valeur
+           doit être de type int|null » rencontré le 10 juillet.) */
+        is_draft: environnement !== 'production',
         number: invoice.invoice_number,
         issue_date: ymdParis(invoice.created_at),
         due_date: ymdParis(invoice.due_date ?? invoice.created_at),
