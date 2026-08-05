@@ -4,8 +4,12 @@
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * ⚠ LE FORMAT DU PAYLOAD A CHANGÉ LE 5 AOÛT — schema_version « 2.0 ».
- * Le scénario Make doit être remappé AVANT le déploiement de cette version : les clés
- * `totals.total_ht`, `items[]`, `tiime_lines[]` et `fiscal.outre_mer` n'existent plus.
+ * Le scénario Make a été remappé en conséquence : `totals.total_ht`, `items[]` et
+ * `fiscal.outre_mer` n'existent plus (voir la table de correspondance en fin d'en-tête).
+ * ★ `tiime_lines[]` a en revanche été RÉTABLI le 5 août : le module Make attend la
+ * structure de Tiime, et la reconstruire dans Make coûterait un Iterator + un Aggregator
+ * par facture sur un forfait à 1 000 opérations/mois. Le serveur produit donc les deux
+ * formats — `lines[]` pour l'échange normalisé, `tiime_lines[]` pour le branchement.
  * Le mode `apercu: true` sert précisément à cela : il rend le payload exact sans rien
  * émettre, de quoi construire le nouveau mapping sur un cas réel.
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -79,6 +83,13 @@ const supabaseAdmin = createClient(
 /** Euros à 2 décimales. Le payload ne transporte JAMAIS de centimes : les centimes
     n'existent que dans l'API Stripe, et les confondre a déjà coûté des factures ×100. */
 const eur = (n: unknown): number => Math.round((Number(n) || 0) * 100) / 100;
+
+/* Taux de TVA en FRACTION pour Tiime (0.2, 0.055, 0.021).
+   ⚠ NE PAS réutiliser `eur()` ici : arrondi à 2 décimales, le taux réduit 5,5 % devient
+   0,06 — soit 9 % de TVA en trop sur toute une facture de livres ou d'alimentaire, sans
+   le moindre message d'erreur. Quatre décimales couvrent tous les taux français
+   (20 %, 10 %, 5,5 %, 2,1 %) et les taux DOM (8,5 %). */
+const taux4 = (n: unknown): number => Math.round((Number(n) || 0) * 10000) / 10000;
 
 /**
  * `AAAA-MM-JJ` dans le fuseau de Paris.
@@ -658,6 +669,54 @@ Deno.serve(async (req: Request) => {
       buyer,
       lines,
       vat_breakdown,
+
+      /* ============================================================
+         LIGNES PRÊTES POUR TIIME — rétabli le 5 août 2026
+         ============================================================
+         `lines[]` ci-dessus est au format neutre (EN 16931, codes BT-xxx) : c'est le bon
+         format d'échange, et il ne bouge plus. Mais le module Make « Tiime — Créer une
+         facture » attend SA structure à lui. Reconstituer celle-ci DANS Make demanderait
+         un Iterator puis un Array aggregator : deux modules de plus, donc le double
+         d'opérations par facture sur un forfait qui en compte 1 000 par mois, et surtout
+         une transformation écrite dans une interface graphique — sans test, sans revue,
+         et à refaire à la main à chaque évolution.
+         Le serveur, lui, a déjà les données ET les huit contrôles bloquants. Il produit
+         donc les deux : `lines` pour l'échange, `tiime_lines` pour le branchement direct.
+         Make reste un passe-plat, ce qu'il n'aurait jamais dû cesser d'être.
+
+         ⚠ DEUX PIÈGES, tous deux vérifiés contre le format qui fonctionnait :
+          · le taux part en FRACTION (0.2), pas en pourcentage (20) comme `lines[].vat_rate`.
+            Tiime attend la fraction ; l'inverse passe en TVA à 2 000 % ou en refus ;
+          · le PORT est maintenant une ligne comme une autre. C'est précisément ce qui
+            manquait avant — la facture transmise valait moins que l'encaissement, du
+            montant exact des frais de port. */
+      tiime_lines: lines.map((l) => ({
+        invoice_quantity: l.quantity,
+        invoice_quantity_unit_of_measure_code: 'unit',
+        line_vat_information: {
+          invoiced_item_vat_rate: taux4(l.vat_rate / 100),
+          invoiced_item_vat_category_code: l.vat_category_code,
+          ...(l.vat_category_code !== 'S' && l.vat_exemption_reason
+            ? { invoiced_item_vat_exemption_reason_text: l.vat_exemption_reason }
+            : {}),
+        },
+        price_details: { item_net_price: l.unit_price_ht },
+        item_information: {
+          item_name: l.name,
+          item_attributes: [
+            /* ⚠ DEUX VALEURS ET DEUX SEULEMENT, imposées par Tiime : `sale` (Bien) ou
+               `benefit` (Service). Toute autre chaîne — « shipping » par exemple —
+               déclenche « [400] Cette valeur doit être l'un des choix proposés », l'erreur
+               qui a bloqué la mise au point du 10 juillet. Le transport EST un service :
+               c'est `benefit`, et c'est aussi ce qui le distingue de la marchandise pour
+               la ventilation 707 / 708. */
+            {
+              item_attribute_name: 'type',
+              item_attribute_value: l.line_kind === 'shipping' ? 'benefit' : 'sale',
+            },
+          ],
+        },
+      })),
 
       totals: {
         sum_line_net: sumLineNet,                       // BT-106
