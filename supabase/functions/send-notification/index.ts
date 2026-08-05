@@ -35,6 +35,13 @@ const SITE = 'https://omegasud.fr';
 /** Identifiant du logo joint au message, référencé par `cid:` dans le HTML. */
 const LOGO_CID = 'logo-omega';
 
+/* Fin de ligne MIME. Écrite par code de caractères plutôt qu'en littéral : un
+   `'\r\n'` recopié par un outil d'édition finit trop facilement en VRAI saut de
+   ligne au milieu de la chaîne — ce qui casse le fichier entier, sans que ni le
+   typecheck du site ni les tests ne le voient (ce dossier n'est compilé que par
+   Deno, au déploiement). Ici, aucune ambiguïté possible. */
+const CRLF = String.fromCharCode(13, 10);
+
 /**
  * Le logo, encodé une fois puis conservé : l'instance de la fonction est réutilisée
  * d'un appel à l'autre, inutile de le retélécharger à chaque e-mail.
@@ -396,8 +403,7 @@ async function envoyer(
       for (const o of octets) binaire += String.fromCharCode(o);
       // Decoupe en lignes de 76 caracteres : au-dela, le serveur SMTP coupe la
       // connexion (RFC 2045). Meme regle que pour le logo.
-      const b64 = (btoa(binaire).match(/.{1,76}/g) ?? []).join('
-');
+      const b64 = (btoa(binaire).match(/.{1,76}/g) ?? []).join(CRLF);
       pieces.push({
         contentType: 'application/pdf',
         filename: pdf.nom,
@@ -548,7 +554,7 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
           sousTitre: `Facture ${f.invoice_number}`,
           corps:
             p(jointe
-              ? 'Votre facture est jointe à ce message. Vous la retrouverez aussi, à l'identique, dans votre espace client.'
+              ? "Votre facture est jointe à ce message. Vous la retrouverez aussi, à l'identique, dans votre espace client."
               : 'Votre facture est à votre disposition dans votre espace client. Vous pouvez la télécharger à tout moment.') +
             details([
               ['Total HT', euros(f.subtotal_ht)],
