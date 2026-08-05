@@ -24,8 +24,6 @@ import {
 import toast from 'react-hot-toast';
 import { EURO } from '../utils/prix';
 import { Invoice } from '../types/billing';
-import InvoicePDF from '../components/InvoicePDF';
-import { generateInvoicePDF } from '../utils/pdfGenerator';
 
 interface Order {
   id: string;
@@ -64,7 +62,11 @@ const OrdersPage = () => {
      AUCUN moyen d'obtenir sa facture — alors que la remise d'une facture est une
      obligation du vendeur. */
   const [factures, setFactures] = useState<Record<string, Invoice>>({});
-  const [factureEnCours, setFactureEnCours] = useState<Invoice | null>(null);
+  /* Verrou anti double-clic pendant la preparation du telechargement. L'etat ne
+     sert plus a rendre la facture hors ecran (elle n'est plus photographiee), mais
+     un bouton qui ne reagit pas donne l'impression d'une panne : on le desactive
+     visiblement le temps de l'appel. */
+  const [telechargementEnCours, setTelechargementEnCours] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -90,22 +92,62 @@ const OrdersPage = () => {
     setFactures(parCommande);
   };
 
-  /* Le PDF est fabriqué à partir du MÊME composant que celui du back-office : une
-     seule mise en page, donc le client et le vendeur regardent le même document.
-     On rend la facture hors écran, on la capture, puis on la retire. */
+  /* ★ ON SERT L'ORIGINAL ARCHIVÉ, ON NE LE REFABRIQUE PLUS (5 août 2026).
+     Avant, ce bouton rendait la facture hors écran, la photographiait
+     (`html2canvas`) et empilait l'image dans un PDF — à chaque clic, à partir des
+     données du moment. Deux téléchargements à six mois d'écart pouvaient donc
+     donner DEUX DOCUMENTS DIFFÉRENTS : il suffisait qu'une mention légale, une
+     adresse ou le logo ait changé entre-temps. Il n'existait aucun original, et
+     rien n'assurait la conservation de 10 ans (art. L102 B du LPF).
+     Désormais le serveur a fabriqué le PDF UNE fois, l'a archivé et empreinté ; on
+     demande simplement un accès signé de courte durée à ce fichier-là. */
   const telechargerFacture = async (f: Invoice) => {
     const t = toast.loading('Préparation de votre facture…');
-    setFactureEnCours(f);
+    setTelechargementEnCours(true);
     try {
-      // Laisse React peindre le document avant la capture.
-      await new Promise(r => setTimeout(r, 400));
-      await generateInvoicePDF(`facture-${f.invoice_number}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Session expirée — reconnectez-vous.');
+
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facture-pdf`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ invoice_id: f.id }),
+        }
+      );
+      const rep = await r.json().catch(() => ({}));
+
+      /* 409 = la facture existe mais son original n'a pas encore été édité. Ce
+         n'est pas une panne, et le dire franchement évite l'appel au support. */
+      if (r.status === 409) {
+        toast.error(
+          "Cette facture n'a pas encore été éditée. Elle vous sera envoyée par e-mail dès qu'elle le sera.",
+          { id: t, duration: 8000 }
+        );
+        return;
+      }
+      if (!r.ok || !rep?.url) throw new Error(rep?.error || 'Facture indisponible');
+
+      /* Téléchargement direct plutôt qu'un simple `window.open` : sur mobile, un
+         nouvel onglet vers une URL signée se referme parfois sans rien enregistrer. */
+      const a = document.createElement('a');
+      a.href = rep.url;
+      a.download = `facture-${f.invoice_number}.pdf`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
       toast.success(`Facture ${f.invoice_number} téléchargée`, { id: t });
-    } catch (e) {
-      console.error('Génération du PDF impossible :', e);
-      toast.error('Téléchargement impossible — réessayez ou contactez-nous', { id: t });
+    } catch (e: any) {
+      console.error('Téléchargement de la facture impossible :', e);
+      toast.error(e?.message || 'Téléchargement impossible — réessayez ou contactez-nous', { id: t });
     } finally {
-      setFactureEnCours(null);
+      setTelechargementEnCours(false);
     }
   };
 
@@ -405,7 +447,7 @@ const OrdersPage = () => {
                   {factures[order.id] ? (
                     <button
                       onClick={() => telechargerFacture(factures[order.id])}
-                      disabled={!!factureEnCours}
+                      disabled={telechargementEnCours}
                       className="flex items-center gap-2 px-4 py-3 rounded-lg bg-white/5 border border-white/15 text-white hover:border-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
                     >
                       <FileText size={18} className="text-blue-400" />
@@ -611,24 +653,6 @@ const OrdersPage = () => {
         </div>
       </div>
 
-      {/* Facture rendue HORS ÉCRAN le temps de la capture.
-          Elle doit être réellement mise en page (largeur, polices, images) : un
-          `display:none` ne produirait qu'une page blanche, html2canvas n'ayant rien à
-          photographier. On la sort donc du champ de vision au lieu de la masquer. */}
-      {factureEnCours && (
-        <div
-          aria-hidden
-          style={{
-            position: 'fixed',
-            left: '-10000px',
-            top: 0,
-            width: '800px',
-            background: '#ffffff',
-          }}
-        >
-          <InvoicePDF invoice={factureEnCours} />
-        </div>
-      )}
     </div>
   );
 };

@@ -328,7 +328,8 @@ async function envoyer(
   destinataires: string[],
   sujet: string,
   html: string,
-  evenement: string
+  evenement: string,
+  pdf?: { chemin: string; nom: string } | null
 ) {
   if (destinataires.length === 0) return { envoyes: 0, motif: 'aucun destinataire' };
 
@@ -378,6 +379,35 @@ async function envoyer(
         },
       ]
     : [];
+
+  /* ── LA FACTURE EN PIECE JOINTE ────────────────────────────────────────────
+     On lit l ORIGINAL archive, jamais une regeneration : c est le meme fichier
+     que celui servi dans l espace client, au meme octet.
+     ⚠ Un echec de lecture ne doit PAS empecher l e-mail de partir : le client
+     serait prevenu de rien du tout. On envoie alors le message avec son lien,
+     et on le trace. */
+  if (pdf?.chemin) {
+    try {
+      const { data: fichier, error } = await supabaseAdmin.storage
+        .from('factures').download(pdf.chemin);
+      if (error || !fichier) throw error ?? new Error('fichier vide');
+      const octets = new Uint8Array(await fichier.arrayBuffer());
+      let binaire = '';
+      for (const o of octets) binaire += String.fromCharCode(o);
+      // Decoupe en lignes de 76 caracteres : au-dela, le serveur SMTP coupe la
+      // connexion (RFC 2045). Meme regle que pour le logo.
+      const b64 = (btoa(binaire).match(/.{1,76}/g) ?? []).join('
+');
+      pieces.push({
+        contentType: 'application/pdf',
+        filename: pdf.nom,
+        content: b64,
+        encoding: 'base64' as const,
+      } as typeof pieces[number]);
+    } catch (err) {
+      console.error('Facture non jointe (envoi maintenu) :', err);
+    }
+  }
 
   // Un message par destinataire : personne ne découvre l'adresse des autres, et le
   // refus du serveur pour l'un n'emporte pas les autres.
@@ -464,7 +494,15 @@ async function journaliser(
 // Un message par événement
 // ---------------------------------------------------------------------------
 
-type Message = { destinataires: string[]; sujet: string; html: string } | null;
+type Message = {
+  destinataires: string[];
+  sujet: string;
+  html: string;
+  /* Chemin de la facture archivee dans le compartiment prive `factures`.
+     Present => le PDF part EN PIECE JOINTE. Remettre la facture est une obligation
+     du vendeur ; un lien vers un site ne la remet pas, il la rend consultable. */
+  pdf?: string | null;
+} | null;
 
 const PIED_ADMIN =
   "Vous recevez ce message parce que votre compte est administrateur du site. Les types d'e-mails envoyés se règlent dans Administration puis Paramètres.";
@@ -475,15 +513,22 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
        Le client n'était prévenu de rien : sa facture existait dans le back-office
        sans qu'il puisse le savoir ni la demander. Remettre la facture est une
        obligation du vendeur — cet e-mail est le moment où on s'en acquitte.
-       On n'attache pas de PDF (il serait figé et lourd) : on renvoie vers
-       « Mes commandes », où le client la télécharge quand il veut, autant de fois
-       qu'il veut, dans la mise en page à jour. */
+       ★ LE PDF EST DÉSORMAIS JOINT (5 août 2026). L'argument d'avant — « il serait
+       figé » — décrivait en réalité le défaut : le document N'ÉTAIT PAS figé, il
+       était refabriqué à chaque affichage, si bien que deux téléchargements à six
+       mois d'écart pouvaient différer. Depuis que l'original est archivé une fois
+       pour toutes (cf. la fonction `facture-pdf`), « figé » est exactement ce qu'on
+       veut : c'est la définition d'un original.
+       Et un lien vers un site ne REMET pas la facture, il la rend consultable —
+       la remise est une obligation du vendeur.
+       Si l'original n'a pas encore été édité, on envoie quand même le message avec
+       son lien : prévenir tard vaut mieux que ne pas prévenir. */
     case 'invoice_ready': {
       const { data: f } = await supabaseAdmin
         .from('invoices')
         .select(
           'invoice_number, customer_id, customer_email, subtotal_ht, tax_amount, ' +
-            'total_ttc, vat_rate, vat_mention, created_at, status'
+            'total_ttc, vat_rate, vat_mention, created_at, status, pdf_storage_path'
         )
         .eq('id', data.id)
         .single();
@@ -493,14 +538,18 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
       if (!destinataire) return null;
 
       const taux = Number(f.vat_rate ?? 20);
+      const jointe = !!f.pdf_storage_path;
       return {
         destinataires: [destinataire],
+        pdf: f.pdf_storage_path ?? null,
         sujet: `Votre facture ${f.invoice_number} — OMEGA`,
         html: gabarit({
           titre: 'Votre facture est disponible',
           sousTitre: `Facture ${f.invoice_number}`,
           corps:
-            p('Votre facture est à votre disposition dans votre espace client. Vous pouvez la télécharger à tout moment.') +
+            p(jointe
+              ? 'Votre facture est jointe à ce message. Vous la retrouverez aussi, à l'identique, dans votre espace client.'
+              : 'Votre facture est à votre disposition dans votre espace client. Vous pouvez la télécharger à tout moment.') +
             details([
               ['Total HT', euros(f.subtotal_ht)],
               [`TVA (${taux.toLocaleString('fr-FR')} %)`, euros(f.tax_amount)],
@@ -993,7 +1042,8 @@ Deno.serve(async (req) => {
       message.destinataires,
       message.sujet,
       message.html,
-      event
+      event,
+      message.pdf ? { chemin: message.pdf, nom: message.pdf.split('/').pop() || 'facture.pdf' } : null
     );
     return json({ event, ...bilan });
   } catch (err) {
