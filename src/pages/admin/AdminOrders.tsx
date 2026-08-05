@@ -414,6 +414,40 @@ const AdminOrders = () => {
         });
       }
 
+      /* ★ FABRICATION DE L'ORIGINAL — c'est le maillon qui manquait.
+         Sans cet appel, la facture existait en base mais son PDF n'était jamais
+         fabriqué : le client lisait « cette facture n'a pas encore été éditée » et
+         l'e-mail partait sans pièce jointe. On l'édite DÈS la création, une fois
+         pour toutes ; le fichier est ensuite servi tel quel, au client comme à
+         l'e-mail.
+         ⚠ Un échec ici ne doit pas casser la création : la facture est déjà en
+         base et transmise à la comptabilité. On le dit, et l'édition reste
+         rattrapable depuis Facturation. */
+      try {
+        const { data: s } = await supabase.auth.getSession();
+        const r = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facture-pdf`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${s.session?.access_token}`,
+            },
+            body: JSON.stringify({ invoice_id: invoiceId }),
+          }
+        );
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          throw new Error(d?.error || `HTTP ${r.status}`);
+        }
+      } catch (e) {
+        console.error('Édition du PDF impossible :', e);
+        toast('Facture créée, mais son PDF n’a pas pu être édité — relancez depuis Facturation', {
+          icon: '⚠️',
+          duration: 8000,
+        });
+      }
+
       // Stocker l'ID de la facture et naviguer vers la facturation
       sessionStorage.setItem('openInvoiceId', invoiceId as string);
 

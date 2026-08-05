@@ -226,27 +226,51 @@ const AdminBilling = () => {
   /** Un avoir se lit à l'œil dans la liste : c'est un document de sens opposé. */
   const estAvoir = (invoice: Invoice) => invoice.document_type === 'credit_note';
 
+  /* ★ ÉDITION ET TÉLÉCHARGEMENT DE L'ORIGINAL (5 août 2026).
+     Avant : on ouvrait la fenêtre de la facture, on la photographiait à l'écran
+     (`html2canvas`) et on empilait l'image dans un PDF. Le document dépendait donc
+     du navigateur, du moment, et n'était conservé nulle part.
+     Maintenant : le serveur fabrique l'original la première fois qu'on le demande,
+     l'archive, puis le sert. Les appels suivants renvoient LE MÊME fichier — c'est
+     ce qui permet au client de retélécharger sa facture, à l'identique, des années
+     plus tard. Ce bouton est aussi le rattrapage des factures créées avant ce
+     changement : le premier clic les édite. */
   const handleDownloadPDF = async (invoice: Invoice) => {
+    const t = toast.loading('Édition de la facture…');
     try {
-      setSelectedInvoice(invoice);
-      setShowInvoiceModal(true);
+      const { data: s } = await supabase.auth.getSession();
+      if (!s.session) throw new Error('Session expirée — reconnectez-vous.');
 
-      // Attendre que le modal soit rendu
-      setTimeout(async () => {
-        try {
-          await generateInvoicePDF(`facture-${invoice.invoice_number}`);
-          toast.success('PDF téléchargé avec succès');
-        } catch (error) {
-          console.error('Erreur génération PDF:', error);
-          toast.error('Erreur lors de la génération du PDF');
-        } finally {
-          setShowInvoiceModal(false);
-          setSelectedInvoice(null);
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facture-pdf`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${s.session.access_token}`,
+          },
+          body: JSON.stringify({ invoice_id: invoice.id }),
         }
-      }, 500);
-    } catch (error) {
-      console.error('Erreur:', error);
-      toast.error('Erreur lors du téléchargement');
+      );
+      const rep = await r.json().catch(() => ({}));
+      if (!r.ok || !rep?.url) throw new Error(rep?.error || 'Édition impossible');
+
+      const a = document.createElement('a');
+      a.href = rep.url;
+      a.download = `facture-${invoice.invoice_number}.pdf`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast.success(
+        rep.archive ? 'Facture téléchargée' : 'Facture éditée et archivée',
+        { id: t }
+      );
+      loadInvoices();
+    } catch (error: any) {
+      console.error('Édition/téléchargement impossible :', error);
+      toast.error(error?.message || 'Erreur lors du téléchargement', { id: t });
     }
   };
 
