@@ -154,13 +154,46 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
     y = height - M;
   };
 
-  // ── 1. En-tête : nature du document, numéro, dates ──────────────────────────
-  T(avoir ? 'AVOIR' : 'FACTURE', M, y - 6, { f: gras, t: 24 });
-  D(`N° ${f.invoice_number}`, width - M, y, { f: gras, t: 12 });
-  D(`Émise le ${dateFr(f.created_at)}`, width - M, y - 15, { t: 9, c: pale });
+  // ── 1. En-tête : logo, identité, nature du document ─────────────────────────
+  /* Le logo est chargé depuis le site. ⚠ On prend la version PNG de l'e-mail et
+     PAS le `.webp` du composant React : pdf-lib ne sait embarquer que du PNG et du
+     JPEG. Un échec de chargement ne doit rien casser — la facture part sans image
+     plutôt que pas du tout. */
+  let hautGauche = y;
+  try {
+    const rep = await fetch('https://omegasud.fr/email/logo-omega.png');
+    if (rep.ok) {
+      const png = await pdf.embedPng(new Uint8Array(await rep.arrayBuffer()));
+      const h = 38;
+      const l = (png.width / png.height) * h;
+      page.drawImage(png, { x: M, y: y - h + 6, width: l, height: h });
+      hautGauche = y - h - 4;
+    }
+  } catch { /* sans logo, la facture reste valable */ }
+
+  // Identité du vendeur, sous le logo — comme sur le document que tu connais.
+  T(reglages.company_name, M, hautGauche - 8, { f: gras, t: 13 });
+  T(`${reglages.legal_form} au capital de ${reglages.capital} €`, M, hautGauche - 21, { t: 8, c: pale });
+  T('Fabricant français depuis 1996', M, hautGauche - 32, { t: 8, c: pale });
+
+  // Nature du document, à droite et en gros : c'est ce qu'on lit en premier.
+  D(avoir ? 'AVOIR' : 'FACTURE', width - M, y - 20, { f: gras, t: 30, c: rgb(0.12, 0.12, 0.14) });
+  let yd = y - 38;
+  D(`N° ${f.invoice_number}`, width - M, yd, { f: gras, t: 11 }); yd -= 14;
+  D(`Émise le ${dateFr(f.created_at)}`, width - M, yd, { t: 8.5, c: pale }); yd -= 11;
   // Date de la vente : obligatoire dès qu'elle diffère de l'émission.
-  if (f.delivery_date) D(`Livrée le ${dateFr(f.delivery_date)}`, width - M, y - 27, { t: 9, c: pale });
-  y -= 46;
+  if (f.delivery_date) { D(`Livrée le ${dateFr(f.delivery_date)}`, width - M, yd, { t: 8.5, c: pale }); yd -= 11; }
+  if (!avoir && f.due_date) { D(`Échéance : ${dateFr(f.due_date)}`, width - M, yd, { f: gras, t: 8.5 }); yd -= 11; }
+  // Une facture acquittée doit le dire : c'est la première chose que cherche le client.
+  if (f.paid_at && !avoir) {
+    D(`Acquittée le ${dateFr(f.paid_at)}`, width - M, yd, { f: gras, t: 8.5, c: rgb(0.05, 0.5, 0.25) });
+    yd -= 11;
+  }
+
+  y = Math.min(hautGauche - 44, yd) - 8;
+  // Filet de séparation, comme le liseré du document à l'écran.
+  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1.4, color: rgb(0.12, 0.12, 0.14) });
+  y -= 22;
 
   // Un avoir DOIT référencer la facture qu'il rectifie (art. 289 I-3 du CGI).
   if (avoir && f.facture_origine) {
@@ -219,8 +252,19 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
   D('Total HT', xTot, y, { f: gras, c: blanc, t: 8.5 });
   y -= 22;
 
+  /* Lignes alternées : sur une facture de quinze articles, l'œil perd la ligne
+     qu'il suit et lit le prix de la ligne d'à côté. Un fond très pâle une ligne
+     sur deux suffit à l'en empêcher. */
+  let paire = false;
   for (const l of lignes) {
     place(20);
+    if (paire) {
+      page.drawRectangle({
+        x: M - 4, y: y - 4, width: width - 2 * M + 8, height: 13,
+        color: rgb(0.965, 0.965, 0.975),
+      });
+    }
+    paire = !paire;
     const nom = net(l.description).slice(0, 58);
     T(nom, M, y, { t: 8.5 });
     D(String(l.quantity), xQte, y, { t: 8.5 });
@@ -268,9 +312,15 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
   };
   ligneTotal('Total HT', fmt(f.subtotal_ht));
   ligneTotal('Total TVA', fmt(f.tax_amount));
-  page.drawLine({ start: { x: xg, y: yT + 5 }, end: { x: xTot, y: yT + 5 }, thickness: 1, color: encre });
-  yT -= 3;
-  ligneTotal('TOTAL TTC', fmt(f.total_ttc), { g: true, t: 11 });
+  /* Le TTC dans un pavé sombre : c'est LE chiffre que le client cherche, et sur
+     le document actuel il se confondait avec les deux lignes au-dessus. */
+  page.drawRectangle({
+    x: xg - 8, y: yT - 5, width: xTot - xg + 16, height: 22,
+    color: rgb(0.12, 0.12, 0.14),
+  });
+  T('TOTAL TTC', xg, yT + 1, { f: gras, t: 11, c: blanc });
+  D(fmt(f.total_ttc), xTot, yT + 1, { f: gras, t: 12, c: blanc });
+  yT -= 20;
   const paye = eur(f.amount_paid);
   if (paye) {
     ligneTotal('Déjà réglé', fmt(paye));
