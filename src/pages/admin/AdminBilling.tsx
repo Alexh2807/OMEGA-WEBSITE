@@ -571,10 +571,47 @@ const AdminBilling = () => {
         .eq('id', avoirId as string)
         .maybeSingle();
 
+      /* ★ L'AVOIR DOIT PARTIR EN COMPTABILITÉ — c'est ce qui manquait (5 août 2026).
+         Il existe DEUX chemins pour émettre un avoir :
+           · le remboursement Stripe (`process-refund`), qui appelle `send-to-make` ;
+           · ce bouton, qui créait l'avoir en base ET S'ARRÊTAIT LÀ.
+         Résultat constaté : l'avoir apparaissait sur le site, la facture passait en
+         « annulée »… et Tiime n'en savait rien. La comptabilité continuait donc de
+         porter une vente annulée — donc de la TVA collectée sur une somme rendue.
+         On emprunte le MÊME chemin que le remboursement : un seul constructeur de
+         payload, un seul format. */
+      let transmis = false;
+      try {
+        const { data: s } = await supabase.auth.getSession();
+        const r = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-to-make`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${s.session?.access_token}`,
+            },
+            body: JSON.stringify({ invoiceId: avoirId }),
+          }
+        );
+        const rep = await r.json().catch(() => ({}));
+        transmis = r.ok && (rep?.sent === true || rep?.envoye === true || !!rep?.tiime_invoice_id);
+      } catch (e) {
+        console.error('Avoir non transmis à la comptabilité :', e);
+      }
+
       toast.success(
         `Avoir ${avoir?.invoice_number ?? ''} émis — la facture ${invoice.invoice_number} est annulée.`,
         { id: t, duration: 8000 }
       );
+      /* ⚠ On le DIT quand ça n'est pas parti. Un avoir absent de la comptabilité est
+         invisible : c'est précisément le genre d'écart qu'on ne découvre qu'au bilan. */
+      if (!transmis) {
+        toast('Avoir NON transmis à la comptabilité — à renvoyer depuis cette page', {
+          icon: '⚠️',
+          duration: 9000,
+        });
+      }
       loadData();
     } catch (e: any) {
       toast.error(e?.message || "Émission de l'avoir impossible", { id: t });
