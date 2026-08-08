@@ -326,13 +326,22 @@ export function normalizeTransform(raw: unknown): ImageTransform {
     t.parallaxMode === 'scroll' || t.parallaxMode === 'mouse' || t.parallaxMode === 'none'
       ? t.parallaxMode
       : DEFAULT_TRANSFORM.parallaxMode;
-  const rawOrient = typeof t.orient === 'number' ? t.orient : 0;
+  // Migration : ancien rotateZ à 90/180/270 → orient
+  let rawOrient = typeof t.orient === 'number' ? t.orient : 0;
+  let rawRotateZ = typeof t.rotateZ === 'number' ? t.rotateZ : 0;
+  if (
+    (t.orient === undefined || t.orient === null) &&
+    (rawRotateZ === 90 || rawRotateZ === 180 || rawRotateZ === 270)
+  ) {
+    rawOrient = rawRotateZ;
+    rawRotateZ = 0;
+  }
   const orient: ImageOrient =
     rawOrient === 90 || rawOrient === 180 || rawOrient === 270 ? rawOrient : 0;
 
   return {
     orient,
-    rotateZ: typeof t.rotateZ === 'number' ? clamp(t.rotateZ, -45, 45) : 0,
+    rotateZ: clamp(rawRotateZ, -45, 45),
     rotateX: typeof t.rotateX === 'number' ? clamp(t.rotateX, -60, 60) : 0,
     rotateY: typeof t.rotateY === 'number' ? clamp(t.rotateY, -60, 60) : 0,
     perspective:

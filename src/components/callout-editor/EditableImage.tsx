@@ -10,12 +10,16 @@ type Props = Omit<AnnotatedPhotoProps, 'className'> & {
   onSelectImage?: (photoId: string) => void;
   cover?: boolean;
   aspectClass?: string;
+  /**
+   * true = ce composant EST le cadre arrondi transformé
+   * (ne pas envelopper d’un autre rounded + overflow outside)
+   */
+  framed?: boolean;
 };
 
 /**
- * Conteneur éditable.
- * Orient 0/90/180/270 + tilt 3D X/Y/Z s’appliquent au BLOC ENTIER
- * (image + callouts + bordures), jamais à la balise <img> seule.
+ * Cadre arrondi = bloc transformé (image + callouts solidaires).
+ * orient 0/90/180/270 + tilt X/Y/Z s’appliquent sur CE conteneur, pas sur <img>.
  */
 export const EditableImage: React.FC<Props> = ({
   transform,
@@ -25,23 +29,23 @@ export const EditableImage: React.FC<Props> = ({
   onSelectImage,
   cover = false,
   aspectClass,
+  framed = true,
   editMode = false,
   photoId,
   ...photoProps
 }) => {
   const outerRef = useRef<HTMLDivElement>(null);
-  const blockRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   const [natural, setNatural] = useState({ w: 0, h: 0 });
 
-  const orient: ImageOrient = transform.orient ?? 0;
+  const orient: ImageOrient = (transform.orient ?? 0) as ImageOrient;
   const swapped = orient === 90 || orient === 270;
 
   useLayoutEffect(() => {
-    const el = blockRef.current;
+    const el = cardRef.current;
     if (!el) return;
     const measure = () => {
-      // Mesure le contenu dans son orientation “native” (avant de s’appuyer sur le cadre swappé)
       const img = el.querySelector('img');
       if (img && img.naturalWidth > 0) {
         setNatural({ w: img.naturalWidth, h: img.naturalHeight });
@@ -63,10 +67,13 @@ export const EditableImage: React.FC<Props> = ({
       ro.disconnect();
       img?.removeEventListener('load', measure);
     };
-  }, [photoProps.src, cover]);
+  }, [photoProps.src, cover, orient]);
 
   useEffect(() => {
-    if (transform.parallaxMode === 'none' || (transform.parallaxX === 0 && transform.parallaxY === 0)) {
+    if (
+      transform.parallaxMode === 'none' ||
+      (transform.parallaxX === 0 && transform.parallaxY === 0)
+    ) {
       setParallax({ x: 0, y: 0 });
       return;
     }
@@ -116,28 +123,26 @@ export const EditableImage: React.FC<Props> = ({
   const liveX = editMode ? 0 : parallax.x;
   const liveY = editMode ? 0 : parallax.y;
 
-  const rotX = transform.rotateX + liveY * 0.55;
-  const rotY = transform.rotateY + liveX * 0.7;
+  const rotX = (transform.rotateX || 0) + liveY * 0.55;
+  const rotY = (transform.rotateY || 0) + liveX * 0.7;
   const rotZ = orient + (transform.rotateZ || 0);
   const tx = liveX * 0.35;
   const ty = liveY * 0.35;
 
-  // Transform unique sur le CONTENEUR (pas sur <img>)
-  const blockTransform = [
+  /** Transform sur la CARTE (cadre arrondi), jamais sur <img> seule */
+  const cardTransform = [
     `rotateX(${rotX.toFixed(2)}deg)`,
     `rotateY(${rotY.toFixed(2)}deg)`,
     `rotateZ(${rotZ.toFixed(2)}deg)`,
     `translate3d(${tx.toFixed(2)}%, ${ty.toFixed(2)}%, 0)`,
-    `scale(${transform.scale})`,
+    `scale(${transform.scale ?? 1})`,
   ].join(' ');
 
   const hasNatural = natural.w > 0 && natural.h > 0;
-
-  // Cadre layout : ratio swappé à 90°/270° pour que le conteneur occupe le bon espace
   const frameAspect =
     hasNatural && !cover
       ? swapped
-        ? `${natural.h} / ${natural.w}` // portrait si source paysage
+        ? `${natural.h} / ${natural.w}`
         : `${natural.w} / ${natural.h}`
       : undefined;
 
@@ -146,7 +151,7 @@ export const EditableImage: React.FC<Props> = ({
       ref={outerRef}
       className={`relative ${aspectClass || ''} ${className}`}
       style={{
-        perspective: `${transform.perspective}px`,
+        perspective: `${transform.perspective || 900}px`,
         perspectiveOrigin: '50% 50%',
         overflow: 'visible',
         ...(frameAspect ? { aspectRatio: frameAspect } : {}),
@@ -157,27 +162,27 @@ export const EditableImage: React.FC<Props> = ({
         onSelectImage(photoId);
       }}
     >
-      <div
-        className={`flex h-full w-full items-center justify-center ${
-          editMode && imageSelected
-            ? 'ring-2 ring-amber-400/80 ring-offset-2 ring-offset-black'
-            : editMode
-              ? 'ring-1 ring-white/20 hover:ring-sky-400/50'
-              : ''
-        }`}
-        style={{ transformStyle: 'preserve-3d' }}
-      >
+      <div className="flex h-full w-full items-center justify-center" style={{ transformStyle: 'preserve-3d' }}>
         {/*
-          BLOC ENTIER transformé — image + SVG callouts + labels dedans.
-          À 90°/270° : hauteur 100% du cadre, largeur auto selon ratio source,
-          puis rotation du bloc (pas de l’img).
+          ★ CARTE = conteneur arrondi TRANSFORMÉ
+          Tout ce qui est dedans (photo, fils, labels) tourne avec.
         */}
         <div
-          ref={blockRef}
-          data-editable-block
-          className="relative transition-transform duration-300 ease-out will-change-transform"
+          ref={cardRef}
+          data-editable-card
+          className={[
+            'relative overflow-hidden bg-zinc-950 transition-transform duration-300 ease-out will-change-transform',
+            framed ? 'rounded-2xl border border-white/10 shadow-lg' : '',
+            editMode && imageSelected
+              ? 'ring-2 ring-amber-400/90 ring-offset-2 ring-offset-black'
+              : editMode
+                ? 'ring-1 ring-white/25 hover:ring-sky-400/50'
+                : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           style={{
-            transform: blockTransform,
+            transform: cardTransform,
             transformOrigin: 'center center',
             transformStyle: 'preserve-3d',
             ...(swapped && hasNatural && !cover
@@ -185,7 +190,6 @@ export const EditableImage: React.FC<Props> = ({
                   height: '100%',
                   width: 'auto',
                   aspectRatio: `${natural.w} / ${natural.h}`,
-                  maxWidth: 'none',
                 }
               : {
                   width: '100%',
@@ -197,26 +201,22 @@ export const EditableImage: React.FC<Props> = ({
             {...photoProps}
             photoId={photoId}
             editMode={editMode}
-            className={
-              cover
-                ? 'h-full w-full !rounded-none border-0'
-                : 'h-full w-full border-0'
-            }
+            className="h-full w-full !rounded-none !border-0 !bg-transparent"
             imgClassName={
               cover
                 ? `h-full w-full object-cover ${imgClassName || ''}`
                 : `h-full w-full object-contain ${imgClassName || ''}`
             }
-            objectPosition={transform.objectPosition}
+            objectPosition={transform.objectPosition || 'center center'}
           />
+
+          {editMode && (
+            <div className="pointer-events-none absolute right-2 top-2 z-30 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-white/80">
+              {imageSelected ? `carte · ${orient}°` : 'cliquer'}
+            </div>
+          )}
         </div>
       </div>
-
-      {editMode && (
-        <div className="pointer-events-none absolute right-2 top-2 z-30 rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-white/70">
-          {imageSelected ? `conteneur entier · ${orient}°` : 'cliquer pour 3D'}
-        </div>
-      )}
     </div>
   );
 };

@@ -285,6 +285,7 @@ const OmegaDmxInterfacePage = () => {
               src={BOX.hero}
               alt="OMEGA DMX Interface — boîtier réel, 2 sorties XLR"
               cover
+              framed={false}
               className="h-full w-full"
               aspectClass="h-full w-full"
               {...imageProps(PHOTO_IDS.hero)}
@@ -506,11 +507,13 @@ const OmegaDmxInterfacePage = () => {
           <div className="mt-12 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
             {gallery.map((g, i) => (
               <Reveal key={g.id} delay={i * 40}>
-                <div className="group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-950 text-left transition hover:border-white/25">
+                {/* Pas de cadre arrondi ici : EditableImage EST le conteneur transformé */}
+                <div className="group relative w-full text-left">
                   <EditableImage
                     src={g.src}
                     alt={g.cap}
                     cover
+                    framed
                     aspectClass="aspect-[16/10]"
                     className="w-full"
                     {...imageProps(g.id)}
@@ -539,7 +542,7 @@ const OmegaDmxInterfacePage = () => {
                       aria-label={`Agrandir : ${g.cap}`}
                     />
                   )}
-                  <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-[11px] text-white/70 opacity-0 transition group-hover:opacity-100 sm:text-xs">
+                  <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-[11px] text-white/70 opacity-0 transition group-hover:opacity-100 sm:text-xs">
                     {g.cap}
                   </span>
                 </div>
@@ -836,17 +839,18 @@ const OmegaDmxInterfacePage = () => {
 
           {/* Bandeau capture */}
           <Reveal delay={60}>
-            <div className="relative mt-12 overflow-hidden rounded-2xl border border-white/10">
+            <div className="relative mt-12">
               <EditableImage
                 src={BOX.softAfx}
                 alt="OMEGADMX — page machine avec plateau 3D"
                 cover
+                framed
                 className="max-h-[52vh] w-full"
                 aspectClass="max-h-[52vh] w-full"
                 imgClassName="max-h-[52vh] object-top"
                 {...imageProps(PHOTO_IDS.softAfx)}
               />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-t from-black via-transparent to-transparent" />
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 p-6 md:p-8">
                 <p className="text-sm text-white/70 md:text-base">
                   Page machine, plateau 3D, contrôles live — connecté à votre boîtier en USB, WiFi
@@ -967,19 +971,18 @@ const OmegaDmxInterfacePage = () => {
               { src: BOX.softDmx, cap: 'Sortie DMX', id: PHOTO_IDS.softDmx },
             ].map((g, i) => (
               <Reveal key={g.cap} delay={i * 50}>
-                <figure className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+                <figure className="bg-transparent">
                   <EditableImage
                     src={g.src}
                     alt={g.cap}
                     cover
+                    framed
                     aspectClass="aspect-video"
                     className="w-full"
                     imgClassName="object-top"
                     {...imageProps(g.id)}
                   />
-                  <figcaption className="border-t border-white/5 px-3 py-2 text-[11px] text-white/40">
-                    {g.cap}
-                  </figcaption>
+                  <figcaption className="mt-2 px-1 text-[11px] text-white/40">{g.cap}</figcaption>
                 </figure>
               </Reveal>
             ))}
@@ -1132,21 +1135,47 @@ const OmegaDmxInterfacePage = () => {
             ‹
           </button>
           <figure
-            className="max-h-[90vh] max-w-5xl"
+            className="flex max-h-[90vh] max-w-5xl flex-col items-center"
             onClick={(e) => e.stopPropagation()}
           >
-            {gallery[lightbox] && (
-              <>
-                <img
-                  src={gallery[lightbox].src}
-                  alt={gallery[lightbox].cap}
-                  className="max-h-[82vh] w-full rounded-lg object-contain"
-                />
-                <figcaption className="mt-3 text-center text-sm text-white/55">
-                  {gallery[lightbox].cap} · {lightbox + 1}/{gallery.length}
-                </figcaption>
-              </>
-            )}
+            {gallery[lightbox] && (() => {
+              const item = gallery[lightbox];
+              const t = calloutsApi.getTransform(item.id);
+              const orient = t.orient ?? 0;
+              const swapped = orient === 90 || orient === 270;
+              return (
+                <>
+                  {/* Même orientation que sur la page (sinon l’image paraît à l’envers) */}
+                  <div
+                    className="flex max-h-[82vh] max-w-full items-center justify-center overflow-visible"
+                    style={{ perspective: `${t.perspective || 900}px` }}
+                  >
+                    <img
+                      src={item.src}
+                      alt={item.cap}
+                      className="rounded-xl object-contain shadow-2xl"
+                      style={{
+                        maxHeight: swapped ? 'min(82vh, 90vw)' : '82vh',
+                        maxWidth: swapped ? 'min(82vh, 90vw)' : '100%',
+                        transform: [
+                          `rotateX(${t.rotateX || 0}deg)`,
+                          `rotateY(${t.rotateY || 0}deg)`,
+                          `rotateZ(${orient + (t.rotateZ || 0)}deg)`,
+                          `scale(${t.scale ?? 1})`,
+                        ].join(' '),
+                        transformOrigin: 'center center',
+                      }}
+                    />
+                  </div>
+                  <figcaption className="mt-3 text-center text-sm text-white/55">
+                    {item.cap} · {lightbox + 1}/{gallery.length}
+                    {orient !== 0 && (
+                      <span className="ml-2 text-white/30">({orient}°)</span>
+                    )}
+                  </figcaption>
+                </>
+              );
+            })()}
           </figure>
           <button
             type="button"
