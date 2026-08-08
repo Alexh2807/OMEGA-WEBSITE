@@ -1,6 +1,5 @@
 import { Callout, createCallout, PageCalloutsConfig, PAGE_ID } from './types';
 
-/** Identifiants stables des zones photo éditables sur la page interface */
 export const PHOTO_IDS = {
   dmxClose: 'dmxClose',
   antennes: 'antennes',

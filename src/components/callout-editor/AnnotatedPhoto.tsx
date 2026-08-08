@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Callout, CalloutDesign, clamp } from './types';
+import {
+  buildPathPoints,
+  Callout,
+  CalloutDesign,
+  clamp,
+  pathToSvgD,
+} from './types';
 
-type DragMode = 'point' | 'stretch' | null;
+type DragMode = 'point' | 'card' | null;
 
 export type AnnotatedPhotoProps = {
   src: string;
@@ -9,9 +15,7 @@ export type AnnotatedPhotoProps = {
   photoId: string;
   callouts: Callout[];
   className?: string;
-  /** Mode édition admin */
   editMode?: boolean;
-  /** Outil actif : select ou add */
   tool?: 'select' | 'add';
   selectedId?: string | null;
   onSelect?: (photoId: string, calloutId: string | null) => void;
@@ -36,7 +40,11 @@ function labelClasses(style: CalloutDesign['labelStyle']): string {
 }
 
 /**
- * Photo annotée — rendu public + interaction complète en mode édition.
+ * Photo annotée — rendu public + édition :
+ * - outil Ajouter → clic sur l’image pour poser le POINT
+ * - glisser le POINT pour le déplacer
+ * - glisser la CARD pour placer le texte (point B)
+ * - 4 styles de fil (droit, horizontal, coude, 45°)
  */
 export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   src,
@@ -53,14 +61,12 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
 }) => {
   const boxRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(editMode);
+  const [aspect, setAspect] = useState(16 / 9);
   const dragRef = useRef<{
     id: string;
     mode: DragMode;
-    startStretch: number;
-    startPointerX: number;
-    side: 'left' | 'right';
-    boxWidth: number;
   } | null>(null);
+  const didDragRef = useRef(false);
 
   useEffect(() => {
     if (editMode) {
@@ -79,6 +85,19 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
     return () => io.disconnect();
   }, [editMode]);
 
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0) setAspect(r.width / r.height);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const pctFromEvent = (clientX: number, clientY: number) => {
     const el = boxRef.current;
     if (!el) return { x: 50, y: 50 };
@@ -95,22 +114,23 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || !onChangeCallout) return;
+      didDragRef.current = true;
+      const { x, y } = pctFromEvent(e.clientX, e.clientY);
       if (d.mode === 'point') {
-        const { x, y } = pctFromEvent(e.clientX, e.clientY);
         onChangeCallout(photoId, d.id, { x, y });
-      } else if (d.mode === 'stretch') {
-        const dxPct = ((e.clientX - d.startPointerX) / Math.max(d.boxWidth, 1)) * 100;
-        const stretch = clamp(
-          d.startStretch + (d.side === 'right' ? dxPct : -dxPct),
-          4,
-          45,
-        );
-        onChangeCallout(photoId, d.id, { stretch });
+      } else if (d.mode === 'card') {
+        const c = callouts.find((k) => k.id === d.id);
+        const side = c ? (x >= c.x ? 'right' : 'left') : x > 50 ? 'right' : 'left';
+        onChangeCallout(photoId, d.id, { labelX: x, labelY: y, side });
       }
     };
 
     const onUp = () => {
       dragRef.current = null;
+      // laisser le click handler lire didDrag puis reset
+      requestAnimationFrame(() => {
+        didDragRef.current = false;
+      });
     };
 
     window.addEventListener('pointermove', onMove);
@@ -122,13 +142,24 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editMode, photoId, callouts, onChangeCallout]);
 
-  const handleBgClick = (e: React.MouseEvent) => {
+  const handleBgPointerDown = (e: React.PointerEvent) => {
     if (!editMode) return;
+    // Ne pas traiter si on clique un élément interactif (point / card)
+    if ((e.target as HTMLElement).closest('[data-callout-hit]')) return;
+
     if (tool === 'add' && onAddAt) {
+      e.preventDefault();
+      e.stopPropagation();
       const { x, y } = pctFromEvent(e.clientX, e.clientY);
       onAddAt(photoId, x, y);
       return;
     }
+  };
+
+  const handleBgClick = (e: React.MouseEvent) => {
+    if (!editMode) return;
+    if ((e.target as HTMLElement).closest('[data-callout-hit]')) return;
+    if (tool === 'add') return; // déjà géré en pointerdown
     onSelect?.(photoId, null);
   };
 
@@ -143,89 +174,110 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
             : 'border-sky-400/60 ring-2 ring-sky-400/20'
           : 'border-white/10'
       } ${className}`}
+      onPointerDown={handleBgPointerDown}
       onClick={handleBgClick}
     >
       <img
         src={src}
         alt={alt}
-        className="pointer-events-none block w-full h-auto select-none"
+        className="pointer-events-none block h-auto w-full select-none"
         loading="lazy"
         draggable={false}
       />
 
       {editMode && (
-        <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/80">
-          {tool === 'add' ? 'Clic pour ajouter' : 'Glisser les points'}
+        <div className="pointer-events-none absolute left-2 top-2 z-30 rounded bg-black/75 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-white/85">
+          {tool === 'add' ? (
+            <span className="text-amber-300">① Cliquez l’endroit du point à montrer</span>
+          ) : (
+            <span>Point = cible · Card = glisser le texte</span>
+          )}
         </div>
       )}
 
+      {/* SVG des fils — viewBox 0–100 pour suivre le % de l’image */}
+      <svg
+        className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        {callouts.map((c, i) => {
+          const design = c.design;
+          const { main, outline } = lineColors(design);
+          const points = buildPathPoints(c, aspect);
+          const d = pathToSvgD(points);
+          const selected = editMode && selectedId === c.id;
+          const sw = design.strokeWidth * 0.35; // viewBox % scale approx
+          const dash =
+            design.lineStyle === 'dashed' ? `${0.8 + sw} ${0.6 + sw * 0.5}` : undefined;
+
+          return (
+            <g
+              key={`line-${c.id}`}
+              style={{
+                opacity: active || editMode ? 1 : 0,
+                transition: editMode ? 'none' : `opacity 0.45s ease ${0.12 + i * 0.1}s`,
+              }}
+            >
+              {outline && (
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={outline}
+                  strokeWidth={sw + 0.35}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={dash}
+                  vectorEffect="non-scaling-stroke"
+                  style={{ strokeWidth: design.strokeWidth + 1.5 }}
+                />
+              )}
+              <path
+                d={d}
+                fill="none"
+                stroke={main}
+                strokeWidth={sw}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={dash}
+                vectorEffect="non-scaling-stroke"
+                style={{
+                  strokeWidth: design.strokeWidth,
+                  filter: selected ? 'drop-shadow(0 0 2px rgba(251,191,36,0.8))' : undefined,
+                }}
+              />
+            </g>
+          );
+        })}
+      </svg>
+
       {callouts.map((c, i) => {
-        const stretch = c.stretch ?? 16;
-        const labelDy = c.labelDy ?? 0;
-        const isRight = c.side === 'right';
-        const lineW = stretch;
-        const lineLeft = isRight ? c.x : c.x - lineW;
-        const labelX = isRight ? c.x + lineW : c.x - lineW;
-        const labelY = c.y + labelDy;
         const design = c.design;
         const { main, outline } = lineColors(design);
         const selected = editMode && selectedId === c.id;
+        // Attache carte : si label à droite du point, carte part vers la droite
+        const cardOnRight = c.labelX >= c.x;
 
         return (
           <div
             key={c.id}
-            className={`absolute inset-0 ${editMode ? 'pointer-events-none' : 'pointer-events-none'}`}
+            className="absolute inset-0"
             style={{
               opacity: active || editMode ? 1 : 0,
               transition: editMode ? 'none' : `opacity 0.45s ease ${0.12 + i * 0.1}s`,
               zIndex: selected ? 20 : 10,
+              pointerEvents: 'none',
             }}
           >
-            {/* Trait horizontal */}
-            <span
-              className="absolute block"
-              style={{
-                left: `${lineLeft}%`,
-                top: `${c.y}%`,
-                width: `${lineW}%`,
-                height: design.strokeWidth,
-                transform: 'translateY(-50%)',
-                background: main,
-                boxShadow: outline ? `0 0 0 1px ${outline}` : undefined,
-                backgroundImage:
-                  design.lineStyle === 'dashed'
-                    ? `repeating-linear-gradient(90deg, ${main} 0, ${main} ${design.strokeWidth * 3}px, transparent ${design.strokeWidth * 3}px, transparent ${design.strokeWidth * 5}px)`
-                    : undefined,
-                backgroundColor: design.lineStyle === 'dashed' ? 'transparent' : main,
-                borderTop:
-                  design.lineStyle === 'dashed' && outline
-                    ? undefined
-                    : undefined,
-                opacity: design.lineStyle === 'dashed' ? 1 : 1,
-              }}
-              aria-hidden
-            />
-            {Math.abs(labelDy) > 1 && (
-              <span
-                className="absolute block"
-                style={{
-                  left: isRight ? `${c.x + lineW}%` : `${c.x - lineW}%`,
-                  top: `${Math.min(c.y, labelY)}%`,
-                  height: `${Math.abs(labelDy)}%`,
-                  width: design.strokeWidth,
-                  transform: 'translateX(-50%)',
-                  background: main,
-                  boxShadow: outline ? `0 0 0 1px ${outline}` : undefined,
-                }}
-                aria-hidden
-              />
-            )}
-
-            {/* Point */}
+            {/* Point A — cible */}
             <button
               type="button"
+              data-callout-hit="point"
               className={`absolute block rounded-full ${
-                editMode ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'
+                editMode
+                  ? 'pointer-events-auto cursor-grab active:cursor-grabbing'
+                  : 'pointer-events-none'
               } ${selected ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-black' : ''}`}
               style={{
                 left: `${c.x}%`,
@@ -234,82 +286,69 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
                 height: design.pointSize,
                 transform: 'translate(-50%, -50%)',
                 background: main,
-                boxShadow: outline ? `0 0 0 1px ${outline}` : `0 0 0 1px rgba(0,0,0,0.5)`,
+                boxShadow: outline
+                  ? `0 0 0 1px ${outline}`
+                  : '0 0 0 1px rgba(0,0,0,0.5)',
               }}
               aria-label={c.label}
+              title={editMode ? 'Glisser le point cible' : c.label}
               onClick={(e) => {
                 if (!editMode) return;
                 e.stopPropagation();
+                if (didDragRef.current) return;
                 onSelect?.(photoId, c.id);
               }}
               onPointerDown={(e) => {
                 if (!editMode || tool === 'add') return;
                 e.stopPropagation();
                 e.preventDefault();
+                didDragRef.current = false;
                 onSelect?.(photoId, c.id);
-                const boxW = boxRef.current?.getBoundingClientRect().width ?? 1;
-                dragRef.current = {
-                  id: c.id,
-                  mode: 'point',
-                  startStretch: stretch,
-                  startPointerX: e.clientX,
-                  side: c.side,
-                  boxWidth: boxW,
-                };
-                (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                dragRef.current = { id: c.id, mode: 'point' };
               }}
             />
 
-            {/* Poignée stretch (édition) */}
-            {editMode && selected && (
-              <button
-                type="button"
-                className="pointer-events-auto absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-amber-400 bg-amber-300"
-                style={{
-                  left: `${labelX}%`,
-                  top: `${c.y}%`,
-                }}
-                title="Allonger / raccourcir le trait"
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  const boxW = boxRef.current?.getBoundingClientRect().width ?? 1;
-                  dragRef.current = {
-                    id: c.id,
-                    mode: 'stretch',
-                    startStretch: stretch,
-                    startPointerX: e.clientX,
-                    side: c.side,
-                    boxWidth: boxW,
-                  };
-                }}
-              />
-            )}
-
-            {/* Étiquette */}
+            {/* Card B — texte, glissable librement */}
             <div
-              className={`absolute max-w-[46%] whitespace-nowrap rounded px-2.5 py-1 ${labelClasses(
+              data-callout-hit="card"
+              className={`absolute max-w-[48%] whitespace-nowrap rounded px-2.5 py-1.5 ${labelClasses(
                 design.labelStyle,
               )} ${
                 editMode
-                  ? `pointer-events-auto cursor-pointer ${selected ? 'outline outline-2 outline-amber-400' : ''}`
+                  ? `pointer-events-auto cursor-grab active:cursor-grabbing select-none ${
+                      selected ? 'outline outline-2 outline-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.25)]' : 'hover:outline hover:outline-1 hover:outline-white/40'
+                    }`
                   : ''
               }`}
               style={{
-                left: `${labelX}%`,
-                top: `${labelY}%`,
-                transform: isRight
-                  ? 'translate(8px, -50%)'
-                  : 'translate(calc(-100% - 8px), -50%)',
+                left: `${c.labelX}%`,
+                top: `${c.labelY}%`,
+                transform: cardOnRight
+                  ? 'translate(6px, -50%)'
+                  : 'translate(calc(-100% - 6px), -50%)',
                 fontSize: 11,
               }}
+              title={editMode ? 'Glisser la carte texte' : undefined}
               onClick={(e) => {
                 if (!editMode) return;
                 e.stopPropagation();
+                if (didDragRef.current) return;
                 onSelect?.(photoId, c.id);
               }}
+              onPointerDown={(e) => {
+                if (!editMode || tool === 'add') return;
+                e.stopPropagation();
+                e.preventDefault();
+                didDragRef.current = false;
+                onSelect?.(photoId, c.id);
+                dragRef.current = { id: c.id, mode: 'card' };
+              }}
             >
+              {editMode && selected && (
+                <div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-amber-400/90">
+                  carte · glisser
+                </div>
+              )}
               <div
                 className="font-semibold tracking-wide"
                 style={{
@@ -324,7 +363,10 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
                   className="mt-0.5 leading-snug"
                   style={{
                     fontSize: 10,
-                    color: design.labelStyle === 'light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)',
+                    color:
+                      design.labelStyle === 'light'
+                        ? 'rgba(0,0,0,0.55)'
+                        : 'rgba(255,255,255,0.5)',
                   }}
                 >
                   {c.sub}

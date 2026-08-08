@@ -11,10 +11,17 @@ import {
   ChevronDown,
   ChevronUp,
   Move,
+  Crosshair,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageCalloutsApi } from './usePageCallouts';
-import { Callout, CalloutDesign, CalloutSide, createCallout } from './types';
+import {
+  Callout,
+  CalloutDesign,
+  CalloutPathStyle,
+  clamp,
+  createCallout,
+} from './types';
 import { PHOTO_LABELS, PhotoId } from './defaults';
 
 export type EditorTool = 'select' | 'add';
@@ -28,6 +35,39 @@ type Props = {
   selected: { photoId: string; calloutId: string } | null;
   setSelected: (s: { photoId: string; calloutId: string } | null) => void;
 };
+
+const PATH_STYLES: {
+  id: CalloutPathStyle;
+  label: string;
+  hint: string;
+  /** Mini SVG preview path in 40x24 viewBox */
+  preview: string;
+}[] = [
+  {
+    id: 'straight',
+    label: 'Droit',
+    hint: 'Ligne directe A → B',
+    preview: 'M4 20 L36 4',
+  },
+  {
+    id: 'horizontal',
+    label: 'Horizontal',
+    hint: 'Horizontal puis vertical',
+    preview: 'M4 12 H28 V6',
+  },
+  {
+    id: 'elbow',
+    label: 'Coude 90°',
+    hint: 'Orthogonal H/V selon la distance',
+    preview: 'M4 20 V8 H36',
+  },
+  {
+    id: 'diag45',
+    label: '45° + fin',
+    hint: 'Départ 45° puis 0° ou 90°',
+    preview: 'M4 20 L16 8 H36',
+  },
+];
 
 export const AdminCalloutEditor: React.FC<Props> = ({
   api,
@@ -46,7 +86,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
     return api.getCallouts(selected.photoId).find((c) => c.id === selected.calloutId) ?? null;
   })();
 
-  // Raccourcis clavier
   useEffect(() => {
     if (!editMode) return;
     const onKey = (e: KeyboardEvent) => {
@@ -54,6 +93,11 @@ export const AdminCalloutEditor: React.FC<Props> = ({
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
       if (e.key === 'Escape') {
+        if (tool === 'add') {
+          setTool('select');
+          toast('Placement annulé');
+          return;
+        }
         setSelected(null);
         return;
       }
@@ -64,27 +108,38 @@ export const AdminCalloutEditor: React.FC<Props> = ({
         toast.success('Repère supprimé');
         return;
       }
-      if (e.key === 'a' || e.key === 'A') setTool('add');
+      if (e.key === 'a' || e.key === 'A') {
+        setTool('add');
+        toast('Mode placement — cliquez le point sur l’image', { icon: '①' });
+      }
       if (e.key === 'v' || e.key === 'V') setTool('select');
-      if (selected && e.key.startsWith('Arrow')) {
+      if (selected && selectedCallout && e.key.startsWith('Arrow')) {
         e.preventDefault();
         const step = e.shiftKey ? 2 : 0.5;
-        const c = selectedCallout;
-        if (!c) return;
-        let { x, y } = c;
+        // Shift+Alt = move card, else move point
+        const moveCard = e.altKey;
+        let x = moveCard ? selectedCallout.labelX : selectedCallout.x;
+        let y = moveCard ? selectedCallout.labelY : selectedCallout.y;
         if (e.key === 'ArrowLeft') x -= step;
         if (e.key === 'ArrowRight') x += step;
         if (e.key === 'ArrowUp') y -= step;
         if (e.key === 'ArrowDown') y += step;
-        api.updateCallout(selected.photoId, selected.calloutId, {
-          x: Math.min(99.5, Math.max(0.5, x)),
-          y: Math.min(99.5, Math.max(0.5, y)),
-        });
+        x = clamp(x, 0.5, 99.5);
+        y = clamp(y, 0.5, 99.5);
+        if (moveCard) {
+          api.updateCallout(selected.photoId, selected.calloutId, {
+            labelX: x,
+            labelY: y,
+            side: x >= selectedCallout.x ? 'right' : 'left',
+          });
+        } else {
+          api.updateCallout(selected.photoId, selected.calloutId, { x, y });
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editMode, selected, selectedCallout, api, setSelected, setTool]);
+  }, [editMode, selected, selectedCallout, api, setSelected, setTool, tool]);
 
   const handleSave = async () => {
     const { error } = await api.save();
@@ -102,7 +157,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
     api.updateCalloutDesign(selected.photoId, selected.calloutId, d);
   };
 
-  // Bouton flottant toujours visible (admin)
   if (!editMode) {
     return (
       <div
@@ -131,17 +185,15 @@ export const AdminCalloutEditor: React.FC<Props> = ({
 
   return (
     <>
-      {/* Barre outils haut-gauche */}
       <div
         className="fixed z-[60] flex flex-col gap-2"
         style={{
           top: 'max(5.5rem, calc(env(safe-area-inset-top) + 4.5rem))',
           left: 'max(0.75rem, env(safe-area-inset-left))',
-          maxWidth: 'min(340px, calc(100vw - 1.5rem))',
+          maxWidth: 'min(360px, calc(100vw - 1.5rem))',
         }}
       >
         <div className="rounded-2xl border border-amber-400/40 bg-black/92 shadow-2xl backdrop-blur-xl">
-          {/* Header */}
           <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2">
@@ -162,7 +214,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                 type="button"
                 className="rounded p-1 text-white/50 hover:bg-white/10 hover:text-white"
                 onClick={() => setCollapsed((v) => !v)}
-                title={collapsed ? 'Déplier' : 'Replier'}
               >
                 {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
               </button>
@@ -175,7 +226,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                   setEditMode(false);
                   setSelected(null);
                 }}
-                title="Fermer le mode édition"
               >
                 <X size={14} />
               </button>
@@ -184,7 +234,29 @@ export const AdminCalloutEditor: React.FC<Props> = ({
 
           {!collapsed && (
             <div className="space-y-3 p-3">
-              {/* Outils */}
+              {/* Workflow guide */}
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-[10px] leading-relaxed text-white/50">
+                <div className="mb-1 font-semibold uppercase tracking-wider text-white/35">
+                  Workflow
+                </div>
+                <ol className="list-decimal space-y-0.5 pl-3.5">
+                  <li>
+                    <strong className="text-white/70">Ajouter</strong> → cliquez le point à montrer
+                    sur la photo
+                  </li>
+                  <li>
+                    <strong className="text-white/70">Glissez la carte</strong> (texte) où vous
+                    voulez
+                  </li>
+                  <li>
+                    Choisissez le <strong className="text-white/70">style de fil</strong> à droite
+                  </li>
+                  <li>
+                    <strong className="text-white/70">Enregistrer</strong> pour publier
+                  </li>
+                </ol>
+              </div>
+
               <div className="flex flex-wrap gap-1.5">
                 <ToolBtn
                   active={tool === 'select'}
@@ -194,9 +266,15 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                 />
                 <ToolBtn
                   active={tool === 'add'}
-                  onClick={() => setTool('add')}
+                  onClick={() => {
+                    setTool('add');
+                    toast('Cliquez sur la photo pour placer le point', {
+                      icon: '①',
+                      duration: 3500,
+                    });
+                  }}
                   icon={<Plus size={14} />}
-                  label="Ajouter (A)"
+                  label="Placer un point (A)"
                 />
                 <ToolBtn
                   active={false}
@@ -215,13 +293,24 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                 />
               </div>
 
-              <p className="text-[10px] leading-relaxed text-white/40">
-                {tool === 'add'
-                  ? 'Cliquez sur une photo pour placer un nouveau repère.'
-                  : 'Glissez le point · poignée ambre = longueur du trait · flèches = nudge'}
-              </p>
+              {tool === 'add' && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-2 text-[11px] text-amber-100">
+                  <Crosshair size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    <strong>Mode placement actif</strong> — cliquez précisément sur l’élément à
+                    montrer (prise XLR, antenne…). La carte se place à côté ; glissez-la ensuite.
+                    Échap pour annuler.
+                  </span>
+                </div>
+              )}
 
-              {/* Actions save */}
+              {tool === 'select' && (
+                <p className="text-[10px] leading-relaxed text-white/40">
+                  Point = cible · carte = texte déplaçable · flèches = nudge point · Alt+flèches =
+                  nudge carte
+                </p>
+              )}
+
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
@@ -240,7 +329,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     toast('Modifications annulées');
                   }}
                   className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-2 text-xs text-white/70 transition hover:bg-white/5 disabled:opacity-40"
-                  title="Annuler les changements non sauvés"
                 >
                   <Undo2 size={13} />
                 </button>
@@ -253,7 +341,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     toast.success('Defaults chargés — pensez à Enregistrer');
                   }}
                   className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-2 text-xs text-white/70 transition hover:bg-white/5"
-                  title="Revenir aux repères par défaut"
                 >
                   <RotateCcw size={13} />
                 </button>
@@ -265,7 +352,6 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                 </p>
               )}
 
-              {/* Liste des repères de la photo sélectionnée */}
               {selected && (
                 <div className="rounded-lg border border-white/10 bg-white/5 p-2">
                   <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider text-white/40">
@@ -303,10 +389,9 @@ export const AdminCalloutEditor: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Inspecteur droit */}
       {panelOpen && selectedCallout && selected && (
         <div
-          className="fixed z-[60] w-[min(320px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-white/15 bg-black/92 shadow-2xl backdrop-blur-xl"
+          className="fixed z-[60] w-[min(340px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-white/15 bg-black/92 shadow-2xl backdrop-blur-xl"
           style={{
             top: 'max(5.5rem, calc(env(safe-area-inset-top) + 4.5rem))',
             right: 'max(0.75rem, env(safe-area-inset-right))',
@@ -344,33 +429,58 @@ export const AdminCalloutEditor: React.FC<Props> = ({
               />
             </Field>
 
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Côté étiquette">
-                <select
-                  className="field-input"
-                  value={selectedCallout.side}
-                  onChange={(e) => patch({ side: e.target.value as CalloutSide })}
-                >
-                  <option value="left">Gauche</option>
-                  <option value="right">Droite</option>
-                </select>
-              </Field>
-              <Field label="Longueur trait %">
-                <input
-                  type="range"
-                  min={4}
-                  max={45}
-                  step={0.5}
-                  value={selectedCallout.stretch}
-                  onChange={(e) => patch({ stretch: Number(e.target.value) })}
-                  className="w-full accent-amber-400"
-                />
-                <div className="text-[10px] text-white/40">{selectedCallout.stretch.toFixed(1)}%</div>
-              </Field>
+            {/* Path style */}
+            <div className="border-t border-white/10 pt-3">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                Forme du fil (A → carte)
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {PATH_STYLES.map((ps) => {
+                  const active = (selectedCallout.design.pathStyle || 'horizontal') === ps.id;
+                  return (
+                    <button
+                      key={ps.id}
+                      type="button"
+                      onClick={() => patchDesign({ pathStyle: ps.id })}
+                      className={`rounded-xl border p-2 text-left transition ${
+                        active
+                          ? 'border-amber-400/60 bg-amber-400/15'
+                          : 'border-white/10 hover:bg-white/5'
+                      }`}
+                      title={ps.hint}
+                    >
+                      <svg
+                        viewBox="0 0 40 24"
+                        className="mb-1 h-6 w-full"
+                        fill="none"
+                        aria-hidden
+                      >
+                        <path
+                          d={ps.preview}
+                          stroke={active ? '#fbbf24' : '#fff'}
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity={active ? 1 : 0.55}
+                        />
+                        <circle cx="4" cy={ps.id === 'straight' ? 20 : ps.id === 'elbow' ? 20 : 12} r="1.8" fill={active ? '#fbbf24' : '#fff'} opacity={0.9} />
+                      </svg>
+                      <div
+                        className={`text-[11px] font-semibold ${
+                          active ? 'text-amber-100' : 'text-white/70'
+                        }`}
+                      >
+                        {ps.label}
+                      </div>
+                      <div className="mt-0.5 text-[9px] leading-snug text-white/35">{ps.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Position X %">
+              <Field label="Point X %">
                 <input
                   type="number"
                   min={0}
@@ -381,7 +491,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                   onChange={(e) => patch({ x: Number(e.target.value) })}
                 />
               </Field>
-              <Field label="Position Y %">
+              <Field label="Point Y %">
                 <input
                   type="number"
                   min={0}
@@ -394,22 +504,40 @@ export const AdminCalloutEditor: React.FC<Props> = ({
               </Field>
             </div>
 
-            <Field label="Décalage vertical label %">
-              <input
-                type="range"
-                min={-20}
-                max={20}
-                step={0.5}
-                value={selectedCallout.labelDy}
-                onChange={(e) => patch({ labelDy: Number(e.target.value) })}
-                className="w-full accent-amber-400"
-              />
-              <div className="text-[10px] text-white/40">{selectedCallout.labelDy.toFixed(1)}%</div>
-            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Carte X %">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  className="field-input"
+                  value={Number(selectedCallout.labelX.toFixed(1))}
+                  onChange={(e) => {
+                    const labelX = Number(e.target.value);
+                    patch({
+                      labelX,
+                      side: labelX >= selectedCallout.x ? 'right' : 'left',
+                    });
+                  }}
+                />
+              </Field>
+              <Field label="Carte Y %">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  className="field-input"
+                  value={Number(selectedCallout.labelY.toFixed(1))}
+                  onChange={(e) => patch({ labelY: Number(e.target.value) })}
+                />
+              </Field>
+            </div>
 
             <div className="border-t border-white/10 pt-3">
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                Design du fil
+                Apparence
               </div>
               <div className="space-y-3">
                 <Field label="Couleur">
@@ -437,7 +565,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                   </div>
                 </Field>
 
-                <Field label="Style trait">
+                <Field label="Trait">
                   <div className="flex gap-1">
                     {(
                       [
@@ -485,7 +613,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                   />
                 </Field>
 
-                <Field label="Style étiquette">
+                <Field label="Style carte">
                   <select
                     className="field-input"
                     value={selectedCallout.design.labelStyle}
@@ -583,7 +711,7 @@ const ToolBtn: React.FC<{
   </button>
 );
 
-/** Helper pour brancher l’ajout depuis la page */
+/** ① Clic menu Ajouter → ② clic sur l’image = pose le POINT, carte offset à côté */
 export function handleAddCallout(
   api: PageCalloutsApi,
   photoId: string,
@@ -592,17 +720,35 @@ export function handleAddCallout(
   setSelected: (s: { photoId: string; calloutId: string } | null) => void,
   setTool: (t: EditorTool) => void,
 ) {
+  const side = x > 50 ? 'left' : 'right'; // carte du côté où il y a de la place
+  const offset = 14;
+  const labelX = clamp(side === 'right' ? x + offset : x - offset, 2, 98);
+  const labelY = clamp(y - 4, 2, 98);
+
   const callout = createCallout({
     x,
     y,
+    labelX,
+    labelY,
     label: 'Nouveau repère',
-    sub: '',
-    side: x > 50 ? 'right' : 'left',
+    sub: 'Double-clic → éditer le texte',
+    side,
+    design: {
+      pathStyle: 'horizontal',
+      lineColor: 'bw',
+      strokeWidth: 2,
+      lineStyle: 'solid',
+      pointSize: 8,
+      labelStyle: 'dark',
+      showSub: true,
+    },
   });
   api.addCallout(photoId, callout);
   setSelected({ photoId, calloutId: callout.id });
   setTool('select');
-  toast.success('Repère ajouté — éditez le texte à droite');
+  toast.success('Point placé — glissez la carte pour positionner le texte', {
+    duration: 4000,
+  });
 }
 
 export default AdminCalloutEditor;
