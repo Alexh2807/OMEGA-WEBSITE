@@ -4,7 +4,7 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 05/08/2026 10:42:09
+ * Dernière mise à jour: 08/08/2026 15:31:45
  */
 
 // Liste de toutes les images disponibles dans /public
@@ -23,6 +23,8 @@ export const productImages = [
   "/products/omega-dmx-soft-color.webp",
   "/products/omega-dmx-soft-dash.webp",
   "/products/omega-dmx-soft-dashboard.webp",
+  "/products/omega-dmx-soft-live-stage.png",
+  "/products/omega-dmx-soft-live-dashboard.png",
   "/products/omega-dmx-soft-move.webp",
   "/products/omega-dmx-soft-plan2d.webp",
   "/products/omega-dmx-soft-stage.webp",

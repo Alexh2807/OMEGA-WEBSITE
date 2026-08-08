@@ -20,6 +20,7 @@ import {
 import toast from 'react-hot-toast';
 import { EURO } from '../utils/prix';
 import { supabase } from '../lib/supabase';
+import { CLE_DEVIS_EN_COURS, CLE_SECRET_PAIEMENT } from '../utils/paiement';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
@@ -70,7 +71,10 @@ interface CheckoutFormProps {
      port — exactement l'invariant n° 1 du contrat. */
   serviceLivraison?: string | null;
   onQuote?: (recap: RecapitulatifDevis) => void;
-  onSuccess: (paymentIntentId: string, quoteId: string) => void;
+  /* Le SECRET accompagne la réussite : la page de retour en a besoin pour relire
+     l'état auprès de Stripe, et `sessionStorage` peut être indisponible (navigation
+     privée). Sans lui, un paiement RÉUSSI s'afficherait en échec. */
+  onSuccess: (paymentIntentId: string, quoteId: string, clientSecret: string) => void;
   onError: (error: string) => void;
 }
 
@@ -208,6 +212,18 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
       return;
     }
 
+    /* ⚠ AVANT de confirmer : on met le devis et le secret à l'abri.
+       Si la banque impose une authentification par REDIRECTION COMPLÈTE, le navigateur
+       quitte le site immédiatement — tout l'état React est perdu. Sans ces deux valeurs,
+       la page de retour ne saurait ni quel paiement relire, ni à partir de quel devis
+       créer la commande. */
+    try {
+      sessionStorage.setItem(CLE_DEVIS_EN_COURS, quoteId);
+      sessionStorage.setItem(CLE_SECRET_PAIEMENT, clientSecret);
+    } catch { /* navigation privée : l'URL de retour porte déjà les mêmes valeurs */ }
+
+    const urlRetour = `${window.location.origin}/paiement/retour?quote_id=${encodeURIComponent(quoteId)}`;
+
     try {
       const { error, paymentIntent } = await stripe.confirmCardPayment(
         clientSecret,
@@ -218,6 +234,10 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
               name: cardholderName,
             },
           },
+          /* Obligatoire dès qu'une banque exige un 3-D Secure en pleine page plutôt que
+             dans la fenêtre intégrée. Sans elle, Stripe refuse la confirmation et le
+             client reste bloqué sans explication. */
+          return_url: urlRetour,
         }
       );
 
@@ -252,11 +272,25 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
 
         setPaymentError(errorMessage);
         toast.error(errorMessage);
+        sessionStorage.removeItem(CLE_DEVIS_EN_COURS);
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         toast.success('Paiement réussi !');
+        sessionStorage.removeItem(CLE_DEVIS_EN_COURS);
         // Le devis accompagne le paiement : c'est LUI qui porte les montants et le
         // régime de TVA, et c'est à partir de lui que la commande sera créée.
-        onSuccess(paymentIntent.id, quoteId);
+        onSuccess(paymentIntent.id, quoteId, clientSecret);
+      } else if (paymentIntent) {
+        /* ⚠ TOUT AUTRE STATUT ÉTAIT IGNORÉ. Le code ne traitait que `succeeded` : un
+           paiement `processing` (la banque n'a pas fini) ou `requires_action` (une
+           authentification reste à faire) ne déclenchait RIEN — ni message, ni
+           navigation. Le client se retrouvait devant un formulaire redevenu actif, sans
+           savoir s'il avait payé. Beaucoup repaient dans ce cas.
+           On l'envoie donc sur la page de retour, qui relit l'état auprès de Stripe et
+           suit un `processing` jusqu'à sa résolution. */
+        window.location.assign(
+          `${urlRetour}&payment_intent_client_secret=${encodeURIComponent(clientSecret)}`
+        );
+        return;
       }
     } catch (err) {
       console.error('Erreur inattendue:', err);
@@ -458,7 +492,10 @@ interface StripeCheckoutProps {
   express?: boolean;
   serviceLivraison?: string | null;
   onQuote?: (recap: RecapitulatifDevis) => void;
-  onSuccess: (paymentIntentId: string, quoteId: string) => void;
+  /* Le SECRET accompagne la réussite : la page de retour en a besoin pour relire
+     l'état auprès de Stripe, et `sessionStorage` peut être indisponible (navigation
+     privée). Sans lui, un paiement RÉUSSI s'afficherait en échec. */
+  onSuccess: (paymentIntentId: string, quoteId: string, clientSecret: string) => void;
   onError: (error: string) => void;
 }
 

@@ -74,16 +74,24 @@ const OmegaDmxSection = () => {
                 Logiciel inclus · sans abonnement
               </div>
 
-              <Link
-                to="/omega-dmx-interface"
-                className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full font-semibold hover:shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 group"
-              >
-                <span>DÉCOUVRIR LE BOÎTIER</span>
-                <ArrowRight
-                  size={20}
-                  className="group-hover:translate-x-1 transition-transform"
-                />
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to="/omega-dmx-interface"
+                  className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full font-semibold hover:shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 group"
+                >
+                  <span>DÉCOUVRIR LE BOÎTIER</span>
+                  <ArrowRight
+                    size={20}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                </Link>
+                <Link
+                  to="/omega-dmx-logiciel"
+                  className="inline-flex items-center gap-2 border border-white/15 text-white px-7 py-4 rounded-full font-semibold hover:bg-white/5 transition-colors"
+                >
+                  Voir le logiciel
+                </Link>
+              </div>
             </div>
           </div>
         </div>

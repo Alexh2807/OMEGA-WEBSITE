@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   Shield,
   RefreshCw,
@@ -630,20 +631,20 @@ const OmegaDmxInterfacePage = () => {
             </div>
           </Reveal>
 
-          {/* Grande image : vue 3D du show */}
+          {/* Grande image : capture réelle OMEGADMX (vue 3D + effet mouvement) */}
           <Reveal>
-            <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-black mb-8">
+            <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-black mb-6">
               <img
-                src="/products/omega-dmx-soft-3d.webp"
-                alt="Visualisation 3D du show en temps réel"
+                src="/products/omega-dmx-soft-live-stage.png"
+                alt="OMEGADMX — plateau 3D avec effet de mouvement circulaire"
                 className="w-full object-cover"
                 loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
               <div className="absolute bottom-0 left-0 p-6 md:p-8">
                 <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-400/30 rounded-full px-3 py-1 mb-3">
                   <Boxes className="text-blue-300" size={14} />
-                  <span className="text-blue-200 text-xs font-semibold">VUE 3D TEMPS RÉEL</span>
+                  <span className="text-blue-200 text-xs font-semibold">CAPTURE RÉELLE · VUE 3D</span>
                 </div>
                 <h3 className="text-2xl md:text-3xl font-bold text-white mb-1">
                   Visualisez chaque faisceau en direct
@@ -653,6 +654,15 @@ const OmegaDmxInterfacePage = () => {
                   travaillez — réglez votre show sans même allumer la salle.
                 </p>
               </div>
+            </div>
+            <div className="text-center mb-10">
+              <Link
+                to="/omega-dmx-logiciel"
+                className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-semibold transition-colors"
+              >
+                Présentation complète du logiciel OMEGADMX
+                <ArrowRight size={18} />
+              </Link>
             </div>
           </Reveal>
 

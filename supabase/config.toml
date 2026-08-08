@@ -337,6 +337,15 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # donc pas de JWT à vérifier. Elle se protège par le secret partagé `x-notify-secret`,
 # validé par public.notify_check_secret(). Sans cette ligne, un `functions deploy` sans
 # --no-verify-jwt réactiverait la vérification et la base se ferait refuser en 401.
+# Appelée par un CLIENT CONNECTÉ (panier -> devis -> PaymentIntent). La vérification
+# doit rester ACTIVE. Elle est déclarée ici explicitement parce qu'un `functions deploy
+# --no-verify-jwt` la désactive de façon PERSISTANTE et qu'un redéploiement sans le
+# drapeau ne la rétablit PAS tout seul (erreur commise le 7 août 2026, corrigée ici).
+# ⚠ Ce n'est qu'une ceinture : la vraie garde est dans la fonction, qui exige un
+# utilisateur réel via admin.auth.getUser(jwt) — la clé anon seule ne suffit pas.
+[functions.devis-commande]
+verify_jwt = true
+
 [functions.send-notification]
 verify_jwt = false
 

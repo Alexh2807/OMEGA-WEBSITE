@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import MesLicences from '../components/MesLicences';
 import {
   User,
   Mail,
@@ -44,7 +45,14 @@ const AccountPage = () => {
      relue et le client lisait « Accès non autorisé » sur SON PROPRE compte. */
   const { user, loading: sessionEnCours, demanderReinitialisation } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [activeTab, setActiveTab] = useState('profile');
+  /* Les e-mails de licence pointent vers `/compte?onglet=logiciels` : sans cette lecture,
+     le lien retombait sur le profil et le client devait chercher lui-même. */
+  const [activeTab, setActiveTab] = useState(() => {
+    const o = new URLSearchParams(window.location.search).get('onglet');
+    return ['profile', 'addresses', 'orders', 'logiciels', 'messages'].includes(o || '')
+      ? (o as string)
+      : 'profile';
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -275,6 +283,7 @@ const AccountPage = () => {
               { id: 'profile', label: 'Profil', icon: User },
               { id: 'addresses', label: 'Adresses', icon: MapPin },
               { id: 'orders', label: 'Commandes', icon: Package },
+              { id: 'logiciels', label: 'Logiciels', icon: KeyRound },
               { id: 'messages', label: 'Messages', icon: MessageSquare },
             ].map(tab => (
               <button
@@ -600,6 +609,8 @@ const AccountPage = () => {
             )}
 
             {activeTab === 'addresses' && <AddressManager />}
+
+            {activeTab === 'logiciels' && <MesLicences />}
 
             {activeTab === 'orders' && (
               <div className="text-center py-12">

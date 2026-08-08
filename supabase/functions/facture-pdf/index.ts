@@ -52,7 +52,17 @@
  *  · un PDF déjà archivé n'est JAMAIS refabriqué : c'est tout l'intérêt.
  */
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  AFRelationship,
+  PDFName,
+  type PDFFont,
+  type PDFPage,
+} from 'npm:pdf-lib@1.17.1';
+import { buildFacturXXml, type FacturXInput, type FacturXLine } from './facturx/buildCII.ts';
+import { categorieTva, motifExonerationTva } from './facturx/categorieTva.ts';
 
 const ORIGINES = [
   'https://omegasud.fr',
@@ -146,6 +156,32 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
     T(s, xd - fo.widthOfTextAtSize(net(s), ta), yy, o);
   };
 
+  /**
+   * Coupe un texte à une LARGEUR, pas à un nombre de caractères.
+   *
+   * ⚠ C'était la cause des chevauchements signalés sur les factures reçues par les
+   * clients. La désignation était tronquée par `slice(0, 58)` : 58 caractères en
+   * minuscules tiennent dans la colonne, 58 caractères en capitales font presque le
+   * double de large et venaient s'écrire PAR-DESSUS les colonnes Qté et P.U. HT.
+   * Le nombre de caractères ne dit rien de la place occupée — seule la police le sait.
+   *
+   * On ne dessine rien ici : on rend un texte dont la largeur mesurée tient dans la
+   * place disponible, avec une ellipse quand il a fallu couper.
+   */
+  const couper = (s: unknown, largeurMax: number, f: PDFFont, taille: number): string => {
+    const texte = net(s);
+    if (f.widthOfTextAtSize(texte, taille) <= largeurMax) return texte;
+    const ell = '…';
+    const dispo = largeurMax - f.widthOfTextAtSize(ell, taille);
+    let bas = 0, haut = texte.length;
+    while (bas < haut) {
+      const milieu = Math.ceil((bas + haut) / 2);
+      if (f.widthOfTextAtSize(texte.slice(0, milieu), taille) <= dispo) bas = milieu;
+      else haut = milieu - 1;
+    }
+    return texte.slice(0, bas).trimEnd() + ell;
+  };
+
   /* Saut de page automatique. Sans lui, une facture de plus de ~25 lignes écrit
      dans le vide sous le bas de page : le client reçoit un document tronqué. */
   const place = (besoin: number) => {
@@ -236,8 +272,11 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
 
   let yy = y;
   for (let i = 0; i < Math.max(vendeur.length, acheteur.length); i++) {
-    if (vendeur[i]) T(vendeur[i], M, yy, { f: i === 0 ? gras : helv, t: 8.5 });
-    if (acheteur[i]) T(acheteur[i], colD, yy, { f: i === 0 ? gras : helv, t: 8.5 });
+    /* Même piège : une raison sociale longue, une adresse longue ou un numéro de TVA
+       intracommunautaire débordaient de la colonne VENDEUR jusque dans FACTURÉ À. */
+    const fi = i === 0 ? gras : helv;
+    if (vendeur[i]) T(couper(vendeur[i], colD - M - 12, fi, 8.5), M, yy, { f: fi, t: 8.5 });
+    if (acheteur[i]) T(couper(acheteur[i], width - M - colD, fi, 8.5), colD, yy, { f: fi, t: 8.5 });
     yy -= 11.5;
   }
   y = yy - 20;
@@ -265,8 +304,10 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
       });
     }
     paire = !paire;
-    const nom = net(l.description).slice(0, 58);
-    T(nom, M, y, { t: 8.5 });
+    /* 30 pt réservés à droite : la quantité est alignée À DROITE sur `xQte`, elle
+       s'écrit donc vers la gauche et mordrait sur une désignation qui irait jusqu'au
+       bord de la colonne. */
+    T(couper(l.description, xQte - M - 30, helv, 8.5), M, y, { t: 8.5 });
     D(String(l.quantity), xQte, y, { t: 8.5 });
     D(fmt(l.unit_price_ht), xPu, y, { t: 8.5 });
     D(`${Number(l.tax_rate ?? 0)} %`, xTva, y, { t: 8.5 });
@@ -313,7 +354,15 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
   ligneTotal('Total HT', fmt(f.subtotal_ht));
   ligneTotal('Total TVA', fmt(f.tax_amount));
   /* Le TTC dans un pavé sombre : c'est LE chiffre que le client cherche, et sur
-     le document actuel il se confondait avec les deux lignes au-dessus. */
+     le document actuel il se confondait avec les deux lignes au-dessus.
+
+     ⚠ CE RECUL EST INDISPENSABLE — mesuré, pas estimé.
+     `ligneTotal` décale de 14 pt entre deux lignes, mais le pavé monte 17 pt au-dessus
+     de la ligne de base du TTC (5 pt sous + 22 pt de haut). Sans recul, son bord
+     supérieur arrivait 4,9 pt À L'INTÉRIEUR de « Total TVA » : le rectangle noir
+     recouvrait le bas de ce texte, qui devenait illisible sur la facture du client.
+     12 pt de plus donnent 7,1 pt d'air entre les deux. */
+  yT -= 12;
   page.drawRectangle({
     x: xg - 8, y: yT - 5, width: xTot - xg + 16, height: 22,
     color: rgb(0.12, 0.12, 0.14),
@@ -374,7 +423,175 @@ async function fabriquer(f: any, lignes: Ligne[], reglages: any): Promise<Uint8A
     p.drawText(s, { x: width - M - helv.widthOfTextAtSize(s, 7), y: M + 6, font: helv, size: 7, color: pale });
   });
 
-  return await pdf.save();
+  /* ★ LE XML NORMALISE REJOINT LA PAGE — un seul fichier, un seul document.
+     Il doit etre embarque AVANT `save()` : apres, les octets sont figes et
+     l'empreinte SHA-256 calculee par l'appelant ne porterait pas sur le XML. */
+  await embarquerFacturX(pdf, buildFacturXXml(entreeFacturX(f, lignes, reglages)), f);
+
+  /* ⚠ `useObjectStreams: false` — comme le generateur navigateur qu'on remplace.
+     Par defaut pdf-lib compresse les objets dans des flux : la piece jointe et sa
+     relation `/Alternative` deviennent alors invisibles a tout lecteur qui ne
+     decompresse pas. Verifie au banc : avec la compression, le controle
+     « relation Alternative » ECHOUE ; sans elle, les neuf controles passent.
+     Le fichier est un peu plus gros ; une facture electronique doit d'abord etre
+     lisible par l'outil qui la recevra. */
+  return await pdf.save({ useObjectStreams: false });
+}
+
+/* ===========================================================================
+   FACTUR-X - LE XML NORMALISE, DANS LE MEME FICHIER QUE LE PDF
+   ===========================================================================
+   Il etait produit DANS LE NAVIGATEUR, par un bouton de l'administration, et donnait
+   un TROISIEME document pour une meme facture : autre mise en page, autres totaux
+   affiches, autre troncature. On validait donc une facture que le client ne recevait
+   jamais.
+
+   Une facture n'a qu'une forme. Le XML rejoint donc l'original archive : meme
+   fichier, meme empreinte SHA-256, meme exemplaire pour le client, l'e-mail, le
+   comptable et l'administration fiscale.
+
+   REPRIS A L'IDENTIQUE du generateur navigateur (rien n'est perdu) : categories de
+   TVA par ligne, motif d'exoneration, code 381 pour les avoirs avec la facture
+   rectifiee, et le montant deja encaisse (BT-113) - sans lequel la regle BR-CO-16
+   (DuePayable = Grand - Prepaid) est fausse a CHAQUE vente du site, qui est reglee
+   avant d'etre editee.
+
+   CORRIGE au passage :
+   - AFRelationship passe de `Data` a **`Alternative`**. La specification Factur-X
+     l'impose : `Data` designe une piece jointe quelconque, `Alternative` designe une
+     representation ALTERNATIVE du meme document. Un lecteur conforme cherche
+     `Alternative` - avec `Data` il ne trouve pas la facture electronique.
+   - Les metadonnees XMP decrivant le profil sont ajoutees : sans elles, aucun outil
+     ne sait qu'il s'agit d'un Factur-X ni quel profil lire.
+
+   RESTE A FAIRE, et ce n'est pas un detail : la conformite **PDF/A-3** complete
+   (OutputIntent avec profil ICC, polices integrees). Le fichier produit est un PDF
+   valide portant le XML normalise et declare ; il n'est pas encore un PDF/A-3 au sens
+   strict. Etape a franchir avant le depot sur une plateforme agreee.
+   =========================================================================== */
+
+function entreeFacturX(f: any, lignes: Ligne[], reglages: any): FacturXInput {
+  const avoir = f.document_type === 'credit_note';
+  const regime = f.vat_regime ?? null;
+  const territoire = f.vat_territory ?? null;
+  const code = categorieTva(regime, territoire);
+  const motif = motifExonerationTva(code, f.vat_mention, regime, territoire);
+
+  const lignesFx: FacturXLine[] = lignes.map((l, i) => ({
+    id: String(i + 1),
+    name: net(l.description),
+    quantity: Number(l.quantity ?? 0),
+    unitPriceHt: Number(l.unit_price_ht ?? 0),
+    lineTotalHt: Number(l.total_ht ?? 0),
+    taxRatePercent: Number(l.tax_rate ?? 0),
+    vatCategoryCode: code,
+    vatExemptionReason: motif,
+  }));
+
+  /* Les montants viennent de la FACTURE, jamais d'un recalcul : ce sont ceux qui sont
+     imprimes sur la page. Le XML ne doit pas contredire le PDF qui le porte. */
+  const totalTtc = eur(f.total_ttc);
+  const encaisse = eur(f.amount_paid);
+  const baseHt = eur(f.subtotal_ht);
+  const tva = eur(f.tax_amount);
+
+  return {
+    invoiceNumber: f.invoice_number,
+    issueDate: new Date(f.created_at),
+    dueDate: f.due_date ? new Date(f.due_date) : undefined,
+    currency: 'EUR',
+    documentTypeCode: avoir ? 381 : 380,
+    deliveryDate: f.delivery_date ? new Date(f.delivery_date) : undefined,
+    precedingInvoice:
+      avoir && f.facture_origine
+        ? {
+            number: f.facture_origine,
+            issueDate: f.facture_origine_date
+              ? new Date(f.facture_origine_date)
+              : undefined,
+          }
+        : null,
+    seller: {
+      name: reglages?.company_name ?? 'OMEGA',
+      siren: (reglages?.siret ?? '').replace(/\s/g, '').slice(0, 9) || undefined,
+      vatNumber: reglages?.vat_number ?? undefined,
+      addressLine: reglages?.address ?? undefined,
+      postalCode: reglages?.postal_code ?? undefined,
+      city: reglages?.city ?? undefined,
+      countryCode: 'FR',
+    },
+    buyer: {
+      name: net(f.company_name || f.customer_name || 'Client'),
+      vatNumber: f.vat_number ?? undefined,
+      addressLine: net(f.billing_address ?? f.customer_address ?? ''),
+      countryCode: String(f.customer_country ?? 'FR').slice(0, 2).toUpperCase(),
+    },
+    lines: lignesFx,
+    totals: {
+      lineTotalHt: baseHt,
+      taxBasisTotal: baseHt,
+      taxTotal: tva,
+      grandTotalTtc: totalTtc,
+      prepaidAmount: encaisse,
+      duePayable: eur(totalTtc - encaisse),
+    },
+  };
+}
+
+/**
+ * Metadonnees XMP declarant le Factur-X.
+ *
+ * Sans ce bloc, le XML embarque n'est qu'une piece jointe parmi d'autres : rien
+ * n'indique a un lecteur qu'il s'agit d'une facture electronique, ni quel profil
+ * appliquer. C'est l'extension officielle `fx:` de la specification.
+ */
+const xmpFacturX = (profil: string, titre: string): string =>
+  '<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>\n' +
+  '<x:xmpmeta xmlns:x="adobe:ns:meta/">\n' +
+  ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n' +
+  '  <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">\n' +
+  '   <dc:title><rdf:Alt><rdf:li xml:lang="x-default">' + titre + '</rdf:li></rdf:Alt></dc:title>\n' +
+  '  </rdf:Description>\n' +
+  '  <rdf:Description rdf:about="" xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/">\n' +
+  '   <pdfaid:part>3</pdfaid:part>\n' +
+  '   <pdfaid:conformance>B</pdfaid:conformance>\n' +
+  '  </rdf:Description>\n' +
+  '  <rdf:Description rdf:about="" xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">\n' +
+  '   <fx:DocumentType>INVOICE</fx:DocumentType>\n' +
+  '   <fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>\n' +
+  '   <fx:Version>1.0</fx:Version>\n' +
+  '   <fx:ConformanceLevel>' + profil + '</fx:ConformanceLevel>\n' +
+  '  </rdf:Description>\n' +
+  ' </rdf:RDF>\n' +
+  '</x:xmpmeta>\n' +
+  '<?xpacket end="w"?>';
+
+/** Embarque `factur-x.xml` et declare le document comme facture electronique. */
+async function embarquerFacturX(
+  pdf: PDFDocument,
+  xml: string,
+  f: any
+): Promise<void> {
+  await pdf.attach(new TextEncoder().encode(xml), 'factur-x.xml', {
+    mimeType: 'text/xml',
+    description: 'Facture electronique Factur-X (EN 16931, profil BASIC)',
+    creationDate: new Date(f.created_at),
+    modificationDate: new Date(f.created_at),
+    afRelationship: AFRelationship.Alternative,
+  });
+
+  const titre =
+    (f.document_type === 'credit_note' ? 'Avoir ' : 'Facture ') + f.invoice_number;
+  pdf.setTitle(titre);
+  pdf.setProducer('OMEGA - facture-pdf');
+  pdf.setCreator('OMEGA');
+
+  // XMP : pdf-lib n'expose pas d'API dediee, on pose le flux nous-memes.
+  const flux = pdf.context.stream(xmpFacturX('BASIC', titre), {
+    Type: 'Metadata',
+    Subtype: 'XML',
+  });
+  pdf.catalog.set(PDFName.of('Metadata'), pdf.context.register(flux));
 }
 
 /* ── Point d'entrée ───────────────────────────────────────────────────────── */
@@ -383,13 +600,28 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors(req) });
   try {
     const jeton = (req.headers.get('Authorization') || '').replace('Bearer ', '');
-    const { data: u } = await admin.auth.getUser(jeton);
-    const utilisateur = u?.user;
-    if (!utilisateur) return json({ error: 'Authentification requise.' }, req, 401);
 
-    const { data: profil } = await admin
-      .from('profiles').select('role').eq('id', utilisateur.id).maybeSingle();
-    const estAdmin = profil?.role === 'admin';
+    /* ★ APPEL SERVEUR A SERVEUR.
+       `confirmer-commande` edite la facture des que le paiement est confirme. Il n'a
+       pas de session d'administrateur : il ne pouvait donc transmettre que le jeton du
+       CLIENT, qui se heurtait au controle « fabrication reservee aux administrateurs »
+       — la facture existait en base, son PDF n'etait jamais fabrique, et le client
+       lisait « pas encore editee ». Le defaut etait silencieux : un 409 ignore.
+       La cle de service n'existe QUE sur le serveur ; elle n'est jamais exposee au
+       navigateur. On l'accepte donc comme preuve d'appel interne. */
+    const cleService = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const estServeur = !!cleService && jeton === cleService;
+
+    let utilisateur: { id: string } | null = null;
+    let estAdmin = estServeur;
+    if (!estServeur) {
+      const { data: u } = await admin.auth.getUser(jeton);
+      utilisateur = u?.user ?? null;
+      if (!utilisateur) return json({ error: 'Authentification requise.' }, req, 401);
+      const { data: profil } = await admin
+        .from('profiles').select('role').eq('id', utilisateur.id).maybeSingle();
+      estAdmin = profil?.role === 'admin';
+    }
 
     const { invoice_id } = await req.json().catch(() => ({}));
     if (!invoice_id) return json({ error: 'invoice_id manquant.' }, req, 400);
@@ -401,7 +633,7 @@ Deno.serve(async (req) => {
     /* ⚠ On ne se contente PAS du rôle : un client ne doit voir QUE ses factures.
        Le rattachement se fait sur `customer_id`, jamais sur l'e-mail — une adresse
        se change, et deux comptes peuvent partager une boîte. */
-    if (!estAdmin && f.customer_id !== utilisateur.id) {
+    if (!estAdmin && f.customer_id !== utilisateur!.id) {
       return json({ error: 'Cette facture ne vous appartient pas.' }, req, 403);
     }
 

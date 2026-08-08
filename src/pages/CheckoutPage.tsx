@@ -70,8 +70,11 @@ const CheckoutPage = () => {
 
   const port = computeShipping(
     items.map(i => {
-      const p = i.product as { shipping_class?: string; weight_kg?: number | null } | undefined;
-      return { shipping_class: p?.shipping_class, weight_kg: p?.weight_kg, quantity: i.quantity };
+      const p = i.product as { shipping_class?: string; weight_kg?: number | null; product_type?: string } | undefined;
+      return {
+        shipping_class: p?.shipping_class, weight_kg: p?.weight_kg, quantity: i.quantity,
+        dematerialise: p?.product_type === 'licence',
+      };
     }),
     adresse ? { country: adresse.country, postal_code: adresse.postal_code } : null,
     shippingConfig,
@@ -81,9 +84,25 @@ const CheckoutPage = () => {
   /* Les 5 modes proposables pour CE panier vers CETTE adresse. Même source que le
      panier (`listerOffresLivraison`), donc mêmes prix : le client ne doit pas voir un
      tarif ici et un autre là. */
+  /* Panier 100 % dématérialisé (licences) : rien à livrer. On ne demande alors ni mode de
+     livraison ni adresse de LIVRAISON — l'adresse reste néanmoins nécessaire, mais comme
+     adresse de FACTURATION : c'est le pays qui détermine le régime de TVA et elle figure
+     sur la facture. On le dit explicitement plutôt que de laisser le client se demander
+     pourquoi on lui réclame un lieu de livraison pour un fichier. */
+  // ⚠ `serviceLivraison` doit rester NULL quand ce drapeau est vrai : transmettre un code
+  //    d'offre ferait répondre au serveur « ce mode de livraison n'est pas proposé pour
+  //    cette adresse », puisqu'un panier dématérialisé n'a aucune offre.
+  const panierDematerialise = items.length > 0 && items.every(i => {
+    const p = i.product as { product_type?: string } | undefined;
+    return p?.product_type === 'licence';
+  });
+
   const lignesLivraison = items.map(i => {
-    const p = i.product as { shipping_class?: string; weight_kg?: number | null } | undefined;
-    return { shipping_class: p?.shipping_class, weight_kg: p?.weight_kg, quantity: i.quantity };
+    const p = i.product as { shipping_class?: string; weight_kg?: number | null; product_type?: string } | undefined;
+    return {
+      shipping_class: p?.shipping_class, weight_kg: p?.weight_kg, quantity: i.quantity,
+      dematerialise: p?.product_type === 'licence',
+    };
   });
   const destination = adresse ? { country: adresse.country, postal_code: adresse.postal_code } : null;
   const offres: OffreLivraison[] = listerOffresLivraison(
@@ -124,7 +143,7 @@ const CheckoutPage = () => {
                `devis-commande` ne lit que `service` ou `shipping_service` ; tout autre
                nom est ignoré EN SILENCE et le devis retombe sur le mode par défaut —
                le client verrait un mode et paierait l'autre. */
-            shipping_service: serviceLivraison || null,
+            shipping_service: panierDematerialise ? null : (serviceLivraison || null),
           }),
         }
       );
@@ -137,32 +156,24 @@ const CheckoutPage = () => {
 
   useEffect(() => { demanderApercu(); }, [demanderApercu]);
 
-  const paiementReussi = async (paymentIntentId: string, quoteId: string) => {
+  /* Le paiement est réglé sans que le navigateur ait quitté le site. On ne confirme PAS
+     ici : on rejoint la page de retour, qui est aussi le point d'arrivée quand la banque
+     a imposé une redirection en pleine page.
+     Pourquoi ne pas garder les deux logiques : elles finiraient par diverger. La
+     confirmation de commande, la vidange du panier et le message au client doivent se
+     lire à un seul endroit, sinon un paiement réglé au guichet et un paiement authentifié
+     à la banque n'aboutissent pas au même écran — et c'est déjà arrivé. */
+  const paiementReussi = async (
+    paymentIntentId: string,
+    quoteId: string,
+    clientSecret: string
+  ) => {
     setFinalisation(true);
-    const t = toast.loading('Finalisation de votre commande…');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Session expirée — reconnectez-vous.');
-      /* La commande est enregistrée par le serveur, qui vérifie d'abord auprès de Stripe
-         que le paiement a réellement abouti et pour le bon montant. */
-      const rep = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirmer-commande`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ quote_id: quoteId, payment_intent: paymentIntentId }),
-        }
-      );
-      const conf = await rep.json();
-      if (!rep.ok) throw new Error(conf?.error || 'Commande non enregistrée.');
-      await clearCart();
-      toast.success(conf.deja_creee ? 'Votre commande était déjà enregistrée.' : 'Commande confirmée !', { id: t });
-      navigate('/commandes');
-    } catch (e: any) {
-      toast.error(e?.message || 'Erreur lors de la finalisation', { id: t });
-    } finally {
-      setFinalisation(false);
-    }
+    navigate(
+      `/paiement/retour?quote_id=${encodeURIComponent(quoteId)}` +
+      `&payment_intent_client_secret=${encodeURIComponent(clientSecret)}`,
+      { replace: true }
+    );
   };
 
   const etape2Prete = !!adresse && !port.needsQuote && port.cost !== null;
@@ -181,8 +192,14 @@ const CheckoutPage = () => {
             <section className="bg-white/5 border border-white/10 rounded-xl p-5">
               <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-300 text-xs flex items-center justify-center">1</span>
-                Adresse de livraison
+                {panierDematerialise ? 'Adresse de facturation' : 'Adresse de livraison'}
               </h2>
+              {panierDematerialise && (
+                <p className="text-gray-400 text-xs mb-3">
+                  Votre commande est dématérialisée : il n'y a rien à expédier. Cette adresse
+                  sert uniquement à établir la facture et à déterminer la TVA applicable.
+                </p>
+              )}
               {adresse && !choixAdresse ? (
                 <div className="flex items-start justify-between gap-4">
                   <div className="text-gray-300 text-sm leading-relaxed">
@@ -244,6 +261,18 @@ const CheckoutPage = () => {
                 </div>
               )}
 
+              {/* Panier 100 % dématérialisé (licence logiciel) : aucun mode de livraison
+                  n'a de sens. On le DIT, sinon l'absence du bloc « Mode de livraison »
+                  ressemble à un écran qui n'a pas fini de charger. L'adresse, elle, reste
+                  demandée : c'est elle qui détermine le régime de TVA et figure sur la
+                  facture. */}
+              {adresse && panierDematerialise && (
+                <div className="mt-4 text-sm text-gray-400 bg-white/5 border border-white/10 rounded-lg px-4 py-3">
+                  Commande dématérialisée — aucune livraison, votre licence est rattachée à
+                  votre compte OMEGA dès le paiement.
+                </div>
+              )}
+
               {adresse && port.expressAvailable && (
                 <label className="mt-3 flex items-center gap-2 text-sm text-gray-300 cursor-pointer bg-white/5 border border-white/10 rounded-lg px-3 py-2">
                   <input type="checkbox" checked={express} onChange={e => { setExpress(e.target.checked); setRecap(null); setCleCheckout(k => k + 1); }} className="accent-blue-500" />
@@ -276,14 +305,16 @@ const CheckoutPage = () => {
                   items={items.map(i => ({ product_id: i.product_id, quantity: i.quantity }))}
                   addressId={adresse.id}
                   express={express}
-                  serviceLivraison={serviceLivraison}
+                  serviceLivraison={panierDematerialise ? null : serviceLivraison}
                   onQuote={setRecap}
                   onSuccess={paiementReussi}
                   onError={m => toast.error(m)}
                 />
               ) : (
                 <p className="text-gray-400 text-sm">
-                  Choisissez d'abord une adresse de livraison.
+                  {panierDematerialise
+                    ? "Choisissez d'abord une adresse de facturation."
+                    : "Choisissez d'abord une adresse de livraison."}
                 </p>
               )}
               {finalisation && (

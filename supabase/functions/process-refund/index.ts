@@ -53,6 +53,11 @@ const enTetesCors = (req: Request) => ({
 interface RefundRequest {
   invoiceId: string;
   amount: number;
+  /* Lignes à créditer, choisies par l'administrateur : [{item_id, quantity}].
+     Absentes → avoir global du montant remboursé (compatibilité de l'appel historique). */
+  lignes?: Array<{ item_id: string; quantity: number }>;
+  /** La marchandise revient-elle en stock ? Décidé au cas par cas, jamais deviné. */
+  remettreEnStock?: boolean;
   reason: string;
   adminNotes?: string;
   /** Envoyé par AdminBilling — indice de dernier recours, jamais une autorisation. */
@@ -127,7 +132,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- 2. Validation de la requête ---
-    const { invoiceId, amount, reason, adminNotes, chargeId }: RefundRequest = await req.json();
+    const { invoiceId, amount, reason, adminNotes, chargeId, lignes, remettreEnStock }:
+      RefundRequest = await req.json();
 
     if (!invoiceId || !amount || amount <= 0 || !reason) {
       return json({
@@ -301,7 +307,7 @@ Deno.serve(async (req: Request) => {
     const reussi = refund.status === 'succeeded' || refund.status === 'pending';
 
     // --- 7. Enregistrement en base ---
-    const { error: dbError } = await supabaseAdmin.from('refunds').insert({
+    const { data: ligneRemb, error: dbError } = await supabaseAdmin.from('refunds').insert({
       invoice_id: invoiceId,
       order_id: orderId,
       stripe_refund_id: refund.id,
@@ -314,7 +320,7 @@ Deno.serve(async (req: Request) => {
       admin_notes: adminNotes || null,
       processed_by: user.id,
       created_by: user.id,
-    });
+    }).select('id').single();
 
     if (dbError) {
       // Désynchronisation : l'argent est parti, la trace manque. On le dit franchement.
@@ -344,7 +350,47 @@ Deno.serve(async (req: Request) => {
     const remboursementTotal = totalFacture > 0 && cumul >= totalFacture - 0.01;
 
     let avoirId: string | null = null;
-    if (reussi && remboursementTotal) {
+    let avoirPartiel = false;
+
+    /* ★ REMBOURSEMENT PARTIEL → AVOIR PARTIEL.
+       Avant, un remboursement partiel ne produisait AUCUN document : la vente restait
+       entière en comptabilité, la TVA rendue restait déclarée, et Tiime ne recevait rien
+       (son scénario n'a de route que pour `invoice.issued` et `invoice.credited`).
+       Désormais tout remboursement produit un avoir, et emprunte donc le MÊME chemin
+       comptable — un seul format à maintenir, une seule route côté Make. */
+    const aDesLignes = Array.isArray(lignes) && lignes.length > 0;
+
+    if (reussi && facture.status !== 'draft' && (aDesLignes || !remboursementTotal)) {
+      /* ★ L'AVOIR SUIT LE REMBOURSEMENT, JAMAIS L'INVERSE.
+         L'argent est déjà parti chez Stripe à ce stade : on documente ce qui a eu lieu.
+         Si des LIGNES ont été choisies, l'avoir les reprend telles quelles (quantités,
+         prix, taux d'origine) et peut remettre la marchandise en stock. Sinon on retombe
+         sur un avoir du montant global — le cas d'un remboursement sans article précis. */
+      const { data: idAvoir, error: eAvoir } = aDesLignes
+        ? await supabaseAdmin.rpc('creer_avoir_lignes_depuis_facture', {
+            p_invoice_id: invoiceId,
+            p_lignes: lignes,
+            p_motif: reason,
+            p_refund_id: ligneRemb?.id ?? null,
+            p_remettre_en_stock: remettreEnStock === true,
+          })
+        : await supabaseAdmin.rpc('creer_avoir_partiel_depuis_facture', {
+            p_invoice_id: invoiceId,
+            p_montant_ttc: montant,
+            p_motif: reason,
+            // Clé d'idempotence : un rejeu du webhook ne doit pas créer un second avoir.
+            p_refund_id: ligneRemb?.id ?? null,
+          });
+      if (eAvoir) {
+        // L'argent est rendu : on ne fait pas échouer le remboursement pour l'avoir.
+        console.error('process-refund : avoir non émis', eAvoir.message);
+      } else {
+        avoirId = (idAvoir as string) ?? null;
+        avoirPartiel = !remboursementTotal;
+      }
+    }
+
+    if (reussi && remboursementTotal && !avoirId) {
       /* --- 9. ★ UN VRAI AVOIR, pas une facture positive en brouillon ---
          Une facture émise est inaltérable : l'avoir (type 381 de la norme EN 16931) est la
          SEULE correction régulière. `creer_avoir_depuis_facture` reprend les lignes avec
@@ -394,10 +440,12 @@ Deno.serve(async (req: Request) => {
         comptabilite = { envoye: false, motif: 'webhook comptable injoignable' };
       }
     } else {
-      /* Remboursement PARTIEL : la fonction SQL n'émet que des avoirs TOTAUX (choisir des
-         lignes suppose une interface, c'est le chantier de F2). On transmet donc un
-         événement `refund` — mais avec le taux, le régime et la mention RÉELS de la
-         facture, et non 20 % en dur. */
+      /* REPLI. Depuis l'avoir partiel, ce chemin ne sert plus qu'en cas d'ÉCHEC de son
+         émission (ou sur une facture encore en brouillon) : l'argent est parti, la
+         comptabilité doit au moins l'apprendre.
+         ⚠ Le scénario Make n'a AUCUNE route pour `invoice.refunded_partially` : ce
+         message n'atteint donc pas Tiime aujourd'hui. C'est assumé — le chemin normal
+         est désormais l'avoir, qui passe par `invoice.credited`. */
       const webhook = Deno.env.get('MAKE_WEBHOOK_URL');
       if (webhook) {
         try {

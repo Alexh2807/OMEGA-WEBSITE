@@ -14,6 +14,7 @@ import {
   Star,
   Mail,
   Receipt,
+  KeyRound,
 } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('./admin/AdminDashboard'));
@@ -29,6 +30,7 @@ const AdminAccounting = lazy(() => import('./admin/AdminAccounting'));
 const AdminTva = lazy(() => import('./admin/AdminTva'));
 const AdminSettings = lazy(() => import('./admin/AdminSettings'));
 const AdminReviews = lazy(() => import('./admin/AdminReviews'));
+const AdminLicences = lazy(() => import('./admin/AdminLicences'));
 
 const AdminPage = () => {
   const { user, isAdmin, loading } = useAuth();
@@ -85,6 +87,7 @@ const AdminPage = () => {
     { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'products', label: 'Produits', icon: Package },
     { id: 'orders', label: 'Commandes', icon: ShoppingCart },
+    { id: 'licences', label: 'Licences', icon: KeyRound },
     { id: 'reviews', label: 'Avis Clients', icon: Star },
     { id: 'planning', label: 'Planning', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
@@ -104,6 +107,8 @@ const AdminPage = () => {
         return <AdminProducts />;
       case 'orders':
         return <AdminOrders />;
+      case 'licences':
+        return <AdminLicences />;
       case 'reviews':
         return <AdminReviews />;
       case 'planning':

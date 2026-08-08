@@ -234,7 +234,9 @@ const CartPage = () => {
        `shipping.ts` (adresse à compléter, code postal invalide, destination hors zone)
        au lieu du message unique « DOM-TOM / hors Europe » qui s'affichait même pour une
        simple faute de frappe dans le code postal. */
-    if (!offreChoisie) {
+    // Rien à expédier → pas d'offre à choisir. Exiger une offre ici bloquait tout achat
+    // de licence, alors même que le port vaut zéro.
+    if (!offreChoisie && !panierDematerialise) {
       toast.error(
         shipping.motif ||
           'Frais de livraison indéterminés — vérifiez votre adresse de livraison.'
@@ -487,13 +489,22 @@ const CartPage = () => {
   // tarif par unité selon la zone (distance calculée depuis le code postal,
   // Europe selon le pays, DOM/hors Europe = devis). Barèmes configurables
   // dans Admin → Paramètres → Livraison.
+  /* Panier 100 % DÉMATÉRIALISÉ (licences) : rien à expédier, donc AUCUNE offre de
+     livraison — et c'est normal. Sans ce drapeau, l'absence d'offre était prise pour une
+     erreur et bloquait la commande sur « Frais de livraison indéterminés ». */
+  const panierDematerialise =
+    items.length > 0 &&
+    items.every(i => (i.product as { product_type?: string } | undefined)?.product_type === 'licence');
+
   const lignesLivraison = items.map(item => {
     const p = item.product as
-      | { shipping_class?: string; weight_kg?: number | null; price_ht?: number | null; price?: number | null }
+      | { shipping_class?: string; weight_kg?: number | null; price_ht?: number | null; price?: number | null; product_type?: string }
       | undefined;
     return {
       shipping_class: p?.shipping_class,
       weight_kg: p?.weight_kg,
+      // Une licence logiciel ne s'expédie pas : hors de tout calcul de port.
+      dematerialise: p?.product_type === 'licence',
       /* Le prix HT sert UNIQUEMENT au franco de port. Sans lui, le seuil « livraison
          offerte » ne se déclenchait jamais et le client payait un port qu'on avait
          annoncé gratuit. */
@@ -875,6 +886,12 @@ const CartPage = () => {
                   commande au dépôt (gratuit), ni payer un express quand il en avait
                   besoin. Les offres viennent de `listerOffresLivraison()`, qui applique
                   le barème 2026 ; seul l'IDENTIFIANT du service part au serveur. */}
+              {panierDematerialise ? (
+                <div className="mb-6 text-sm text-gray-400 bg-white/5 border border-white/10 rounded-lg px-4 py-3">
+                  Commande dématérialisée — aucune livraison. Votre licence est rattachée à
+                  votre compte OMEGA dès le paiement.
+                </div>
+              ) : (
               <div className="mb-6">
                 <h4 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
                   <Truck size={16} className="text-blue-400" />
@@ -924,6 +941,7 @@ const CartPage = () => {
                   </label>
                 )}
               </div>
+              )}
 
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between text-gray-300">
@@ -957,13 +975,15 @@ const CartPage = () => {
                       montant se lisait comme un HT et venait grossir un total mélangé.
                       Le montant affiché est celui de l'offre CHOISIE par le client. */}
                   <span>
-                    {offreChoisie
-                      ? offreChoisie.prix_ttc === 0
-                        ? 'Offerte'
-                        : `${offreChoisie.prix_ttc.toLocaleString('fr-FR', EURO)} TTC`
-                      : shipping.needsQuote
-                        ? 'Sur devis'
-                        : 'Selon adresse'}
+                    {panierDematerialise
+                      ? 'Sans objet'
+                      : offreChoisie
+                        ? offreChoisie.prix_ttc === 0
+                          ? 'Offerte'
+                          : `${offreChoisie.prix_ttc.toLocaleString('fr-FR', EURO)} TTC`
+                        : shipping.needsQuote
+                          ? 'Sur devis'
+                          : 'Selon adresse'}
                   </span>
                 </div>
                 {offreChoisie && (
@@ -977,7 +997,7 @@ const CartPage = () => {
                 {/* MOTIF EXACT plutôt que message unique : « code postal invalide » n'est
                     pas « destination hors zone », et le client n'a pas la même chose à
                     faire dans les deux cas. */}
-                {!offreChoisie && shipping.motif && (
+                {!offreChoisie && !panierDematerialise && shipping.motif && (
                   <div className="text-xs text-orange-300 -mt-1 leading-relaxed">
                     {shipping.motif}
                   </div>
@@ -1021,7 +1041,7 @@ const CartPage = () => {
               {/* Le devis de transport n'est proposé que si AUCUNE offre chiffrée n'existe
                   — le retrait au dépôt en est une : tant qu'il reste possible, le client
                   doit pouvoir commander plutôt qu'être renvoyé vers un formulaire. */}
-              {shipping.needsQuote && !offresChiffrables.length ? (
+              {shipping.needsQuote && !offresChiffrables.length && !panierDematerialise ? (
                 <Link
                   to="/contact?sujet=devis"
                   className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-full font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 mb-4 flex items-center justify-center gap-2"

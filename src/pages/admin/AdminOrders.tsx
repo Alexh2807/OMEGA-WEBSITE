@@ -863,35 +863,31 @@ const AdminOrders = () => {
                         </button>
                       )}
 
-                      {/* Bouton facture dynamique */}
-                      {orderInvoices[order.id] ? (
-                        // Facture existe - Bouton rouge avec icône de navigation
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleInvoiceAction(order.id)}
-                            className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                            title={`Facture ${orderInvoices[order.id].invoice_number} - Cliquer pour voir`}
-                          >
-                            <FileText size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleInvoiceAction(order.id)}
-                            className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                            title="Aller à la facture"
-                          >
-                            <ExternalLink size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        // Pas de facture - Bouton vert pour créer
-                        <button
-                          onClick={() => handleInvoiceAction(order.id)}
-                          className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-                          title="Créer une facture"
-                        >
-                          <FileText size={16} />
-                        </button>
-                      )}
+                      {/* ★ « VOIR LA FACTURE » — un seul bouton, un seul geste.
+                          La facture est désormais émise TOUTE SEULE au paiement
+                          (`confirmer-commande`), avec son PDF. « Créer la facture » n'a
+                          donc plus lieu d'être comme action courante : il laissait croire
+                          qu'il fallait la fabriquer, et l'oublier bloquait tout
+                          remboursement (un avoir doit référencer une facture).
+                          `handleInvoiceAction` reste le rattrapage : si la facture manque
+                          — comptabilité indisponible, commande antérieure — il l'émet
+                          avant d'y conduire. Le libellé dit ce qu'on obtient, pas ce que
+                          le programme fait. */}
+                      <button
+                        onClick={() => handleInvoiceAction(order.id)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          orderInvoices[order.id]
+                            ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
+                            : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                        }`}
+                        title={
+                          orderInvoices[order.id]
+                            ? `Voir la facture ${orderInvoices[order.id].invoice_number}`
+                            : "Voir la facture (elle sera émise si elle manque)"
+                        }
+                      >
+                        <FileText size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>

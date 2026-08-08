@@ -316,6 +316,18 @@ Deno.serve(async (req: Request) => {
           .eq('id', invoice.credit_note_of).maybeSingle()
       : { data: null };
 
+    /* ★ LE REMBOURSEMENT QUE CET AVOIR CONSTATE.
+       Un avoir n'annule pas forcément TOUTE la facture : depuis les remboursements
+       partiels, il porte le montant réellement rendu, pas le total d'origine. C'est ce
+       remboursement-ci — pas le cumul, pas la facture — qui dit ce que l'avoir doit
+       valoir. Sans lui, le contrôle n° 3 comparait 30 € rendus à une facture de 249 € et
+       refusait l'envoi. */
+    const { data: remboursementLie } = estAvoir && invoice.refund_id
+      ? await supabaseAdmin
+          .from('refunds').select('id, amount, status')
+          .eq('id', invoice.refund_id).maybeSingle()
+      : { data: null };
+
     // ═════════════════════════════════════════════════════════════════════════
     // 5. LIGNES — le port en est une (BG-25)
     // ═════════════════════════════════════════════════════════════════════════
@@ -635,6 +647,84 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('APP_ENVIRONMENT') ||
       ((Deno.env.get('STRIPE_SECRET_KEY') || '').startsWith('sk_live_') ? 'production' : 'sandbox');
 
+    /* ═══════════════════════════════════════════════════════════════════════
+       LA NOTE DU DOCUMENT — ASSEMBLÉE ICI, PAS DANS MAKE
+       ═══════════════════════════════════════════════════════════════════════
+       Elle l'était dans le scénario Make, par concaténation de champs. Résultat sur
+       l'avoir AV-0004 :
+
+           Montant rembourse :  EUR TTC le
+           Motif :
+           Reference Stripe :
+
+       Trois lignes vides, imprimées sur un document comptable. Une formule Make ne peut
+       pas OMETTRE une ligne quand la donnée manque : elle colle du vide. Et la donnée
+       manquait parce qu'un avoir TOTAL créé depuis le back-office n'a aucun
+       enregistrement de remboursement — `creer_avoir_depuis_facture` ne prend pas de
+       `refund_id`, le motif part dans `invoices.notes`.
+
+       On assemble donc ici, où l'on peut tester une valeur avant de l'écrire :
+       · le motif vient du remboursement s'il existe, SINON des notes du document ;
+       · montant, date et référence Stripe ne s'écrivent que s'ils existent ;
+       · la facture porte à son tour sa référence de règlement, demandée pour le
+         rapprochement bancaire. */
+    /* Partiel = l'avoir ne couvre pas toute la facture. Calculé UNE fois : la note, le
+       titre du document et le bloc `refund` doivent dire la même chose.
+
+       ⚠ ON COMPARE LE MONTANT DE L'AVOIR, PAS LE CUMUL DES REMBOURSEMENTS.
+       C'était le cumul, et un avoir émis SANS remboursement bancaire (bouton « Émettre un
+       avoir », geste commercial) donnait cumul = 0 : 0 < 249 était vrai, donc TOUT avoir
+       sans remboursement se déclarait partiel. AV-0005 annulait la totalité de FACT0006
+       et arrivait pourtant dans Tiime intitulé « avoir SUR la facture ». Le montant de
+       l'avoir, lui, est toujours renseigné — c'est la seule référence fiable. */
+    const estPartiel = !!factureOrigine &&
+      Math.abs(totalWithVat) < Number(factureOrigine.total_ttc ?? 0) - 0.01;
+
+    const lignesNote: string[] = [];
+    const noteSaisie = (invoice.notes ?? '').trim();
+
+    if (estAvoir) {
+      if (factureOrigine) {
+        lignesNote.push(
+          `Avoir ${invoice.invoice_number} emis par le site OMEGA, ` +
+          `${estPartiel ? 'sur' : 'annulant'} la facture ` +
+          `${factureOrigine.invoice_number} du ${ymdParis(factureOrigine.created_at)}.`
+        );
+      }
+      const motif = remboursesOk[0]?.reason ?? noteSaisie;
+      if (motif) lignesNote.push(`Motif : ${motif}`);
+      if (remboursesOk.length) {
+        lignesNote.push(
+          `Montant rembourse : ${eur(cumulRembourse)} EUR TTC ` +
+          `le ${ymdParis(remboursesOk[0].created_at)}`
+        );
+        const ref = remboursesOk
+          .map((r) => r.stripe_refund_id)
+          .filter(Boolean)
+          .join(', ');
+        if (ref) lignesNote.push(`Remboursement Stripe : ${ref}`);
+      } else {
+        // Aucun remboursement enregistré : on le DIT, plutôt que de laisser croire
+        // qu'un virement est parti. Un avoir sans remboursement est régulier (geste
+        // commercial imputé sur une facture à venir), mais il doit se lire comme tel.
+        lignesNote.push('Aucun remboursement bancaire rattache a cet avoir.');
+      }
+    } else {
+      if (noteSaisie) lignesNote.push(noteSaisie);
+      /* ★ RÉFÉRENCE DU RÈGLEMENT SUR LA FACTURE.
+         Sans elle, rapprocher une facture d'une ligne du relevé Stripe se fait à la main,
+         par montant et par date — impossible dès que deux clients paient la même somme le
+         même jour. On donne la référence la plus parlante disponible. */
+      const refPaiement = paiement?.charge_id || paiement?.payment_intent_id;
+      if (refPaiement) {
+        lignesNote.push(
+          `Reglement Stripe : ${refPaiement}` +
+          (paiement?.paid_at ? ` le ${paiement.paid_at}` : '')
+        );
+      }
+    }
+    const noteDocument = lignesNote.length ? lignesNote.join('\n') : null;
+
     const payload = {
       schema_version: '2.0',
       event_id: eventId,
@@ -664,7 +754,7 @@ Deno.serve(async (req: Request) => {
         buyer_reference: invoice.order_id ? `CMD-${String(invoice.order_id).slice(0, 8)}` : null,
         order_reference: invoice.order_id ?? null,
         // ⚠ `note` est destiné au CLIENT : on n'y met JAMAIS de commentaire interne.
-        note: invoice.notes ?? null,
+        note: noteDocument,
         status: invoice.status,
         delivery_date: invoice.delivery_date
           ? ymdParis(invoice.delivery_date)
@@ -702,8 +792,20 @@ Deno.serve(async (req: Request) => {
           · le PORT est maintenant une ligne comme une autre. C'est précisément ce qui
             manquait avant — la facture transmise valait moins que l'encaissement, du
             montant exact des frais de port. */
-      tiime_lines: lines.map((l) => ({
-        invoice_quantity: l.quantity,
+      tiime_lines: lines.map((l) => {
+        /* ★ SUR UN AVOIR, C'EST LE PRIX QUI EST NÉGATIF, PAS LA QUANTITÉ.
+           `lines[]` (format normalisé EN 16931) porte le signe sur la QUANTITÉ :
+           −1 × 1 599,99 €. Tiime refuse — « [400] Cette valeur doit être strictement
+           positive » — et attend l'inverse : quantité 1, prix −1 599,99 €. Les avoirs
+           déjà présents dans le dossier sont d'ailleurs écrits ainsi.
+           On déplace donc le signe sans toucher aux montants : mêmes chiffres, même
+           total, seule la place du « moins » change. Diviser le total par la quantité
+           aurait introduit un écart d'arrondi dès qu'elle dépasse 1. */
+        const qte = Math.abs(Number(l.quantity ?? 0)) || 1;
+        const negatif = Number(l.quantity ?? 0) < 0 || Number(l.line_total_ht ?? 0) < 0;
+        const puHt = eur((negatif ? -1 : 1) * Math.abs(Number(l.unit_price_ht ?? 0)));
+        return {
+        invoice_quantity: qte,
         invoice_quantity_unit_of_measure_code: 'unit',
         line_vat_information: {
           invoiced_item_vat_rate: taux4(l.vat_rate / 100),
@@ -712,7 +814,7 @@ Deno.serve(async (req: Request) => {
             ? { invoiced_item_vat_exemption_reason_text: l.vat_exemption_reason }
             : {}),
         },
-        price_details: { item_net_price: l.unit_price_ht },
+        price_details: { item_net_price: puHt },
         item_information: {
           item_name: l.name,
           item_attributes: [
@@ -728,7 +830,8 @@ Deno.serve(async (req: Request) => {
             },
           ],
         },
-      })),
+        };
+      }),
 
       totals: {
         sum_line_net: sumLineNet,                       // BT-106
@@ -762,8 +865,7 @@ Deno.serve(async (req: Request) => {
             reason: remboursesOk[0].reason ?? null,
             refunded_at: ymdParis(remboursesOk[0].created_at),
             amount_gross: cumulRembourse,
-            is_partial: !!factureOrigine &&
-              cumulRembourse < Number(factureOrigine.total_ttc ?? 0) - 0.01,
+            is_partial: estPartiel,
             // Stripe ne restitue pas sa commission sur un remboursement.
             fee_refunded: 0,
           }
@@ -807,15 +909,45 @@ Deno.serve(async (req: Request) => {
 
     // 3. ★ Le total transmis vaut l'encaissement. C'est ce contrôle qui rend impossible
     //    la disparition du port constatée sur toutes les factures antérieures.
+    /* ⚠ POUR UN AVOIR, LA RÉFÉRENCE EST LE REMBOURSEMENT, PAS LA FACTURE.
+       Ce contrôle exigeait qu'un avoir vaille exactement l'opposé de la facture
+       d'origine. C'était vrai tant que seuls les remboursements TOTAUX existaient ; depuis
+       les remboursements partiels, un avoir de 30 € sur une facture de 249 € est
+       parfaitement régulier et se faisait pourtant refuser.
+       Ce qui doit rester vrai, c'est que le document transmis vaille l'argent qui a
+       bougé : pour une facture, l'encaissement ; pour un avoir, le remboursement. */
     const attendu = estAvoir
-      ? -Number(factureOrigine?.total_ttc ?? Math.abs(totalWithVat))
+      ? -Number(
+          remboursementLie?.amount ??
+          factureOrigine?.total_ttc ??
+          Math.abs(totalWithVat)
+        )
       : Number(commande?.total ?? invoice.total_ttc ?? 0);
+    const referenceAttendu = estAvoir
+      ? (remboursementLie ? 'montant remboursé' : 'total de la facture annulée')
+      : 'total de la commande';
     if (Math.abs(payload.totals.total_with_vat - attendu) >= 0.01) {
       refus.push(
         `total_with_vat (${payload.totals.total_with_vat} €) ≠ ` +
-        `${estAvoir ? 'total de la facture annulée' : 'total de la commande'} (${eur(attendu)} €). ` +
+        `${referenceAttendu} (${eur(attendu)} €). ` +
         `Écart de ${eur(Math.abs(payload.totals.total_with_vat - attendu))} € — vérifier la ligne de port.`
       );
+    }
+
+    /* 3 bis. ★ UN AVOIR NE PEUT PAS RENDRE PLUS QUE LA FACTURE.
+       Le contrôle précédent, en devenant plus souple, laisse passer un avoir de n'importe
+       quel montant. On rétablit la borne haute — et sur le CUMUL, pas sur l'avoir seul :
+       trois avoirs de 100 € sur une facture de 249 € passeraient un à un. */
+    if (estAvoir && factureOrigine) {
+      const totalOrigine = Number(factureOrigine.total_ttc ?? 0);
+      const dejaRendu = eur(cumulRembourse);
+      if (dejaRendu - totalOrigine >= 0.01) {
+        refus.push(
+          `Les remboursements de la facture ${factureOrigine.invoice_number} totalisent ` +
+          `${eur(dejaRendu)} € alors qu'elle n'a encaissé que ${eur(totalOrigine)} €. ` +
+          `Un avoir ne peut pas rendre plus que ce qui a été payé.`
+        );
+      }
     }
 
     // 4. Le régime est dit, et un régime exonéré ne produit pas de TVA.
@@ -835,16 +967,47 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    /* 6. SIRET de l'acheteur société française.
-       ⚠ ÉCART ASSUMÉ AVEC L'AUDIT, conforme au CONTRAT §2 qui qualifie ce contrôle de
-       « non bloquant » : la colonne `profiles.siret` vient d'être créée et elle est vide
-       pour tous les clients existants. Bloquer ici arrêterait AUJOURD'HUI toute la
-       comptabilité B2B française. On alerte donc, on ne refuse pas — à rendre bloquant
-       une fois les SIRET collectés (échéance réglementaire : 1ᵉʳ septembre 2026). */
+    /* 6. ★ SIRET DE L'ACHETEUR SOCIÉTÉ FRANÇAISE — DÉSORMAIS BLOQUANT.
+       Il ne l'était pas, et c'était justifié à l'époque : la colonne `profiles.siret`
+       venait d'être créée, aucun écran ne la remplissait, et refuser aurait arrêté toute
+       la comptabilité B2B. Ce commentaire annonçait « à rendre bloquant une fois les
+       SIRET collectés ». Deux choses ont changé le 8 août 2026 :
+         · le SIRET est maintenant DEMANDÉ au client, avec contrôle de sa clé ;
+         · Tiime est plateforme agréée : c'est par elle que la facture sera acheminée
+           vers celle de l'acheteur, et l'annuaire route sur le SIREN/SIRET.
+
+       Sans SIRET, la facture n'est pas seulement incomplète : elle est INACHEMINABLE, et
+       Tiime crée le tiers comme un PARTICULIER (son `clientType business` exige SIRET ET
+       numéro de TVA). Laisser passer, c'est fabriquer un dossier client faux qu'il
+       faudra démêler plus tard. Mieux vaut refuser tout de suite et corriger la fiche. */
     if (buyer.is_company && buyer.address.country_code === 'FR' && !buyer.siret) {
+      refus.push(
+        `SIRET manquant pour « ${buyer.name} ». Une facture entre professionnels français ` +
+        `est acheminée d'après le SIRET : sans lui, elle ne peut pas atteindre la ` +
+        `plateforme de l'acheteur, et le client serait enregistré comme un particulier. ` +
+        `Complétez sa fiche, puis renvoyez.`
+      );
+    }
+
+    /* 6 bis. Numéro de TVA d'un acheteur professionnel — ALERTE, pas refus.
+       Tiime exige SIRET **et** TVA pour classer un tiers en « business ». Mais une petite
+       structure en franchise en base peut légitimement ne pas avoir de numéro
+       intracommunautaire : refuser l'empêcherait d'acheter. On signale, on ne bloque pas. */
+    if (buyer.is_company && !buyer.vat_number) {
       alertes.push(
-        `SIRET manquant pour « ${buyer.name} » : obligatoire sur une facture entre ` +
-        `professionnels français à compter du 1ᵉʳ septembre 2026.`
+        `Numéro de TVA absent pour « ${buyer.name} » : le tiers sera classé comme ` +
+        `particulier dans la comptabilité, alors qu'il se déclare professionnel.`
+      );
+    }
+
+    /* 6 ter. Adresse e-mail — ALERTE.
+       C'est elle qui permet l'envoi du document au client depuis la comptabilité. Son
+       absence n'empêche pas l'écriture comptable, qui est l'objet de cette transmission :
+       bloquer serait disproportionné. Mais personne ne recevra la facture. */
+    if (!buyer.email) {
+      alertes.push(
+        `Aucune adresse e-mail pour « ${buyer.name} » : la facture ne pourra pas lui ` +
+        `être envoyée depuis la comptabilité.`
       );
     }
 

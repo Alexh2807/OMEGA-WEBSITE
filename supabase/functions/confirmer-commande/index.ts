@@ -183,6 +183,73 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    /* ---------------------------------------------------------------------------
+       ★ LA FACTURE EST ÉMISE ICI, PAS À LA MAIN.
+       Elle ne l'était par AUCUN chemin automatique : il fallait cliquer « Générer la
+       facture » dans l'administration. Une commande payée pouvait donc rester sans
+       facture — constaté le 8 août 2026 sur une commande de 249 € réglée depuis une
+       demi-heure. Trois conséquences, toutes silencieuses :
+         · le client ne reçoit pas son document alors qu'il a payé ;
+         · rien ne part en comptabilité ;
+         · surtout, AUCUN REMBOURSEMENT n'est possible — un avoir doit référencer une
+           facture, et l'écran Commandes refuse le remboursement sans elle. Un oubli de
+           clic bloquait donc le remboursement d'un client.
+
+       ⚠ DANS UN `try` QUI N'ÉCHOUE JAMAIS VERS LE CLIENT.
+       `creer_facture_depuis_commande` porte un contrôle bloquant : elle refuse d'émettre
+       une facture dont le total s'écarte de la commande. C'est une bonne chose — mieux
+       vaut pas de facture qu'une facture fausse, qui serait ensuite inaltérable. Mais ce
+       refus ne doit surtout pas remonter ici : l'argent est encaissé, la commande existe,
+       et répondre en erreur ferait croire à un paiement raté et pousserait à repayer.
+       En cas d'échec, le bouton « Générer la facture » reste le rattrapage.
+       La fonction est idempotente : elle rend la facture existante si elle en trouve une.
+       --------------------------------------------------------------------------- */
+    if (orderId) {
+      try {
+        const { data: factureId, error: eFacture } = await admin.rpc(
+          'creer_facture_depuis_commande',
+          { p_order_id: orderId },
+        );
+        if (eFacture) {
+          console.error('confirmer-commande : facture non émise', eFacture.message);
+        } else if (factureId) {
+          /* ★ ET SON ORIGINAL, DANS LA FOULÉE.
+             Créer la facture en base ne suffit pas : tant que le PDF n'est pas fabriqué,
+             le client lit « cette facture n'a pas encore été éditée » dans son compte et
+             l'e-mail part sans pièce jointe. C'est exactement ce que fait déjà le bouton
+             « Créer la facture » de l'administration ; le chemin automatique doit faire
+             la même chose, sinon les deux divergent.
+             ⚠ AVEC LA CLÉ DE SERVICE, PAS LE JETON DU CLIENT.
+             Premier essai : on transmettait le jeton du client, en se disant qu'il est
+             bien le titulaire de la facture. Mais `facture-pdf` réserve la FABRICATION
+             aux administrateurs — un client ne peut que relire un PDF déjà édité. La
+             réponse était donc 409, ignorée en silence, et le document n'existait
+             jamais. La clé de service ne quitte pas le serveur ; elle prouve que
+             l'appel est interne. */
+          try {
+            const r = await fetch(
+              `${Deno.env.get('SUPABASE_URL')}/functions/v1/facture-pdf`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                },
+                body: JSON.stringify({ invoice_id: factureId }),
+              },
+            );
+            if (!r.ok) {
+              console.error('confirmer-commande : PDF non édité', r.status, await r.text());
+            }
+          } catch (e) {
+            console.error('confirmer-commande : PDF non édité', e);
+          }
+        }
+      } catch (e) {
+        console.error('confirmer-commande : facture non émise', e);
+      }
+    }
+
     return reponse(resultat);
   } catch (e) {
     console.error('confirmer-commande : erreur', e);

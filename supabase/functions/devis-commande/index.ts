@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
     const ids = [...new Set(items.map(i => String(i.product_id)))];
     const { data: produits } = await admin
       .from('products')
-      .select('id, name, price, price_ht, weight_kg, shipping_class, in_stock, stock_quantity')
+      .select('id, name, price, price_ht, weight_kg, shipping_class, in_stock, stock_quantity, product_type')
       .in('id', ids);
     const parId = new Map((produits || []).map(p => [p.id, p]));
 
@@ -187,6 +187,8 @@ Deno.serve(async (req: Request) => {
         shipping_class: (p.shipping_class === 'large' ? 'large' : 'small'),
         weight_kg: Number(p.weight_kg) || 0,
         quantity: q,
+        // Licence logiciel : rien à transporter, la ligne sort du calcul de port.
+        dematerialise: p.product_type === 'licence',
         /* Le prix HT ne sert QU'au franco de port. Les dimensions ne sont volontairement
            PAS transmises : `products.dimensions` est un jsonb historique dont l'unité
            n'est pas garantie, et le module refuse — à raison — de facturer un poids
@@ -365,7 +367,17 @@ Deno.serve(async (req: Request) => {
     const offres = listerOffresLivraison(lignesPort, destination, config, optionsPort);
     const parDefaut = computeShipping(lignesPort, destination, config, optionsPort);
 
-    if (parDefaut.needsAddress) {
+    /* ★ PANIER 100 % DÉMATÉRIALISÉ (licence logiciel).
+       Rien à transporter : il n'existe AUCUNE offre de livraison, et c'est normal. Sans
+       ce cas particulier, la suite refusait la commande — « cette destination nécessite un
+       devis de livraison » — parce qu'elle exige toujours une offre. Le client ne pouvait
+       donc jamais payer une licence.
+       L'adresse reste lue : c'est le PAYS qui détermine le régime de TVA (une licence
+       vendue hors de France ne se taxe pas comme en France) et qui figure sur la facture.
+       Elle sert de facturation, pas de livraison — l'interface le dit ainsi. */
+    const panierDematerialise = lignesPort.length > 0 && lignesPort.every(l => l.dematerialise === true);
+
+    if (!panierDematerialise && parDefaut.needsAddress) {
       return reponse({ error: parDefaut.motif || 'Adresse de livraison incomplète.' }, 409);
     }
 
@@ -373,7 +385,9 @@ Deno.serve(async (req: Request) => {
        on retient exactement ce que `computeShipping` retiendrait dans le navigateur : la
        moins chère du mode par défaut. Les deux ne peuvent donc pas diverger. */
     let offre: OffreLivraison | null = null;
-    if (serviceDemande) {
+    if (panierDematerialise) {
+      offre = null;   // pas de transport : le port vaut 0 et aucun mode n'est à choisir
+    } else if (serviceDemande) {
       offre = offres.find(o => o.service === serviceDemande) ?? null;
       if (!offre) {
         return reponse({
@@ -383,7 +397,7 @@ Deno.serve(async (req: Request) => {
     } else {
       offre = parDefaut.offre ?? null;
     }
-    if (!offre || offre.sur_devis) {
+    if (!panierDematerialise && (!offre || offre.sur_devis)) {
       return reponse({
         error:
           offre?.motif ||
@@ -397,7 +411,7 @@ Deno.serve(async (req: Request) => {
        ⚠ Pas en APERÇU : le panier affiche les tarifs avant que le client n'ait choisi son
        relais. Refuser à ce moment-là lui cacherait le prix qu'on lui demande justement
        d'arbitrer. Le contrôle joue au moment de créer le devis, c'est-à-dire de payer. */
-    if (!apercu && offre.relais_requis && !relaisDemande) {
+    if (!apercu && offre && offre.relais_requis && !relaisDemande) {
       return reponse({ error: 'Choisissez un point relais pour cette offre de livraison.' }, 409);
     }
 
@@ -417,12 +431,14 @@ Deno.serve(async (req: Request) => {
        HT : le port suit le sort fiscal du bien transporté, et appliquer un TTC calculé
        à 20 % reviendrait à réintroduire une taxe sur une vente exonérée. */
     const TAUX_AFFICHAGE_MODULE = 20;
-    const portTtc =
-      taux === TAUX_AFFICHAGE_MODULE && offre.prix_ttc != null
+    const portTtc = !offre
+      ? 0
+      : taux === TAUX_AFFICHAGE_MODULE && offre.prix_ttc != null
         ? cts(offre.prix_ttc)
         : cts(cts(offre.prix_ht) * (1 + taux / 100));
-    const portHt =
-      taux === TAUX_AFFICHAGE_MODULE && offre.prix_ttc != null
+    const portHt = !offre
+      ? 0
+      : taux === TAUX_AFFICHAGE_MODULE && offre.prix_ttc != null
         ? cts(portTtc / (1 + taux / 100))
         : cts(offre.prix_ht);
 
@@ -445,11 +461,12 @@ Deno.serve(async (req: Request) => {
       produits_ht: produitsHt,
       port_ht: portHt,
       port_ttc: portTtc,
-      port_libelle: offre.libelle,
-      port_service: offre.service,
-      port_carrier: offre.carrier,
-      port_mode: offre.mode,
-      port_delai: [offre.delai_min_j, offre.delai_max_j],
+      // `offre` est nulle pour un panier dématérialisé : aucun transport à décrire.
+      port_libelle: offre ? offre.libelle : 'Sans livraison (produit dématérialisé)',
+      port_service: offre?.service ?? null,
+      port_carrier: offre?.carrier ?? null,
+      port_mode: offre?.mode ?? null,
+      port_delai: offre ? [offre.delai_min_j, offre.delai_max_j] : null,
       base_ht: baseHt,
       taux_tva: taux,
       tva,
@@ -481,12 +498,12 @@ Deno.serve(async (req: Request) => {
       shipping_cost: portTtc,
       // Texte libre repris tel quel sur la ligne de port de la facture : on y met le
       // libellé lisible (« Colissimo Domicile — 4 kg »), pas un code technique.
-      shipping_method: offre.libelle,
+      shipping_method: offre ? offre.libelle : 'Sans livraison (produit dématérialisé)',
       // ★ Les cinq champs qui manquaient : sans eux, l'offre choisie mourait avec le devis.
       shipping_cost_ht: portHt,
-      shipping_carrier: offre.carrier,
-      shipping_service: offre.service,
-      shipping_relay: offre.mode === 'relais' ? relaisDemande : null,
+      shipping_carrier: offre?.carrier ?? null,
+      shipping_service: offre?.service ?? null,
+      shipping_relay: offre && offre.mode === 'relais' ? relaisDemande : null,
       customer_country: pays,
       is_company: estEntreprise,
       company_name: profil?.company_name ?? null,

@@ -33,12 +33,16 @@ const FumeeDetailPage = lazyPage(() => import('./pages/FumeeDetailPage'));
 const FlammeDetailPage = lazyPage(() => import('./pages/FlammeDetailPage'));
 const ProductsPage = lazyPage(() => import('./pages/ProductsPage'));
 const OmegaDmxInterfacePage = lazyPage(() => import('./pages/OmegaDmxInterfacePage'));
+const OmegaDmxLogicielPage = lazyPage(() => import('./pages/OmegaDmxLogicielPage'));
 const ProductDetailPage = lazyPage(() => import('./pages/ProductDetailPage'));
 const CartPage = lazyPage(() => import('./pages/CartPage'));
 /* Page de commande dédiée (adresse → statut → paiement, dans cet ordre). Elle a été
    ajoutée pendant la refonte : la route ne doit pas disparaître, sinon « /commande »
    renvoie sur la page d'accueil et le tunnel se coupe en deux. */
 const CheckoutPage = lazyPage(() => import('./pages/CheckoutPage'));
+// Point d'arrivée du paiement, y compris au retour d'une authentification bancaire
+// qui a fait quitter le site : c'est lui qui annonce réussite ou échec.
+const PaiementRetourPage = lazyPage(() => import('./pages/PaiementRetourPage'));
 const AccountPage = lazyPage(() => import('./pages/AccountPage'));
 const OrdersPage = lazyPage(() => import('./pages/OrdersPage'));
 const ContactPage = lazyPage(() => import('./pages/ContactPage'));
@@ -104,8 +108,10 @@ const ContenuRoutes = () => {
           <Route path="/flamme-detail" element={<FlammeDetailPage />} />
           <Route path="/produit-mousse" element={<MousseDetailPage />} />
           <Route path="/omega-dmx-interface" element={<OmegaDmxInterfacePage />} />
+          <Route path="/omega-dmx-logiciel" element={<OmegaDmxLogicielPage />} />
           <Route path="/panier" element={<CartPage />} />
           <Route path="/commande" element={<CheckoutPage />} />
+          <Route path="/paiement/retour" element={<PaiementRetourPage />} />
           <Route path="/compte" element={<AccountPage />} />
           <Route path="/commandes" element={<OrdersPage />} />
           <Route path="/contact" element={<ContactPage />} />

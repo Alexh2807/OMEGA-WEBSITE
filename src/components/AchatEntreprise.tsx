@@ -46,6 +46,13 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
   const [verification, setVerification] = useState(false);
   const [numero, setNumero] = useState('');
   const [societe, setSociete] = useState('');
+  /* ★ SIRET — c'est LUI qui identifie l'entreprise dans la facturation electronique.
+     Il n'etait demande NULLE PART : la colonne `profiles.siret` existait, aucun ecran ne
+     la remplissait. Le numero de TVA ne suffit pas — l'annuaire de la reforme route les
+     factures sur le SIREN/SIRET. Sans lui, la facture d'un client professionnel ne peut
+     pas lui etre acheminee, et Tiime cree le tiers comme un PARTICULIER (son
+     `clientType` exige SIRET **et** TVA). */
+  const [siret, setSiret] = useState('');
 
   useEffect(() => {
     charger();
@@ -56,12 +63,13 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
     if (!user) return;
     const { data } = await supabase
       .from('profiles')
-      .select('is_company, company_name, vat_number, vat_number_valid, vat_checked_name, vat_name_match')
+      .select('is_company, company_name, siret, vat_number, vat_number_valid, vat_checked_name, vat_name_match')
       .eq('id', user.id)
       .single();
     if (data) {
       setProfil(data as Profil);
       setSociete(data.company_name || '');
+      setSiret(data.siret || '');
       setNumero(data.vat_number || '');
     }
   };
@@ -89,9 +97,44 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
     }
   };
 
+  /**
+   * Un SIRET valide : 14 chiffres dont le dernier est une cle de controle (Luhn).
+   *
+   * On le verifie ICI plutot que de laisser passer une coquille : un SIRET faux ne
+   * produit aucune erreur visible — il part dans Tiime, la facture est emise, et
+   * l'anomalie n'apparait qu'au moment ou personne ne parvient a acheminer le document.
+   * Une saisie a 14 chiffres se controle en trois lignes ; autant le faire.
+   */
+  const siretValide = (valeur: string): boolean => {
+    const chiffres = valeur.replace(/\D/g, '');
+    if (chiffres.length !== 14) return false;
+    let somme = 0;
+    for (let i = 0; i < 14; i++) {
+      let n = Number(chiffres[13 - i]);
+      if (i % 2 === 1) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      somme += n;
+    }
+    return somme % 10 === 0;
+  };
+
   const verifier = async () => {
     if (!numero.trim()) {
       toast.error('Saisissez votre numéro de TVA intracommunautaire.');
+      return;
+    }
+    /* Le SIRET n'est exige que des entreprises FRANCAISES : une societe etrangere n'en a
+       pas, et le lui reclamer l'empecherait simplement de commander. */
+    const francaise = numero.trim().toUpperCase().startsWith('FR');
+    if (francaise && !siretValide(siret)) {
+      toast.error(
+        siret.trim()
+          ? "Ce SIRET est invalide : vérifiez les 14 chiffres (la clé de contrôle ne tombe pas juste)."
+          : 'Saisissez votre SIRET (14 chiffres) : il identifie votre entreprise pour la facturation électronique.',
+        { duration: 8000 }
+      );
       return;
     }
     setVerification(true);
@@ -105,6 +148,7 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
         .update({
           is_company: true,
           company_name: societe.trim() || null,
+          siret: siret.replace(/\D/g, '') || null,
           vat_number: numero.trim().toUpperCase(),
         })
         .eq('id', user.id);
@@ -195,6 +239,16 @@ const AchatEntreprise: React.FC<Props> = ({ onChangement }) => {
             value={societe}
             onChange={e => setSociete(e.target.value)}
             placeholder="Raison sociale"
+            className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+          />
+          {/* Placé AVANT le numéro de TVA : c'est l'identifiant principal de
+              l'entreprise, et le bouton « Vérifier » le contrôle en même temps. */}
+          <input
+            type="text"
+            inputMode="numeric"
+            value={siret}
+            onChange={e => setSiret(e.target.value)}
+            placeholder="SIRET (14 chiffres) — requis pour la facturation électronique"
             className="w-full bg-white/5 border border-white/20 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:border-blue-400 focus:outline-none"
           />
           <div className="flex gap-2">

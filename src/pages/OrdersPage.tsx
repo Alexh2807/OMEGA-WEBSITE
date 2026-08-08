@@ -61,7 +61,11 @@ const OrdersPage = () => {
      et cette page ne mentionnait pas le mot « facture ». Le client n'avait donc
      AUCUN moyen d'obtenir sa facture — alors que la remise d'une facture est une
      obligation du vendeur. */
-  const [factures, setFactures] = useState<Record<string, Invoice>>({});
+  /* ⚠ PLUSIEURS documents par commande : la facture ET ses avoirs. L'ancienne version
+     n'en gardait qu'UN par commande (`parCommande[order_id] = f`) : dès qu'un avoir
+     existait, il écrasait la facture et le client perdait l'un des deux. Or l'avoir lui
+     est dû autant que la facture — c'est la preuve de son remboursement. */
+  const [factures, setFactures] = useState<Record<string, Invoice[]>>({});
   /* Verrou anti double-clic pendant la preparation du telechargement. L'etat ne
      sert plus a rendre la facture hors ecran (elle n'est plus photographiee), mais
      un bouton qui ne reagit pas donne l'impression d'une panne : on le desactive
@@ -85,10 +89,19 @@ const OrdersPage = () => {
       console.error('Chargement des factures impossible :', error);
       return;
     }
-    const parCommande: Record<string, Invoice> = {};
+    const parCommande: Record<string, Invoice[]> = {};
     (data || []).forEach((f: any) => {
-      if (f.order_id) parCommande[f.order_id] = f as Invoice;
+      if (!f.order_id) return;
+      (parCommande[f.order_id] ||= []).push(f as Invoice);
     });
+    // Facture d'abord, avoirs ensuite : l'ordre dans lequel les documents ont été émis.
+    Object.values(parCommande).forEach(l =>
+      l.sort((a: any, b: any) => {
+        const av = (x: any) => (x.document_type === 'credit_note' ? 1 : 0);
+        return av(a) - av(b) ||
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      })
+    );
     setFactures(parCommande);
   };
 
@@ -444,18 +457,37 @@ const OrdersPage = () => {
                     on le dit clairement plutôt que de ne rien afficher : un blanc
                     laisse croire à un oubli. */}
                 <div className="mb-6">
-                  {factures[order.id] ? (
-                    <button
-                      onClick={() => telechargerFacture(factures[order.id])}
-                      disabled={telechargementEnCours}
-                      className="flex items-center gap-2 px-4 py-3 rounded-lg bg-white/5 border border-white/15 text-white hover:border-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
-                    >
-                      <FileText size={18} className="text-blue-400" />
-                      <span className="font-semibold">
-                        Facture {factures[order.id].invoice_number}
-                      </span>
-                      <Download size={16} className="text-gray-400" />
-                    </button>
+                  {(factures[order.id] || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(factures[order.id] || []).map((doc: any) => {
+                        const estAvoir = doc.document_type === 'credit_note';
+                        return (
+                          <button
+                            key={doc.id}
+                            onClick={() => telechargerFacture(doc)}
+                            disabled={telechargementEnCours}
+                            className={`flex items-center gap-2 px-4 py-3 rounded-lg bg-white/5 border text-white transition-colors disabled:opacity-50 ${
+                              estAvoir
+                                ? 'border-orange-400/30 hover:border-orange-400 hover:bg-orange-500/10'
+                                : 'border-white/15 hover:border-blue-400 hover:bg-blue-500/10'
+                            }`}
+                          >
+                            <FileText size={18} className={estAvoir ? 'text-orange-400' : 'text-blue-400'} />
+                            <span className="font-semibold">
+                              {estAvoir ? 'Avoir' : 'Facture'} {doc.invoice_number}
+                            </span>
+                            {estAvoir && (
+                              <span className="text-orange-300 text-sm">
+                                {Number(doc.total_ttc).toLocaleString('fr-FR', {
+                                  style: 'currency', currency: 'EUR',
+                                })}
+                              </span>
+                            )}
+                            <Download size={16} className="text-gray-400" />
+                          </button>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2 text-gray-400 text-sm">
                       <FileText size={16} />

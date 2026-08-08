@@ -25,12 +25,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Invoice, Quote, BillingSettings, Refund } from '../../types/billing';
-import InvoicePDF from '../../components/InvoicePDF';
-import { generateInvoicePDF } from '../../utils/pdfGenerator';
-import {
-  emitEInvoice,
-  downloadFacturXPdf,
-} from '../../services/einvoice/einvoiceService';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
@@ -49,6 +43,9 @@ const AdminBilling = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  /* URL signée de l'ORIGINAL affiché dans l'aperçu.
+     `null` = édition en cours · `''` = échec · sinon l'adresse du PDF archivé. */
+  const [apercuUrl, setApercuUrl] = useState<string | null>(null);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundData, setRefundData] = useState({
@@ -58,6 +55,12 @@ const AdminBilling = () => {
     stripeChargeId: '',
   });
   const [refundLoading, setRefundLoading] = useState(false);
+  /* Avoir par ARTICLES : quantité retenue par ligne de facture, et retour en stock.
+     `modeLignes` bascule vers un montant libre pour les cas sans article précis
+     (geste commercial, erreur de facturation). */
+  const [modeLignes, setModeLignes] = useState(true);
+  const [lignesAvoir, setLignesAvoir] = useState<Record<string, number>>({});
+  const [remettreEnStock, setRemettreEnStock] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -94,6 +97,14 @@ const AdminBilling = () => {
 
   const loadInvoices = async () => {
     try {
+      /* ⚠ `refunds` DOIT être désigné par le nom de sa clé étrangère.
+         Depuis les avoirs il existe DEUX liens entre `invoices` et `refunds` :
+         `refunds.invoice_id` (les remboursements DE cette facture) et
+         `invoices.refund_id` (l'avoir ÉMIS POUR un remboursement). Écrit `refunds (*)`,
+         PostgREST ne peut pas trancher : il répond PGRST201 et TOUTE la requête échoue —
+         la page n'affichait plus une seule facture.
+         ⚠ Ce commentaire est DEHORS : le `select` part tel quel au serveur, un
+         commentaire glissé dedans en ferait partie. */
       const { data, error } = await supabase
         .from('invoices')
         .select(
@@ -104,7 +115,7 @@ const AdminBilling = () => {
             product:products (name, sku)
           ),
           payment_records (*),
-          refunds (*),
+          refunds!refunds_invoice_id_fkey (*),
           customer:profiles!invoices_customer_id_fkey (
             first_name,
             last_name
@@ -235,6 +246,43 @@ const AdminBilling = () => {
      ce qui permet au client de retélécharger sa facture, à l'identique, des années
      plus tard. Ce bouton est aussi le rattrapage des factures créées avant ce
      changement : le premier clic les édite. */
+  /**
+   * ★ L'APERÇU MONTRE L'ORIGINAL, PAS UN SECOND RENDU.
+   *
+   * Il y avait DEUX factures pour un même document : le composant React `InvoicePDF`
+   * (aperçu de l'administration, en HTML) et le PDF fabriqué par la fonction
+   * `facture-pdf` — le seul qui soit archivé, joint aux e-mails, téléchargé par le
+   * client et transmis à la comptabilité. Les deux mises en page ont dérivé, et
+   * l'administration validait donc une facture que le client ne recevait pas.
+   *
+   * Une facture n'a qu'une forme : celle qui est archivée. L'aperçu affiche désormais
+   * ce fichier-là.
+   */
+  const ouvrirApercu = async (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setApercuUrl(null);
+    setShowInvoiceModal(true);
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facture-pdf`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${s.session?.access_token}`,
+          },
+          body: JSON.stringify({ invoice_id: invoice.id }),
+        }
+      );
+      const rep = await r.json().catch(() => ({}));
+      if (r.ok && rep?.url) setApercuUrl(rep.url);
+      else setApercuUrl('');   // '' = échec, on l'affiche franchement
+    } catch {
+      setApercuUrl('');
+    }
+  };
+
   const handleDownloadPDF = async (invoice: Invoice) => {
     const t = toast.loading('Édition de la facture…');
     try {
@@ -311,6 +359,7 @@ const AdminBilling = () => {
         adminNotes: '',
         stripeChargeId: primaryPayment.stripe_charge_id,
       });
+      setLignesAvoir({}); setModeLignes(true); setRemettreEnStock(true);
       setShowRefundModal(true);
       return;
     }
@@ -339,6 +388,7 @@ const AdminBilling = () => {
         adminNotes: '',
         stripeChargeId: paymentWithIntent.reference, // Le backend gérera la conversion PI -> Charge
       });
+      setLignesAvoir({}); setModeLignes(true); setRemettreEnStock(true);
       setShowRefundModal(true);
       return;
     }
@@ -368,7 +418,8 @@ const AdminBilling = () => {
             adminNotes: '',
             stripeChargeId: order.stripe_payment_intent_id,
           });
-          setShowRefundModal(true);
+          setLignesAvoir({}); setModeLignes(true); setRemettreEnStock(true);
+      setShowRefundModal(true);
           return;
         }
       } catch (err) {
@@ -393,6 +444,21 @@ const AdminBilling = () => {
     e.preventDefault();
     if (!selectedInvoice) return;
 
+    const utiliseLignes =
+      modeLignes && (selectedInvoice.invoice_items || []).length > 0;
+    const montantRembourse = utiliseLignes
+      ? Math.round(totalSelection(selectedInvoice) * 100) / 100
+      : parseFloat(refundData.amount);
+
+    if (!(montantRembourse > 0)) {
+      toast.error(
+        utiliseLignes
+          ? 'Choisissez au moins un article à rembourser.'
+          : 'Indiquez un montant à rembourser.'
+      );
+      return;
+    }
+
     setRefundLoading(true);
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -413,9 +479,23 @@ const AdminBilling = () => {
             invoiceId: selectedInvoice.id,
             orderId: selectedInvoice.order_id,
             chargeId: refundData.stripeChargeId,
-            amount: parseFloat(refundData.amount),
+            /* ⚠ C'est CE montant qui part chez Stripe. En mode articles il vient de la
+               sélection, pas du champ texte (qui n'est alors qu'un affichage). Lire
+               `refundData.amount` ici aurait envoyé un montant vide. */
+            amount: montantRembourse,
             reason: refundData.reason,
             adminNotes: refundData.adminNotes,
+            /* En mode ARTICLES, l'avoir reprend les lignes choisies (quantités, prix et
+               taux d'origine) et peut remettre la marchandise en stock. Le serveur
+               rembourse d'abord chez Stripe, puis émet l'avoir : jamais l'inverse. */
+            ...(utiliseLignes
+              ? {
+                  lignes: Object.entries(lignesAvoir)
+                    .filter(([, q]) => q > 0)
+                    .map(([item_id, quantity]) => ({ item_id, quantity })),
+                  remettreEnStock,
+                }
+              : {}),
           }),
         }
       );
@@ -429,6 +509,10 @@ const AdminBilling = () => {
       toast.success(result.message || 'Remboursement traité avec succès');
       setShowRefundModal(false);
       setSelectedInvoice(null);
+      // Sans ça, la sélection d'articles resterait affichée sur la facture suivante.
+      setLignesAvoir({});
+      setModeLignes(true);
+      setRemettreEnStock(true);
       setRefundData({
         amount: '',
         reason: '',
@@ -508,6 +592,34 @@ const AdminBilling = () => {
    * `creer_facture_depuis_commande()`, l'encaissement Stripe est porté par la facture
    * elle-même, et `payment_records` est alimenté par le SERVEUR (cf. rapport).
    */
+  /**
+   * Combien de chaque ligne a DÉJÀ été crédité par des avoirs antérieurs ?
+   * On le déduit des avoirs déjà chargés (`credit_note_of` + `credit_of_item`) : sans ça
+   * on proposerait de rembourser 2 exemplaires d'un article vendu à 1.
+   */
+  const dejaCredite = (invoice: Invoice): Record<string, number> => {
+    const par: Record<string, number> = {};
+    invoices
+      .filter(i => i.document_type === 'credit_note' && (i as any).credit_note_of === invoice.id)
+      .forEach(av =>
+        (av.invoice_items || []).forEach((li: any) => {
+          if (li.credit_of_item) {
+            par[li.credit_of_item] = (par[li.credit_of_item] || 0) + Math.abs(li.quantity || 0);
+          }
+        })
+      );
+    return par;
+  };
+
+  /** Montant TTC de la sélection en cours — c'est lui qui part chez Stripe. */
+  const totalSelection = (invoice: Invoice): number => {
+    return (invoice.invoice_items || []).reduce((s: number, li: any) => {
+      const q = lignesAvoir[li.id] || 0;
+      if (q <= 0) return s;
+      return s + q * Number(li.unit_price_ht || 0) * (1 + Number(li.tax_rate || 0) / 100);
+    }, 0);
+  };
+
   const getPaymentSummary = (invoice: Invoice) => {
     const paiements = (invoice.payment_records || []).filter(
       p => p.payment_method !== 'refund'
@@ -556,7 +668,36 @@ const AdminBilling = () => {
    * un avoir, qui annule la facture sans la réécrire. `creer_avoir_depuis_facture()` est
    * idempotente : un second clic rend l'avoir déjà émis au lieu d'en créer un doublon.
    */
+  /**
+   * La facture a-t-elle encaissé de l'argent ?
+   *
+   * C'est ce qui décide si un avoir SEUL est régulier. Sur une facture jamais payée
+   * (émise par erreur), l'avoir est la seule correction possible et il n'y a rien à
+   * rendre. Sur une facture encaissée, un avoir sans remboursement annule la vente dans
+   * les comptes en laissant l'argent chez nous — la base le refuse désormais.
+   */
+  const estEncaissee = (invoice: Invoice) =>
+    Number((invoice as any).amount_paid ?? 0) > 0 ||
+    ((invoice as any).payment_records || []).some((p: any) => Number(p.amount) > 0);
+
   const emettreAvoir = async (invoice: Invoice, motif?: string) => {
+    /* ★ UN AVOIR N'EST PAS UN REMBOURSEMENT — on le dit AVANT le clic.
+       Constaté le 8 août 2026 : une facture encaissée a été annulée par un avoir sans
+       qu'un centime ne reparte. Ni Stripe ni la table des remboursements n'avaient été
+       touchés ; seul le document existait, et la commande s'affichait « remboursée ».
+       Garde-fou de dernier recours : le bouton est masqué dans ce cas, mais un autre
+       chemin d'appel ne doit pas contourner la règle. */
+    if (estEncaissee(invoice) &&
+        !((invoice as any).refunds || []).some(
+          (r: any) => r.status !== 'failed' && r.status !== 'canceled')) {
+      toast.error(
+        `La facture ${invoice.invoice_number} a été encaissée. Un avoir seul ne rendrait ` +
+        `pas l'argent au client : utilisez « Rembourser » — l'avoir est émis ` +
+        `automatiquement dès que Stripe a validé.`,
+        { duration: 10000 }
+      );
+      return;
+    }
     const t = toast.loading("Émission de l'avoir…");
     try {
       const { data: avoirId, error } = await supabase.rpc(
@@ -1031,8 +1172,7 @@ const AdminBilling = () => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
-                            setSelectedInvoice(invoice);
-                            setShowInvoiceModal(true);
+                            void ouvrirApercu(invoice);
                           }}
                           className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
                           title="Voir détails"
@@ -1046,33 +1186,21 @@ const AdminBilling = () => {
                         >
                           <Download size={16} />
                         </button>
-                        <button
-                          onClick={async () => {
-                            const t = toast.loading('Génération Factur-X…');
-                            try {
-                              const res = await emitEInvoice(invoice);
-                              downloadFacturXPdf(
-                                res.pdfBytes,
-                                invoice.invoice_number
-                              );
-                              toast.success(
-                                `Factur-X générée — mode ${res.mode.toUpperCase()} (${res.status})${
-                                  res.mode === 'test' ? ' · NON transmise' : ''
-                                }`,
-                                { id: t }
-                              );
-                            } catch (e: any) {
-                              toast.error(
-                                e?.message || 'Erreur génération Factur-X',
-                                { id: t }
-                              );
-                            }
-                          }}
-                          className="p-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
-                          title="Générer la facture électronique (Factur-X)"
-                        >
-                          <FileCheck size={16} />
-                        </button>
+                        {/* ⚠ LE BOUTON « FACTURE ÉLECTRONIQUE (Factur-X) » A ÉTÉ RETIRÉ.
+                            Il fabriquait, dans le navigateur, un TROISIÈME document pour
+                            une même facture : une mise en page à lui (« Net à payer » au
+                            lieu de « Déjà réglé / Reste dû »), des marges à lui, et une
+                            troncature à lui. On validait donc côté administration une
+                            facture que le client ne recevait jamais — c'est ce qui a fait
+                            perdre le fil le 8 août 2026.
+                            Une facture n'a qu'une forme : celle qui est archivée par
+                            `facture-pdf`, téléchargée par le client, jointe aux e-mails et
+                            transmise à la comptabilité. Le bouton « Télécharger PDF »
+                            ci-dessus rend CE fichier.
+                            ⚠ L'obligation Factur-X (EN 16931) reste à traiter : le format
+                            devra être produit PAR LE SERVEUR, dans `facture-pdf`, pour
+                            rester l'unique original. Le code du générateur est conservé
+                            dans `src/utils/facturx/` — il n'est simplement plus branché. */}
                         {/* Transmission en comptabilité. Elle part normalement TOUTE
                             SEULE à la création de la facture ; ce bouton ne sert qu'au
                             rattrapage (comptabilité indisponible ce jour-là, facture
@@ -1160,9 +1288,14 @@ const AdminBilling = () => {
                             IMPOSSIBLE au lieu de la rendre régulière. Absent sur un
                             brouillon (qui se corrige directement) et sur un avoir
                             (on n'avoire pas un avoir). */}
+                        {/* ⚠ Masqué sur une facture ENCAISSÉE : là, le geste correct est
+                            « Rembourser », qui appelle Stripe PUIS émet l'avoir tout seul.
+                            Garder ce bouton à côté revenait à proposer deux chemins dont
+                            un seul rend l'argent — et c'est le mauvais qui a été pris. */}
                         {!estAvoir(invoice) &&
                           invoice.status !== 'draft' &&
-                          invoice.status !== 'refunded' && (
+                          invoice.status !== 'refunded' &&
+                          !estEncaissee(invoice) && (
                             <button
                               onClick={() => {
                                 const motif =
@@ -1279,6 +1412,93 @@ const AdminBilling = () => {
             </div>
 
             <form onSubmit={processRefund} className="space-y-6">
+              {/* ---------- Sur quoi porte l'avoir ? ----------
+                  Un remboursement porte presque toujours sur des ARTICLES précis. On les
+                  liste, on laisse choisir les quantités, et le montant s'en déduit — plutôt
+                  que de faire saisir une somme dont personne ne saura plus à quoi elle
+                  correspondait. Le mode « montant libre » reste là pour les gestes
+                  commerciaux et les erreurs de facturation. */}
+              {(selectedInvoice.invoice_items || []).length > 0 && (
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-white font-semibold">Que remboursez-vous ?</h4>
+                    <button
+                      type="button"
+                      onClick={() => setModeLignes(!modeLignes)}
+                      className="text-xs text-blue-400 hover:text-blue-300 underline"
+                    >
+                      {modeLignes ? 'Saisir un montant libre' : 'Choisir des articles'}
+                    </button>
+                  </div>
+
+                  {modeLignes && (
+                    <>
+                      <div className="space-y-2">
+                        {(selectedInvoice.invoice_items || []).map((li: any) => {
+                          const deja = dejaCredite(selectedInvoice)[li.id] || 0;
+                          const dispo = Math.max(0, (li.quantity || 0) - deja);
+                          const q = lignesAvoir[li.id] || 0;
+                          return (
+                            <div
+                              key={li.id}
+                              className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
+                                dispo === 0 ? 'border-white/5 opacity-40' : 'border-white/10'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white text-sm truncate">{li.description}</div>
+                                <div className="text-gray-400 text-xs">
+                                  {Number(li.unit_price_ht).toLocaleString('fr-FR', EURO)} HT ·
+                                  TVA {Number(li.tax_rate)} % · vendu ×{li.quantity}
+                                  {deja > 0 && ` · déjà crédité ×${deja}`}
+                                </div>
+                              </div>
+                              <input
+                                type="number"
+                                min={0}
+                                max={dispo}
+                                disabled={dispo === 0}
+                                value={q}
+                                onChange={e => {
+                                  const v = Math.max(0, Math.min(dispo, parseInt(e.target.value) || 0));
+                                  setLignesAvoir(prev => ({ ...prev, [li.id]: v }));
+                                }}
+                                className="w-20 bg-white/5 border border-white/20 rounded-lg px-2 py-1.5 text-white text-center disabled:opacity-40"
+                              />
+                              <div className="w-24 text-right text-white text-sm">
+                                {(
+                                  q * Number(li.unit_price_ht) * (1 + Number(li.tax_rate) / 100)
+                                ).toLocaleString('fr-FR', EURO)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
+                        <span className="text-gray-300 text-sm">Total à rembourser</span>
+                        <span className="text-white font-bold">
+                          {totalSelection(selectedInvoice).toLocaleString('fr-FR', EURO)}
+                        </span>
+                      </div>
+
+                      <label className="flex items-center gap-2 mt-3 text-sm text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={remettreEnStock}
+                          onChange={e => setRemettreEnStock(e.target.checked)}
+                          className="accent-blue-500"
+                        />
+                        Remettre les articles en stock
+                      </label>
+                      <p className="text-gray-500 text-xs mt-1">
+                        À cocher seulement si la marchandise vous revient réellement.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Montant à rembourser (€) *
@@ -1289,7 +1509,12 @@ const AdminBilling = () => {
                   min="0.01"
                   max={getRefundableAmount(selectedInvoice)}
                   required
-                  value={refundData.amount}
+                  readOnly={modeLignes && (selectedInvoice.invoice_items || []).length > 0}
+                  value={
+                    modeLignes && (selectedInvoice.invoice_items || []).length > 0
+                      ? totalSelection(selectedInvoice).toFixed(2)
+                      : refundData.amount
+                  }
                   onChange={e =>
                     setRefundData({ ...refundData, amount: e.target.value })
                   }
@@ -1407,15 +1632,24 @@ const AdminBilling = () => {
             {/* Sur un AVOIR, on retrouve la facture annulée dans la liste déjà
                 chargée : l'avoir doit imprimer son NUMÉRO, pas un identifiant
                 technique que le client ne peut rapprocher de rien. */}
-            <InvoicePDF
-              invoice={selectedInvoice}
-              billingSettings={billingSettings}
-              factureOrigine={
-                selectedInvoice.credit_note_of
-                  ? invoices.find(i => i.id === selectedInvoice.credit_note_of) ?? null
-                  : null
-              }
-            />
+            {apercuUrl === null ? (
+              <div className="p-10 text-center text-gray-600">Édition du document…</div>
+            ) : apercuUrl === '' ? (
+              <div className="p-10 text-center text-gray-700">
+                Le document n'a pas pu être édité.
+                <div className="text-sm text-gray-500 mt-2">
+                  C'est cette même édition qui alimente l'espace client et les e-mails :
+                  tant qu'elle échoue, le client ne reçoit rien non plus.
+                </div>
+              </div>
+            ) : (
+              <iframe
+                src={apercuUrl}
+                title="Facture"
+                className="w-full"
+                style={{ height: '75vh', border: 0 }}
+              />
+            )}
           </div>
         </div>
       )}

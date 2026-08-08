@@ -27,6 +27,7 @@ const AdminAccounting = () => {
   const [endDate, setEndDate] = useState('');
   const [stats, setStats] = useState({
     totalInvoices: 0,
+    totalAvoirs: 0,
     totalRevenue: 0,
     totalVAT: 0,
     paidInvoices: 0,
@@ -50,6 +51,14 @@ const AdminAccounting = () => {
   const loadInvoices = async () => {
     try {
       // Charger d'abord les factures avec leurs relations simples
+      /* ⚠ `refunds` DOIT être désigné par le nom de sa clé étrangère.
+         Depuis les avoirs il existe DEUX liens entre `invoices` et `refunds` :
+         `refunds.invoice_id` (les remboursements DE cette facture) et
+         `invoices.refund_id` (l'avoir ÉMIS POUR un remboursement). Écrit `refunds (*)`,
+         PostgREST ne peut pas trancher : il répond PGRST201 et TOUTE la requête échoue —
+         la page n'affichait plus une seule facture.
+         ⚠ Ce commentaire est DEHORS : le `select` part tel quel au serveur, un
+         commentaire glissé dedans en ferait partie. */
       const { data, error } = await supabase
         .from('invoices')
         .select(
@@ -57,7 +66,7 @@ const AdminAccounting = () => {
           *,
           invoice_items (*),
           payment_records (*),
-          refunds (*)
+          refunds!refunds_invoice_id_fkey (*)
         `
         )
         .order('created_at', { ascending: false });
@@ -81,33 +90,51 @@ const AdminAccounting = () => {
     const end = endDate ? new Date(endDate) : new Date();
     end.setHours(23, 59, 59, 999);
 
-    const filteredInvoices = invoices.filter(inv => {
+    /* ─────────────────────────────────────────────────────────────────────────
+       ⚠ LE REMBOURSEMENT ÉTAIT COMPTÉ DEUX FOIS.
+
+       L'ancien filtre écartait les factures `refunded` ET gardait leur AVOIR. Or un
+       avoir ne remplace pas la facture : il la CONTREPASSE. Retirer la facture puis
+       soustraire l'avoir déduit donc deux fois le même remboursement.
+       Constaté le 8 août 2026 : une facture de 1 599,99 € remboursée et son avoir de
+       −1 599,99 € affichaient un chiffre d'affaires de −1 261 € au lieu de 338,90 €.
+
+       Règle retenue, qui est celle de la comptabilité : on garde TOUT ce qui a été émis
+       (sauf l'annulé, qui n'a jamais existé), et l'avoir joue son rôle de signe négatif.
+       Facture + son avoir = 0, ce qui est exactement le résultat attendu.
+       ───────────────────────────────────────────────────────────────────────── */
+    const documents = invoices.filter(inv => {
       const invDate = new Date(inv.created_at);
-      return (
-        invDate >= start &&
-        invDate <= end &&
-        inv.status !== 'cancelled' &&
-        inv.status !== 'refunded'
-      );
+      // `cancelled` = document annulé avant d'exister comptablement : lui seul sort.
+      return invDate >= start && invDate <= end && inv.status !== 'cancelled';
     });
 
-    const totalRevenue = filteredInvoices.reduce(
-      (sum, inv) => sum + inv.total_ttc,
-      0
-    );
-    const totalVAT = filteredInvoices.reduce(
-      (sum, inv) => sum + inv.tax_amount,
-      0
-    );
-    const paidInvoices = filteredInvoices.filter(
-      inv => inv.status === 'paid'
-    ).length;
-    const unpaidAmount = filteredInvoices
-      .filter(inv => inv.status !== 'paid')
-      .reduce((sum, inv) => sum + (inv.total_ttc - inv.amount_paid), 0);
+    // Même convention que l'écran Facturation. Le repli sur le signe couvre d'éventuels
+    // avoirs anciens saisis avant l'existence de `document_type`.
+    const estAvoir = (inv: Invoice) =>
+      inv.document_type === 'credit_note' || Number(inv.total_ttc) < 0;
+
+    const factures = documents.filter(inv => !estAvoir(inv));
+    const avoirs = documents.filter(estAvoir);
+
+    // Chiffre d'affaires et TVA : sur TOUS les documents, avoirs compris (ils portent
+    // déjà des montants négatifs). Les deux chiffres portent ainsi sur le même ensemble —
+    // avant, un CA négatif cohabitait avec une TVA positive, ce qui ne pouvait pas être.
+    const totalRevenue = documents.reduce((sum, inv) => sum + Number(inv.total_ttc), 0);
+    const totalVAT = documents.reduce((sum, inv) => sum + Number(inv.tax_amount), 0);
+
+    const paidInvoices = factures.filter(inv => inv.status === 'paid').length;
+
+    /* Impayés : ce qu'il RESTE À ENCAISSER. Un avoir n'est pas une créance — l'y inclure
+       produisait un « impayé » NÉGATIF de −1 600 €, qui ne veut rien dire. Une facture
+       remboursée n'est pas non plus un impayé : elle a été payée, puis rendue. */
+    const unpaidAmount = factures
+      .filter(inv => inv.status !== 'paid' && inv.status !== 'refunded')
+      .reduce((sum, inv) => sum + (Number(inv.total_ttc) - Number(inv.amount_paid)), 0);
 
     setStats({
-      totalInvoices: filteredInvoices.length,
+      totalInvoices: factures.length,
+      totalAvoirs: avoirs.length,
       totalRevenue,
       totalVAT,
       paidInvoices,
@@ -310,6 +337,11 @@ const AdminAccounting = () => {
             </span>
           </div>
           <div className="text-gray-300 text-sm">Factures sur la période</div>
+          {stats.totalAvoirs > 0 && (
+            <div className="text-gray-400 text-xs mt-1">
+              + {stats.totalAvoirs} avoir{stats.totalAvoirs > 1 ? 's' : ''} (déduits du CA)
+            </div>
+          )}
         </div>
 
         <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-md rounded-xl p-6 border border-green-500/30">
@@ -340,6 +372,7 @@ const AdminAccounting = () => {
             </span>
           </div>
           <div className="text-gray-300 text-sm">Impayés / En attente</div>
+          <div className="text-gray-400 text-xs mt-1">Hors avoirs et remboursements</div>
         </div>
       </div>
 

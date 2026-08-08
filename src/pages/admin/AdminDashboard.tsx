@@ -52,30 +52,52 @@ const AdminDashboard = () => {
       // 1. Récupérer toutes les commandes non annulées
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
-        .select('total')
+        .select('id, total, status')
         .not('status', 'eq', 'cancelled');
 
       if (ordersError) throw ordersError;
 
-      const validOrdersCount = orders?.length || 0;
-      const grossRevenue = orders
-        ? orders.reduce((sum, o) => sum + (o.total || 0), 0)
-        : 0;
+      /* ─────────────────────────────────────────────────────────────────────────
+         ⚠ DEUX ÉCRANS DONNAIENT DEUX CHIFFRES D'AFFAIRES DIFFÉRENTS.
 
-      // 2. Récupérer tous les remboursements réussis
+         Ici on comptait TOUTES les commandes non annulées — remboursées comprises —
+         puis on retranchait la table `refunds`. Or un avoir émis depuis le back-office
+         n'écrit AUCUNE ligne dans `refunds` : la vente remboursée restait donc entière
+         dans le chiffre d'affaires, alors que la Comptabilité la voyait annulée par son
+         avoir. Constaté le 8 août 2026 : 1 938,89 € ici contre 338,90 € là-bas.
+
+         Règle unique, alignée sur la Comptabilité : une commande REMBOURSÉE ne compte
+         pas, et les remboursements PARTIELS (qui, eux, laissent la commande active) se
+         retranchent. Aucun remboursement n'est ainsi compté deux fois.
+         ───────────────────────────────────────────────────────────────────────── */
+      const commandes = orders ?? [];
+      const remboursees = new Set(
+        commandes.filter(o => o.status === 'refunded').map(o => o.id)
+      );
+
+      const validOrdersCount = commandes.length;
+      const grossRevenue = commandes
+        .filter(o => !remboursees.has(o.id))
+        .reduce((sum, o) => sum + (o.total || 0), 0);
+
+      // 2. Remboursements réussis — on ne garde que ceux des commandes ENCORE actives :
+      //    pour une commande déjà sortie du brut, les retrancher déduirait deux fois.
       const { data: refunds, error: refundsError } = await supabase
         .from('refunds')
-        .select('amount')
+        .select('amount, order_id')
         .eq('status', 'succeeded');
 
       if (refundsError) throw refundsError;
 
-      const totalRefunded = refunds
-        ? refunds.reduce((sum, r) => sum + (r.amount || 0), 0)
-        : 0;
+      const remboursementsPartiels = (refunds ?? [])
+        .filter(r => !r.order_id || !remboursees.has(r.order_id))
+        .reduce((sum, r) => sum + (r.amount || 0), 0);
 
-      // 3. Calculer le chiffre d'affaires net
-      const netRevenue = grossRevenue - totalRefunded;
+      // Affiché tel quel dans la carte « Remboursé » : le montant réellement rendu.
+      const totalRefunded = (refunds ?? []).reduce((sum, r) => sum + (r.amount || 0), 0);
+
+      // 3. Chiffre d'affaires net
+      const netRevenue = grossRevenue - remboursementsPartiels;
 
       // --- Activités récentes ---
       const { data: recentOrdersData } = await supabase

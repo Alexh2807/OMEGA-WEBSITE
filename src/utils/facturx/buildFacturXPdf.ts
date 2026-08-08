@@ -23,8 +23,32 @@ const fmtDate = (d: Date): string => {
 };
 
 const eur = (n: number): string => `${n.toFixed(2)} EUR`;
+/**
+ * ⚠ Coupe en NOMBRE DE CARACTÈRES — conservée pour les usages hors mise en page.
+ * Pour tout texte dessiné dans une colonne, utiliser `couperLargeur` : 62 caractères
+ * en capitales occupent presque le double de place et débordent sur la colonne voisine.
+ */
 const truncate = (s: string, max: number): string =>
   s.length > max ? `${s.slice(0, max - 1)}…` : s;
+
+/** Coupe à une LARGEUR mesurée dans la police, avec ellipse. */
+const couperLargeur = (
+  s: string,
+  largeurMax: number,
+  f: PDFFont,
+  taille: number
+): string => {
+  const texte = s ?? '';
+  if (f.widthOfTextAtSize(texte, taille) <= largeurMax) return texte;
+  const dispo = largeurMax - f.widthOfTextAtSize('…', taille);
+  let bas = 0, haut = texte.length;
+  while (bas < haut) {
+    const milieu = Math.ceil((bas + haut) / 2);
+    if (f.widthOfTextAtSize(texte.slice(0, milieu), taille) <= dispo) bas = milieu;
+    else haut = milieu - 1;
+  }
+  return texte.slice(0, bas).trimEnd() + '…';
+};
 
 const partyLines = (p: {
   name: string;
@@ -149,7 +173,9 @@ export async function buildFacturXPdf(
   y -= 22;
 
   for (const l of input.lines) {
-    text(truncate(l.name, 62), margin, y, {});
+    /* 30 pt réservés : la quantité est alignée à droite sur 360 et s'écrit vers la
+       gauche — une désignation qui irait jusqu'à la colonne passerait dessous. */
+    text(couperLargeur(l.name, 360 - margin - 30, helv, 9), margin, y, {});
     right(String(l.quantity), 360, y, {});
     right(l.unitPriceHt.toFixed(2), 460, y, {});
     right(l.lineTotalHt.toFixed(2), cTot, y, { font: bold });
@@ -172,7 +198,11 @@ export async function buildFacturXPdf(
     thickness: 1,
     color: gray,
   });
-  y -= 4;
+  /* ⚠ 12 pt, pas 4. Le filet était tracé 10 pt sous la ligne « TVA », et « TOTAL TTC »
+     était écrit 4 pt plus bas : en 11 pt gras, le haut des capitales remontait à
+     1,1 pt du trait — elles le touchaient visuellement. On descend le total pour
+     laisser respirer le séparateur. */
+  y -= 12;
   totalRow('TOTAL TTC', eur(totals.grandTotalTtc), { bold: true, size: 11 });
   if (totals.duePayable !== totals.grandTotalTtc) {
     totalRow('Net à payer', eur(totals.duePayable), { bold: true });

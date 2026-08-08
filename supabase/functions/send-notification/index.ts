@@ -534,7 +534,8 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
         .from('invoices')
         .select(
           'invoice_number, customer_id, customer_email, subtotal_ht, tax_amount, ' +
-            'total_ttc, vat_rate, vat_mention, created_at, status, pdf_storage_path'
+            'total_ttc, vat_rate, vat_mention, created_at, status, pdf_storage_path, ' +
+            'document_type, credit_note_of'
         )
         .eq('id', data.id)
         .single();
@@ -545,21 +546,35 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
 
       const taux = Number(f.vat_rate ?? 20);
       const jointe = !!f.pdf_storage_path;
+
+      /* ★ UN AVOIR N'EST PAS UNE FACTURE. Ce message partait avec « Votre facture est
+         disponible » et un bouton « Télécharger ma facture » même pour un avoir : le
+         client recevait, après un remboursement, ce qui ressemblait à une nouvelle
+         demande de paiement. Le document est le même objet en base, pas dans sa tête. */
+      const estAvoir = f.document_type === 'credit_note';
+      const mot = estAvoir ? 'avoir' : 'facture';
+      const Mot = estAvoir ? 'Avoir' : 'Facture';
+
       return {
         destinataires: [destinataire],
         pdf: f.pdf_storage_path ?? null,
-        sujet: `Votre facture ${f.invoice_number} — OMEGA`,
+        sujet: `Votre ${mot} ${f.invoice_number} — OMEGA`,
         html: gabarit({
-          titre: 'Votre facture est disponible',
-          sousTitre: `Facture ${f.invoice_number}`,
+          titre: estAvoir ? 'Votre avoir est disponible' : 'Votre facture est disponible',
+          sousTitre: `${Mot} ${f.invoice_number}`,
           corps:
-            p(jointe
-              ? "Votre facture est jointe à ce message. Vous la retrouverez aussi, à l'identique, dans votre espace client."
-              : 'Votre facture est à votre disposition dans votre espace client. Vous pouvez la télécharger à tout moment.') +
+            p(estAvoir
+              ? (jointe
+                  ? "Votre avoir est joint à ce message. Il constate le remboursement de votre commande et annule d'autant la facture correspondante."
+                  : "Votre avoir est à votre disposition dans votre espace client. Il constate le remboursement de votre commande et annule d'autant la facture correspondante.")
+              : (jointe
+                  ? "Votre facture est jointe à ce message. Vous la retrouverez aussi, à l'identique, dans votre espace client."
+                  : 'Votre facture est à votre disposition dans votre espace client. Vous pouvez la télécharger à tout moment.')) +
             details([
               ['Total HT', euros(f.subtotal_ht)],
               [`TVA (${taux.toLocaleString('fr-FR')} %)`, euros(f.tax_amount)],
-              ['Total TTC', euros(f.total_ttc)],
+              [estAvoir ? 'Montant remboursé' : 'Total TTC',
+               euros(estAvoir ? Math.abs(Number(f.total_ttc ?? 0)) : f.total_ttc)],
             ]) +
             // La mention d'exonération est portée par la facture : on la reprend ici,
             // pour qu'un acheteur professionnel sache tout de suite pourquoi il n'y a
@@ -567,8 +582,82 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
             (f.vat_mention
               ? p(`<span style="color:#8b8ba3;font-size:13px;">${e(f.vat_mention)}</span>`)
               : ''),
-          bouton: { libelle: 'Télécharger ma facture', url: `${SITE}/commandes` },
+          bouton: {
+            libelle: estAvoir ? 'Télécharger mon avoir' : 'Télécharger ma facture',
+            url: `${SITE}/commandes`,
+          },
           pied: 'Conservez ce document : il vous sera demandé en cas de garantie ou de contrôle.',
+        }),
+      };
+    }
+
+    /* ---- LICENCES LOGICIEL ------------------------------------------------
+       Le client achetait une licence, puis ne recevait plus jamais rien : ni confirmation
+       qu'elle était utilisable, ni explication quand elle était coupée. Le logiciel
+       s'arrêtait, et il croyait à une panne. Ces trois messages ferment ce trou. */
+    case 'licence_active':
+    case 'licence_suspendue':
+    case 'licence_revoquee': {
+      const { data: lic } = await supabaseAdmin
+        .from('licences')
+        .select('id, user_id, reference, postes_max, statut, suspendue_jusqu_au, motif_client')
+        .eq('id', data.id)
+        .single();
+      if (!lic) return null;
+
+      const destinataire = await adresseDe(lic.user_id);
+      if (!destinataire) return null;
+
+      const jusquAu = lic.suspendue_jusqu_au
+        ? new Date(lic.suspendue_jusqu_au).toLocaleDateString('fr-FR', {
+            day: '2-digit', month: 'long', year: 'numeric',
+          })
+        : null;
+
+      if (event === 'licence_active') {
+        return {
+          destinataires: [destinataire],
+          sujet: 'Votre licence OMEGADMX est active',
+          html: gabarit({
+            titre: 'Votre licence OMEGADMX est active',
+            sousTitre: lic.reference ?? '',
+            corps:
+              p("Vous pouvez piloter vos projecteurs depuis OMEGADMX avec une interface DMX de n'importe quelle marque.") +
+              p("<b>Rien à recopier</b> : ouvrez le logiciel, connectez votre interface, puis identifiez-vous avec <b>ce compte OMEGA</b> dans la fenêtre d'activation.") +
+              details([
+                ['Référence', e(lic.reference ?? '—')],
+                ['Postes autorisés', String(lic.postes_max ?? 2)],
+              ]) +
+              p('<span style="color:#8b8ba3;font-size:13px;">Une fois activée, la licence fonctionne hors ligne. Vous retrouvez vos postes activés dans votre espace client, rubrique Logiciels.</span>'),
+            bouton: { libelle: 'Voir mes licences', url: `${SITE}/compte?onglet=logiciels` },
+            pied: "Ce message confirme l'activation de votre licence OMEGADMX.",
+          }),
+        };
+      }
+
+      const suspendue = event === 'licence_suspendue';
+      return {
+        destinataires: [destinataire],
+        sujet: suspendue
+          ? 'Votre licence OMEGADMX est suspendue'
+          : 'Votre licence OMEGADMX a été désactivée',
+        html: gabarit({
+          titre: suspendue
+            ? 'Votre licence est temporairement suspendue'
+            : 'Votre licence a été désactivée',
+          sousTitre: lic.reference ?? '',
+          corps:
+            p(suspendue
+              ? `Le pilotage des interfaces DMX d'autres marques est interrompu${
+                  jusquAu ? ` jusqu'au <b>${e(jusquAu)}</b>` : ''
+                }. Le logiciel reste utilisable avec un boîtier OMEGA DMX.`
+              : "Le pilotage des interfaces DMX d'autres marques n'est plus autorisé sur ce compte. Le logiciel reste utilisable avec un boîtier OMEGA DMX.") +
+            (lic.motif_client
+              ? p(`<b>Motif :</b> ${e(lic.motif_client)}`)
+              : '') +
+            p("<span style=\"color:#8b8ba3;font-size:13px;\">Vous pensez qu'il s'agit d'une erreur ? Répondez à ce message, nous regardons.</span>"),
+          bouton: { libelle: 'Voir mes licences', url: `${SITE}/compte?onglet=logiciels` },
+          pied: 'Ce message concerne votre licence logicielle OMEGADMX.',
         }),
       };
     }
@@ -854,7 +943,7 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
         if (essai > 0) await new Promise((r) => setTimeout(r, 1000));
         const { data: lignes } = await supabaseAdmin
           .from('order_items')
-          .select('quantity, price, products(name)')
+          .select('quantity, price, products(name, product_type)')
           .eq('order_id', c.id);
         articles = lignes ?? [];
       }
@@ -881,6 +970,44 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
           ? Number(c.shipping_cost_ht)
           : Math.round((Number(c.shipping_cost ?? 0) / 1.2) * 100) / 100;
 
+      /* ★ LICENCES LOGICIEL comprises dans la commande.
+         Sans ce bloc, le client payait une licence et ne recevait AUCUN message la
+         concernant : elle n'apparaissait que sur son compte, ce qu'il n'a aucune raison
+         de deviner. On la lui annonce dans l'accusé de commande, avec la marche à suivre.
+         ⚠ Même précaution de temporisation que pour `order_items` : les licences sont
+         écrites juste après la commande, elles peuvent ne pas encore être visibles au
+         premier passage. */
+      let licences: any[] = [];
+      {
+        const aDesLicences = articles.some((a: any) => a?.products?.product_type === 'licence');
+        if (aDesLicences) {
+          for (let essai = 0; essai < 4 && licences.length === 0; essai++) {
+            if (essai > 0) await new Promise((r) => setTimeout(r, 1000));
+            const { data: lic } = await supabaseAdmin
+              .from('licences')
+              .select('reference, postes_max')
+              .eq('order_id', c.id);
+            licences = lic ?? [];
+          }
+        }
+      }
+      const licencesHtml = licences.length
+        ? `<div style="border:1px solid #2b2b45;border-radius:10px;padding:16px;margin:4px 0 18px 0;background:#15152a;">
+             <div style="color:#ffffff;font-size:15px;font-weight:700;margin-bottom:8px;">
+               Votre licence OMEGADMX est active
+             </div>
+             <div style="color:#c9c9de;font-size:14px;line-height:1.6;">
+               ${licences.map((l: any) => `<div style="font-family:monospace;color:#7ad3ff;">${e(l.reference ?? '')}</div>`).join('')}
+             </div>
+             <div style="color:#8b8ba3;font-size:13px;line-height:1.6;margin-top:10px;">
+               Rien à recopier&nbsp;: ouvrez OMEGADMX, connectez votre interface DMX, puis
+               identifiez-vous avec <b style="color:#c9c9de;">ce compte OMEGA</b> dans la
+               fenêtre d'activation. La licence autorise
+               ${e(licences[0]?.postes_max ?? 2)} postes (régie et secours).
+             </div>
+           </div>`
+        : '';
+
       const ad = c.shipping_address as Record<string, string> | null;
       const livraison = ad
         ? [
@@ -898,12 +1025,15 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
 
       return {
         destinataires: [adresse],
-        sujet: `Votre commande OMEGA est confirmée — ${Number(c.total ?? 0).toFixed(2)} €`,
+        sujet: licences.length
+          ? `Votre licence OMEGADMX est active — commande confirmée`
+          : `Votre commande OMEGA est confirmée — ${Number(c.total ?? 0).toFixed(2)} €`,
         html: gabarit({
           titre: 'Merci pour votre commande',
           sousTitre: `Référence ${String(c.id).slice(0, 8)}`,
           corps:
             p('Votre paiement a bien été reçu et votre commande est confirmée.') +
+            licencesHtml +
             (lignesHtml
               ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px 0;">${lignesHtml}</table>
                  <div style="border-top:1px solid #23233a;margin:8px 0 16px 0;"></div>`

@@ -36,6 +36,7 @@ const GAMME_OMEGA = [
   { to: '/machine-hazer', libelle: 'Smoke System' },
   { to: '/fluid-system', libelle: 'Fluid System' },
   { to: '/omega-dmx-interface', libelle: 'DMX Interface' },
+  { to: '/omega-dmx-logiciel', libelle: 'Logiciel OMEGADMX' },
   { to: '/produits', libelle: 'Tous les produits' },
 ];
 

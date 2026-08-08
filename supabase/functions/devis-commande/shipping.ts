@@ -110,6 +110,13 @@ export interface ShippingLine {
   height_cm?: number | null;
   /** Prix unitaire HT — sert UNIQUEMENT au calcul du franco de port. */
   unit_price_ht?: number | null;
+  /* ─ Article DÉMATÉRIALISÉ (licence logiciel) ────────────────────────────
+     Rien à emballer, rien à transporter, aucune adresse à connaître. Ces
+     lignes sont écartées de TOUT le calcul : poids, gabarit, bascule palette
+     et franco de port. Un panier qui n'en contient que devient `vide` et
+     repart avec un devis à 0 € sans adresse requise — sans quoi le client ne
+     pourrait jamais payer une licence, faute de pouvoir livrer un fichier. */
+  dematerialise?: boolean | null;
   quantity: number;
 }
 
@@ -972,7 +979,7 @@ export function analyserEnvoi(
   config: ShippingConfig,
   opts: OptionsLivraison = {}
 ): AnalyseEnvoi {
-  const valides = (lines || []).filter(l => l && l.quantity > 0);
+  const valides = (lines || []).filter(l => l && l.quantity > 0 && !l.dematerialise);
   const { zone, iso, cp } = resoudreZone(dest);
   const km = zone === 'FR_METRO' && !/^980\d{2}$/.test(cp) ? estimateRoadKm(cp, config) : null;
 
