@@ -83,13 +83,22 @@ export const DEFAULT_TRANSFORM: ImageTransform = {
   objectPosition: 'center center',
 };
 
+/** Entrée de la galerie produit (éditable admin) */
+export type GalleryItem = {
+  id: string;
+  src: string;
+  cap: string;
+};
+
 export type PageCalloutsConfig = {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   pageId: string;
   /** Callouts par photoId (toute image de la page) */
   photos: Record<string, Callout[]>;
   /** Transforms 3D / parallax par photoId */
   transforms?: Record<string, ImageTransform>;
+  /** Galerie photos (ordre = affichage) */
+  gallery?: GalleryItem[];
   updatedAt?: string;
 };
 
@@ -358,11 +367,31 @@ export function normalizeConfig(raw: unknown, defaults: PageCalloutsConfig): Pag
     transforms[key] = normalizeTransform(transformsIn[key]);
   }
 
+  const galleryIn = Array.isArray(r.gallery) ? (r.gallery as unknown[]) : null;
+  const gallery: GalleryItem[] = galleryIn
+    ? galleryIn
+        .map((item): GalleryItem | null => {
+          if (!item || typeof item !== 'object') return null;
+          const g = item as Record<string, unknown>;
+          if (typeof g.src !== 'string' || !g.src.trim()) return null;
+          return {
+            id:
+              typeof g.id === 'string' && g.id
+                ? g.id
+                : `g_${Math.random().toString(36).slice(2, 9)}`,
+            src: g.src.trim(),
+            cap: typeof g.cap === 'string' ? g.cap : '',
+          };
+        })
+        .filter((g): g is GalleryItem => !!g)
+    : structuredClone(defaults.gallery || []);
+
   return {
-    version: 2,
+    version: 3,
     pageId: PAGE_ID,
     photos,
     transforms,
+    gallery,
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : undefined,
   };
 }

@@ -50,6 +50,7 @@ import {
 } from '../components/callout-editor/AdminCalloutEditor';
 import { usePageCallouts } from '../components/callout-editor/usePageCallouts';
 import { PHOTO_IDS } from '../components/callout-editor/defaults';
+import { GalleryManager } from '../components/callout-editor/GalleryManager';
 
 /* ================================================================== */
 /*  OMEGA DMX Interface — Product Experience                           */
@@ -72,19 +73,6 @@ const BOX = {
   softDmx: '/products/omega-dmx-v2-sortie-dmx.webp',
   softConn: '/products/omega-dmx-v2-connexion.webp',
 };
-
-/** Toutes les photos produit réelles (galerie) */
-const GALLERY: { src: string; cap: string }[] = [
-  { src: '/products/p1021135.webp', cap: 'Vue produit — double sortie DMX' },
-  { src: '/products/p1021134.webp', cap: 'Gros plan XLR · Univers 1 & 2' },
-  { src: '/products/p1021128.webp', cap: 'Face avant gravée OMEGA' },
-  { src: '/products/p1021132.webp', cap: 'Connecteur RP-SMA + antennes' },
-  { src: '/products/p1021133.webp', cap: 'Antennes interchangeables' },
-  { src: '/products/p1021130.webp', cap: 'Antenne & USB-C' },
-  { src: '/products/p1021131.webp', cap: 'Détail USB-C / liaison PC' },
-  { src: '/products/p1021129.webp', cap: 'Profil antenne' },
-  { src: '/products/omega-box-top-ports.webp', cap: 'Vue ¾ — ports & antenne' },
-];
 
 const PRICE_TTC = 429;
 const PRICE_HT = PRICE_TTC / 1.2;
@@ -195,17 +183,20 @@ const OmegaDmxInterfacePage = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const gallery = calloutsApi.gallery;
+
   useEffect(() => {
     if (lightbox === null) return;
+    const len = gallery.length || 1;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightbox(null);
-      if (e.key === 'ArrowRight') setLightbox((i) => (i === null ? i : (i + 1) % GALLERY.length));
+      if (e.key === 'ArrowRight') setLightbox((i) => (i === null ? i : (i + 1) % len));
       if (e.key === 'ArrowLeft')
-        setLightbox((i) => (i === null ? i : (i - 1 + GALLERY.length) % GALLERY.length));
+        setLightbox((i) => (i === null ? i : (i - 1 + len) % len));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightbox]);
+  }, [lightbox, gallery.length]);
 
   const isPro = affichagePrix === 'ht';
   const mainPrice = isPro ? PRICE_HT : PRICE_TTC;
@@ -513,8 +504,8 @@ const OmegaDmxInterfacePage = () => {
           </Reveal>
 
           <div className="mt-12 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-            {GALLERY.map((g, i) => (
-              <Reveal key={g.src} delay={i * 40}>
+            {gallery.map((g, i) => (
+              <Reveal key={g.id} delay={i * 40}>
                 <div className="group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-950 text-left transition hover:border-white/25">
                   <EditableImage
                     src={g.src}
@@ -522,8 +513,24 @@ const OmegaDmxInterfacePage = () => {
                     cover
                     aspectClass="aspect-[16/10]"
                     className="w-full"
-                    {...imageProps(`gallery${i}`)}
+                    {...imageProps(g.id)}
                   />
+                  {editMode && isAdmin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!confirm(`Supprimer « ${g.cap || 'cette photo'} » de la galerie ?`))
+                          return;
+                        calloutsApi.removeGalleryItem(g.id);
+                        toast.success('Photo retirée — enregistrez pour publier');
+                      }}
+                      className="absolute right-2 top-2 z-30 rounded-full border border-red-400/40 bg-black/80 p-1.5 text-red-300 shadow-lg transition hover:bg-red-500/20"
+                      title="Supprimer de la galerie"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                   {!editMode && (
                     <button
                       type="button"
@@ -538,7 +545,35 @@ const OmegaDmxInterfacePage = () => {
                 </div>
               </Reveal>
             ))}
+
+            {/* Tuile « ajouter » en mode édition */}
+            {editMode && isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('gallery-manager');
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  // Ouvre via focus du manager — le bouton principal est dans GalleryManager
+                  const addBtn = document.querySelector(
+                    '[data-gallery-add]',
+                  ) as HTMLButtonElement | null;
+                  addBtn?.click();
+                }}
+                className="flex aspect-[16/10] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-amber-400/40 bg-amber-400/5 text-amber-200/90 transition hover:border-amber-400/70 hover:bg-amber-400/10"
+              >
+                <span className="text-2xl font-light">+</span>
+                <span className="text-xs font-semibold uppercase tracking-wider">
+                  Ajouter une photo
+                </span>
+              </button>
+            )}
           </div>
+
+          {editMode && isAdmin && (
+            <div id="gallery-manager">
+              <GalleryManager api={calloutsApi} open />
+            </div>
+          )}
         </div>
       </section>
 
@@ -1089,7 +1124,8 @@ const OmegaDmxInterfacePage = () => {
             className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/20 px-3 py-6 text-white/70 transition hover:bg-white/10 md:left-6"
             onClick={(e) => {
               e.stopPropagation();
-              setLightbox((i) => (i === null ? i : (i - 1 + GALLERY.length) % GALLERY.length));
+              const len = gallery.length || 1;
+              setLightbox((i) => (i === null ? i : (i - 1 + len) % len));
             }}
             aria-label="Précédent"
           >
@@ -1099,21 +1135,26 @@ const OmegaDmxInterfacePage = () => {
             className="max-h-[90vh] max-w-5xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <img
-              src={GALLERY[lightbox].src}
-              alt={GALLERY[lightbox].cap}
-              className="max-h-[82vh] w-full rounded-lg object-contain"
-            />
-            <figcaption className="mt-3 text-center text-sm text-white/55">
-              {GALLERY[lightbox].cap} · {lightbox + 1}/{GALLERY.length}
-            </figcaption>
+            {gallery[lightbox] && (
+              <>
+                <img
+                  src={gallery[lightbox].src}
+                  alt={gallery[lightbox].cap}
+                  className="max-h-[82vh] w-full rounded-lg object-contain"
+                />
+                <figcaption className="mt-3 text-center text-sm text-white/55">
+                  {gallery[lightbox].cap} · {lightbox + 1}/{gallery.length}
+                </figcaption>
+              </>
+            )}
           </figure>
           <button
             type="button"
             className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/20 px-3 py-6 text-white/70 transition hover:bg-white/10 md:right-6"
             onClick={(e) => {
               e.stopPropagation();
-              setLightbox((i) => (i === null ? i : (i + 1) % GALLERY.length));
+              const len = gallery.length || 1;
+              setLightbox((i) => (i === null ? i : (i + 1) % len));
             }}
             aria-label="Suivant"
           >

@@ -1,4 +1,4 @@
-import { Callout, createCallout, PageCalloutsConfig, PAGE_ID } from './types';
+import { Callout, createCallout, GalleryItem, PageCalloutsConfig, PAGE_ID } from './types';
 
 export const PHOTO_IDS = {
   hero: 'hero',
@@ -48,10 +48,23 @@ export const PHOTO_LABELS: Record<string, string> = {
 
 const c = (p: Parameters<typeof createCallout>[0]): Callout => createCallout(p);
 
+export const DEFAULT_GALLERY: GalleryItem[] = [
+  { id: 'gallery0', src: '/products/p1021135.webp', cap: 'Vue produit — double sortie DMX' },
+  { id: 'gallery1', src: '/products/p1021134.webp', cap: 'Gros plan XLR · Univers 1 & 2' },
+  { id: 'gallery2', src: '/products/p1021128.webp', cap: 'Face avant gravée OMEGA' },
+  { id: 'gallery3', src: '/products/p1021132.webp', cap: 'Connecteur RP-SMA + antennes' },
+  { id: 'gallery4', src: '/products/p1021133.webp', cap: 'Antennes interchangeables' },
+  { id: 'gallery5', src: '/products/p1021130.webp', cap: 'Antenne & USB-C' },
+  { id: 'gallery6', src: '/products/p1021131.webp', cap: 'Détail USB-C / liaison PC' },
+  { id: 'gallery7', src: '/products/p1021129.webp', cap: 'Profil antenne' },
+  { id: 'gallery8', src: '/products/omega-box-top-ports.webp', cap: 'Vue ¾ — ports & antenne' },
+];
+
 export const DEFAULT_PAGE_CALLOUTS: PageCalloutsConfig = {
-  version: 2,
+  version: 3,
   pageId: PAGE_ID,
   transforms: {},
+  gallery: DEFAULT_GALLERY,
   photos: {
     [PHOTO_IDS.dmxClose]: [
       c({

@@ -5,9 +5,11 @@ import {
   Callout,
   CalloutDesign,
   DEFAULT_TRANSFORM,
+  GalleryItem,
   ImageTransform,
   normalizeConfig,
   normalizeTransform,
+  newCalloutId,
   PageCalloutsConfig,
   PAGE_ID,
 } from './types';
@@ -18,7 +20,11 @@ function cloneConfig(cfg: PageCalloutsConfig): PageCalloutsConfig {
 }
 
 function snapshotOf(cfg: PageCalloutsConfig): string {
-  return JSON.stringify({ photos: cfg.photos, transforms: cfg.transforms || {} });
+  return JSON.stringify({
+    photos: cfg.photos,
+    transforms: cfg.transforms || {},
+    gallery: cfg.gallery || [],
+  });
 }
 
 export function usePageCallouts() {
@@ -69,6 +75,8 @@ export function usePageCallouts() {
 
   const dirty = useMemo(() => snapshotOf(config) !== savedSnapshot, [config, savedSnapshot]);
 
+  const gallery: GalleryItem[] = config.gallery ?? DEFAULT_PAGE_CALLOUTS.gallery ?? [];
+
   const getCallouts = useCallback(
     (photoId: string): Callout[] => config.photos[photoId] ?? [],
     [config.photos],
@@ -85,7 +93,7 @@ export function usePageCallouts() {
       const current = normalizeTransform(prev.transforms?.[photoId] ?? DEFAULT_TRANSFORM);
       return {
         ...prev,
-        version: 2,
+        version: 3,
         transforms: {
           ...(prev.transforms || {}),
           [photoId]: { ...current, ...patch },
@@ -163,6 +171,53 @@ export function usePageCallouts() {
     }));
   }, []);
 
+  /* ── Galerie ── */
+  const addGalleryItem = useCallback((item: Omit<GalleryItem, 'id'> & { id?: string }) => {
+    const id = item.id || `g_${newCalloutId().slice(2)}`;
+    const entry: GalleryItem = {
+      id,
+      src: item.src,
+      cap: item.cap || '',
+    };
+    setConfig((prev) => ({
+      ...prev,
+      version: 3,
+      gallery: [...(prev.gallery || []), entry],
+    }));
+    return entry;
+  }, []);
+
+  const removeGalleryItem = useCallback((id: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      version: 3,
+      gallery: (prev.gallery || []).filter((g) => g.id !== id),
+      // garder callouts/transforms orphelins n’est pas grave ; on peut nettoyer
+    }));
+  }, []);
+
+  const updateGalleryItem = useCallback((id: string, patch: Partial<Pick<GalleryItem, 'src' | 'cap'>>) => {
+    setConfig((prev) => ({
+      ...prev,
+      version: 3,
+      gallery: (prev.gallery || []).map((g) => (g.id === id ? { ...g, ...patch } : g)),
+    }));
+  }, []);
+
+  const moveGalleryItem = useCallback((from: number, to: number) => {
+    setConfig((prev) => {
+      const list = [...(prev.gallery || [])];
+      if (from < 0 || from >= list.length || to < 0 || to >= list.length) return prev;
+      const [item] = list.splice(from, 1);
+      list.splice(to, 0, item);
+      return { ...prev, version: 3, gallery: list };
+    });
+  }, []);
+
+  const setGallery = useCallback((items: GalleryItem[]) => {
+    setConfig((prev) => ({ ...prev, version: 3, gallery: items }));
+  }, []);
+
   const resetToDefaults = useCallback(() => {
     setConfig(cloneConfig(DEFAULT_PAGE_CALLOUTS));
   }, []);
@@ -172,12 +227,14 @@ export function usePageCallouts() {
       const snap = JSON.parse(savedSnapshot) as {
         photos: PageCalloutsConfig['photos'];
         transforms: PageCalloutsConfig['transforms'];
+        gallery: GalleryItem[];
       };
       setConfig({
-        version: 2,
+        version: 3,
         pageId: PAGE_ID,
         photos: snap.photos,
         transforms: snap.transforms || {},
+        gallery: snap.gallery || [],
       });
     } catch {
       setConfig(cloneConfig(DEFAULT_PAGE_CALLOUTS));
@@ -188,10 +245,11 @@ export function usePageCallouts() {
     setSaving(true);
     setError(null);
     const payload: PageCalloutsConfig = {
-      version: 2,
+      version: 3,
       pageId: PAGE_ID,
       photos: config.photos,
       transforms: config.transforms || {},
+      gallery: config.gallery || [],
       updatedAt: new Date().toISOString(),
     };
     try {
@@ -221,7 +279,7 @@ export function usePageCallouts() {
       setSaving(false);
       return { error: msg };
     }
-  }, [config.photos, config.transforms]);
+  }, [config.photos, config.transforms, config.gallery]);
 
   return {
     config,
@@ -229,6 +287,7 @@ export function usePageCallouts() {
     saving,
     dirty,
     error,
+    gallery,
     getCallouts,
     getTransform,
     updateTransform,
@@ -237,6 +296,11 @@ export function usePageCallouts() {
     updateCalloutDesign,
     addCallout,
     removeCallout,
+    addGalleryItem,
+    removeGalleryItem,
+    updateGalleryItem,
+    moveGalleryItem,
+    setGallery,
     resetToDefaults,
     revert,
     save,
