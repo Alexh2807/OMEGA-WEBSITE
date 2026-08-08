@@ -18,12 +18,18 @@ export type AnnotatedPhotoProps = {
   imgClassName?: string;
   objectPosition?: string;
   /**
-   * CSS transform appliqué UNIQUEMENT à la balise <img>
-   * (legacy) — préférer `orient` pour 0/90/180/270.
+   * CSS transform appliqué UNIQUEMENT à la couche image
+   * (orient + scale photo + offset X/Y).
    */
   imageTransform?: string;
   /** Orientation photo seule (0/90/180/270) — ne tourne pas les callouts */
   orient?: 0 | 90 | 180 | 270;
+  /** Zoom de la photo dans la carte */
+  imageScale?: number;
+  /** Décalage photo X (%) */
+  imageOffsetX?: number;
+  /** Décalage photo Y (%) */
+  imageOffsetY?: number;
   /** Remplir le cadre (cover) et centrer l’image */
   coverFill?: boolean;
   editMode?: boolean;
@@ -67,6 +73,9 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   objectPosition = 'center center',
   imageTransform,
   orient = 0,
+  imageScale = 1,
+  imageOffsetX = 0,
+  imageOffsetY = 0,
   coverFill = false,
   editMode = false,
   tool = 'select',
@@ -76,6 +85,26 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   onAddAt,
 }) => {
   const swapped = orient === 90 || orient === 270;
+
+  /** Transform photo seule : orient + zoom + pan (callouts non affectés) */
+  const photoLayerTransform = [
+    'translate(-50%, -50%)',
+    `translate(${imageOffsetX}%, ${imageOffsetY}%)`,
+    orient !== 0 ? `rotate(${orient}deg)` : '',
+    imageScale !== 1 ? `scale(${imageScale})` : '',
+    imageTransform || '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const photoLayerTransformSimple = [
+    `translate(${imageOffsetX}%, ${imageOffsetY}%)`,
+    orient !== 0 ? `rotate(${orient}deg)` : '',
+    imageScale !== 1 ? `scale(${imageScale})` : '',
+    imageTransform || '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const boxRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(editMode);
   const [aspect, setAspect] = useState(16 / 9);
@@ -223,30 +252,19 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
           style={
             coverFill
               ? {
-                  // 90/270 : rectangle inverse (cqh×cqw) puis rotate → remplit et centre
                   width: swapped ? '100cqh' : '100%',
                   height: swapped ? '100cqw' : '100%',
-                  transform: [
-                    'translate(-50%, -50%)',
-                    orient !== 0 ? `rotate(${orient}deg)` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' '),
+                  transform: photoLayerTransform,
                   transformOrigin: 'center center',
                   transition: 'transform 0.3s ease-out',
+                  willChange: 'transform',
                 }
-              : orient || imageTransform
-                ? {
-                    transform: [
-                      orient !== 0 ? `rotate(${orient}deg)` : '',
-                      imageTransform || '',
-                    ]
-                      .filter(Boolean)
-                      .join(' '),
-                    transformOrigin: 'center center',
-                    transition: 'transform 0.3s ease-out',
-                  }
-                : undefined
+              : {
+                  transform: photoLayerTransformSimple || undefined,
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.3s ease-out',
+                  willChange: 'transform',
+                }
           }
         >
           <img

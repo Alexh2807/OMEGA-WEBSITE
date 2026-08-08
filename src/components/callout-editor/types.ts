@@ -68,8 +68,17 @@ export type ImageTransform = {
   rotateY: number;
   /** Perspective CSS (px) */
   perspective: number;
-  /** Échelle 0.5–1.5 */
+  /** Échelle de la carte entière (tilt) 0.5–1.5 */
   scale: number;
+  /**
+   * Échelle de la PHOTO seule dans la carte (indépendant de scale).
+   * 1 = taille normale, >1 zoom, <1 rétrécit.
+   */
+  imageScale: number;
+  /** Décalage horizontal de la photo dans la carte (%) — négatif = gauche */
+  imageOffsetX: number;
+  /** Décalage vertical de la photo dans la carte (%) — négatif = haut */
+  imageOffsetY: number;
   /** Amplitude parallax horizontal (% translate / tilt) */
   parallaxX: number;
   /** Amplitude parallax vertical */
@@ -86,6 +95,9 @@ export const DEFAULT_TRANSFORM: ImageTransform = {
   rotateY: 0,
   perspective: 900,
   scale: 1,
+  imageScale: 1,
+  imageOffsetX: 0,
+  imageOffsetY: 0,
   parallaxX: 0,
   parallaxY: 0,
   parallaxMode: 'none',
@@ -347,6 +359,9 @@ export function normalizeTransform(raw: unknown): ImageTransform {
     perspective:
       typeof t.perspective === 'number' ? clamp(t.perspective, 200, 2000) : DEFAULT_TRANSFORM.perspective,
     scale: typeof t.scale === 'number' ? clamp(t.scale, 0.5, 1.6) : 1,
+    imageScale: typeof t.imageScale === 'number' ? clamp(t.imageScale, 0.3, 3) : 1,
+    imageOffsetX: typeof t.imageOffsetX === 'number' ? clamp(t.imageOffsetX, -100, 100) : 0,
+    imageOffsetY: typeof t.imageOffsetY === 'number' ? clamp(t.imageOffsetY, -100, 100) : 0,
     parallaxX: typeof t.parallaxX === 'number' ? clamp(t.parallaxX, 0, 30) : 0,
     parallaxY: typeof t.parallaxY === 'number' ? clamp(t.parallaxY, 0, 30) : 0,
     parallaxMode: mode,

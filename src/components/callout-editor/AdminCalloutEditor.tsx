@@ -495,9 +495,60 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                   </p>
                 </Field>
 
+                <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 px-2.5 py-2">
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-200/90">
+                    Photo dans la carte
+                  </div>
+                  <p className="mb-2 text-[9px] text-white/40">
+                    Zoom et position de l’image seule (cadre + callouts inchangés)
+                  </p>
+                  <Field label={`Taille photo · ${((transform.imageScale ?? 1) * 100).toFixed(0)}%`}>
+                    <input
+                      type="range"
+                      min={0.4}
+                      max={2.5}
+                      step={0.01}
+                      value={transform.imageScale ?? 1}
+                      onChange={(e) => patchTransform({ imageScale: Number(e.target.value) })}
+                      className="w-full accent-emerald-400"
+                    />
+                  </Field>
+                  <Field label={`Position X · ${(transform.imageOffsetX ?? 0).toFixed(0)}%`}>
+                    <input
+                      type="range"
+                      min={-50}
+                      max={50}
+                      step={0.5}
+                      value={transform.imageOffsetX ?? 0}
+                      onChange={(e) => patchTransform({ imageOffsetX: Number(e.target.value) })}
+                      className="w-full accent-emerald-400"
+                    />
+                  </Field>
+                  <Field label={`Position Y · ${(transform.imageOffsetY ?? 0).toFixed(0)}%`}>
+                    <input
+                      type="range"
+                      min={-50}
+                      max={50}
+                      step={0.5}
+                      value={transform.imageOffsetY ?? 0}
+                      onChange={(e) => patchTransform({ imageOffsetY: Number(e.target.value) })}
+                      className="w-full accent-emerald-400"
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    className="mt-1 w-full rounded-lg border border-white/10 py-1.5 text-[10px] text-white/50 hover:bg-white/5"
+                    onClick={() =>
+                      patchTransform({ imageScale: 1, imageOffsetX: 0, imageOffsetY: 0 })
+                    }
+                  >
+                    Reset photo (taille + position)
+                  </button>
+                </div>
+
                 <div className="rounded-lg border border-sky-400/25 bg-sky-400/5 px-2.5 py-2">
                   <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-sky-200/90">
-                    Tilt 3D — élément entier (carte cliquée)
+                    Tilt 3D — élément entier (carte)
                   </div>
                   <p className="mb-2 text-[9px] text-white/40">
                     Cadre arrondi + photo + annotations bougent ensemble
@@ -535,29 +586,29 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                       className="w-full accent-sky-400"
                     />
                   </Field>
+                  <Field label={`Échelle carte · ${((transform.scale ?? 1) * 100).toFixed(0)}%`}>
+                    <input
+                      type="range"
+                      min={0.7}
+                      max={1.3}
+                      step={0.01}
+                      value={transform.scale}
+                      onChange={(e) => patchTransform({ scale: Number(e.target.value) })}
+                      className="w-full accent-sky-400"
+                    />
+                  </Field>
+                  <Field label={`Perspective · ${transform.perspective}px`}>
+                    <input
+                      type="range"
+                      min={400}
+                      max={1600}
+                      step={50}
+                      value={transform.perspective}
+                      onChange={(e) => patchTransform({ perspective: Number(e.target.value) })}
+                      className="w-full accent-sky-400"
+                    />
+                  </Field>
                 </div>
-                <Field label={`Perspective · ${transform.perspective}px`}>
-                  <input
-                    type="range"
-                    min={400}
-                    max={1600}
-                    step={50}
-                    value={transform.perspective}
-                    onChange={(e) => patchTransform({ perspective: Number(e.target.value) })}
-                    className="w-full accent-amber-400"
-                  />
-                </Field>
-                <Field label={`Échelle · ${transform.scale.toFixed(2)}`}>
-                  <input
-                    type="range"
-                    min={0.7}
-                    max={1.3}
-                    step={0.01}
-                    value={transform.scale}
-                    onChange={(e) => patchTransform({ scale: Number(e.target.value) })}
-                    className="w-full accent-amber-400"
-                  />
-                </Field>
 
                 <Field label="Parallax (animation)">
                   <div className="flex gap-1">
