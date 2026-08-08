@@ -84,20 +84,8 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   onChangeCallout,
   onAddAt,
 }) => {
-  const swapped = orient === 90 || orient === 270;
-
-  /** Transform photo seule : orient + zoom + pan (callouts non affectés) */
-  const photoLayerTransform = [
-    'translate(-50%, -50%)',
-    `translate(${imageOffsetX}%, ${imageOffsetY}%)`,
-    orient !== 0 ? `rotate(${orient}deg)` : '',
-    imageScale !== 1 ? `scale(${imageScale})` : '',
-    imageTransform || '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  const photoLayerTransformSimple = [
+  /** Transform photo seule : pan + orient + zoom (callouts non affectés) */
+  const photoTransform = [
     `translate(${imageOffsetX}%, ${imageOffsetY}%)`,
     orient !== 0 ? `rotate(${orient}deg)` : '',
     imageScale !== 1 ? `scale(${imageScale})` : '',
@@ -226,60 +214,39 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
       onClick={handleBgClick}
     >
       {/*
-        Couche IMAGE seule — orient 0/90/180/270 ici uniquement.
-        Centrée dans le cadre. Callouts en absolute au-dessus, non transformés.
+        Couche IMAGE seule (orient + zoom + pan).
+        object-fit: contain → en dézoom on voit TOUTE la photo (bandes haut/bas),
+        plus de recadrage “cover” qui mange les bords avant le scale.
       */}
       <div
         data-image-layer
         className={
           coverFill
-            ? 'absolute inset-0 overflow-hidden'
-            : 'relative w-full overflow-hidden'
-        }
-        style={
-          coverFill
-            ? { containerType: 'size' as const }
-            : undefined
+            ? 'absolute inset-0 flex items-center justify-center overflow-hidden'
+            : 'relative flex w-full items-center justify-center overflow-hidden'
         }
       >
-        {/* Wrapper centré : gère le 90/270 en swapant largeur/hauteur puis rotate */}
-        <div
+        <img
+          src={src}
+          alt={alt}
           className={
             coverFill
-              ? 'absolute left-1/2 top-1/2 overflow-hidden'
-              : 'relative w-full'
+              ? `pointer-events-none block max-h-full max-w-full select-none object-contain ${imgClassName}`
+              : `pointer-events-none block h-auto w-full max-w-full select-none object-contain ${imgClassName}`
           }
-          style={
-            coverFill
-              ? {
-                  width: swapped ? '100cqh' : '100%',
-                  height: swapped ? '100cqw' : '100%',
-                  transform: photoLayerTransform,
-                  transformOrigin: 'center center',
-                  transition: 'transform 0.3s ease-out',
-                  willChange: 'transform',
-                }
-              : {
-                  transform: photoLayerTransformSimple || undefined,
-                  transformOrigin: 'center center',
-                  transition: 'transform 0.3s ease-out',
-                  willChange: 'transform',
-                }
-          }
-        >
-          <img
-            src={src}
-            alt={alt}
-            className={
-              coverFill
-                ? `pointer-events-none block h-full w-full select-none object-cover object-center ${imgClassName}`
-                : `pointer-events-none block h-auto w-full select-none ${imgClassName}`
-            }
-            style={{ objectPosition }}
-            loading="lazy"
-            draggable={false}
-          />
-        </div>
+          style={{
+            objectPosition,
+            width: coverFill ? '100%' : undefined,
+            height: coverFill ? '100%' : undefined,
+            objectFit: 'contain',
+            transform: photoTransform || undefined,
+            transformOrigin: 'center center',
+            transition: 'transform 0.3s ease-out',
+            willChange: 'transform',
+          }}
+          loading="lazy"
+          draggable={false}
+        />
       </div>
 
       {editMode && (
