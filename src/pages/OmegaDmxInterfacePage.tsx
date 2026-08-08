@@ -42,10 +42,18 @@ import {
   SvgBackupBox,
   SvgMultiDevice,
 } from '../components/OmegaDmxSystemSvgs';
+import { AnnotatedPhoto } from '../components/callout-editor/AnnotatedPhoto';
+import {
+  AdminCalloutEditor,
+  handleAddCallout,
+  type EditorTool,
+} from '../components/callout-editor/AdminCalloutEditor';
+import { usePageCallouts } from '../components/callout-editor/usePageCallouts';
+import { PHOTO_IDS } from '../components/callout-editor/defaults';
 
 /* ================================================================== */
 /*  OMEGA DMX Interface — Product Experience                           */
-/*  Photos réelles + callouts B/W continus + galerie + lien logiciel  */
+/*  Photos réelles + callouts éditables (admin) + galerie + logiciel   */
 /* ================================================================== */
 
 const BOX = {
@@ -80,20 +88,6 @@ const GALLERY: { src: string; cap: string }[] = [
 
 const PRICE_TTC = 429;
 const PRICE_HT = PRICE_TTC / 1.2;
-
-type Callout = {
-  /** Centre de l’élément à montrer (0–100 %) */
-  x: number;
-  y: number;
-  label: string;
-  sub?: string;
-  /** Côté où placer l’étiquette */
-  side: 'left' | 'right';
-  /** Distance horizontale du trait vers le label (%, défaut 20) */
-  stretch?: number;
-  /** Décalage vertical du label par rapport au point (%, 0 = aligné) */
-  labelDy?: number;
-};
 
 const Reveal: React.FC<{
   children: React.ReactNode;
@@ -131,130 +125,40 @@ const Reveal: React.FC<{
   );
 };
 
-/**
- * Callouts produit style fiche technique (pas “IA”) :
- * - point blanc centré sur l’élément
- * - trait horizontal CONTINU noir + blanc (CSS, épaisseur fixe)
- * - étiquette B/W sobre, collée au bout du trait
- */
-const AnnotatedPhoto: React.FC<{
-  src: string;
-  alt: string;
-  callouts: Callout[];
-  className?: string;
-}> = ({ src, alt, callouts, className = '' }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) setActive(true);
-      },
-      { threshold: 0.2 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 ${className}`}
-    >
-      <img src={src} alt={alt} className="block w-full h-auto" loading="lazy" />
-
-      {callouts.map((c, i) => {
-        const stretch = c.stretch ?? 18;
-        const labelDy = c.labelDy ?? 0;
-        const isRight = c.side === 'right';
-        /* Longueur du trait en % de la largeur image */
-        const lineW = stretch;
-        /* Ancre du trait : du centre du point vers le côté */
-        const lineLeft = isRight ? c.x : c.x - lineW;
-        const labelX = isRight ? c.x + lineW : c.x - lineW;
-        const labelY = c.y + labelDy;
-
-        return (
-          <div
-            key={i}
-            className="pointer-events-none absolute inset-0"
-            style={{
-              opacity: active ? 1 : 0,
-              transition: `opacity 0.45s ease ${0.12 + i * 0.1}s`,
-            }}
-          >
-            {/* Trait horizontal continu (contour noir + trait blanc) */}
-            <span
-              className="absolute block"
-              style={{
-                left: `${lineLeft}%`,
-                top: `${c.y}%`,
-                width: `${lineW}%`,
-                height: 2,
-                transform: 'translateY(-50%)',
-                background: '#fff',
-                boxShadow: '0 0 0 1px #000',
-              }}
-              aria-hidden
-            />
-            {/* Segment vertical si label décalé */}
-            {Math.abs(labelDy) > 1 && (
-              <span
-                className="absolute block"
-                style={{
-                  left: isRight ? `${c.x + lineW}%` : `${c.x - lineW}%`,
-                  top: `${Math.min(c.y, labelY)}%`,
-                  height: `${Math.abs(labelDy)}%`,
-                  width: 2,
-                  transform: 'translateX(-50%)',
-                  background: '#fff',
-                  boxShadow: '0 0 0 1px #000',
-                }}
-                aria-hidden
-              />
-            )}
-
-            {/* Point centré sur l’élément à montrer */}
-            <span
-              className="absolute block h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white ring-1 ring-black"
-              style={{ left: `${c.x}%`, top: `${c.y}%` }}
-            />
-
-            {/* Étiquette B/W — collée au bout du trait, centrée verticalement */}
-            <div
-              className="absolute whitespace-nowrap rounded border border-white/30 bg-black/90 px-2.5 py-1"
-              style={{
-                left: `${labelX}%`,
-                top: `${labelY}%`,
-                transform: isRight
-                  ? 'translate(8px, -50%)'
-                  : 'translate(calc(-100% - 8px), -50%)',
-              }}
-            >
-              <div className="text-[11px] font-semibold tracking-wide text-white">{c.label}</div>
-              {c.sub && (
-                <div className="mt-0.5 text-[10px] leading-snug text-white/50">{c.sub}</div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
 const OmegaDmxInterfacePage = () => {
   const [sticky, setSticky] = useState(false);
   const [dbProduct, setDbProduct] = useState<Product | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const { addToCart } = useCart();
-  const { user, affichagePrix } = useAuth();
+  const { user, affichagePrix, isAdmin } = useAuth();
   const { vitrineMode } = useSiteSettings();
   const navigate = useNavigate();
   const heroRef = useRef<HTMLElement>(null);
+
+  /* ── Édition admin des callouts ── */
+  const calloutsApi = usePageCallouts();
+  const [editMode, setEditMode] = useState(false);
+  const [editTool, setEditTool] = useState<EditorTool>('select');
+  const [selectedCallout, setSelectedCallout] = useState<{
+    photoId: string;
+    calloutId: string;
+  } | null>(null);
+
+  const photoEditProps = (photoId: string) =>
+    editMode && isAdmin
+      ? {
+          editMode: true as const,
+          tool: editTool,
+          selectedId: selectedCallout?.photoId === photoId ? selectedCallout.calloutId : null,
+          onSelect: (pid: string, cid: string | null) => {
+            if (!cid) setSelectedCallout(null);
+            else setSelectedCallout({ photoId: pid, calloutId: cid });
+          },
+          onChangeCallout: calloutsApi.updateCallout,
+          onAddAt: (pid: string, x: number, y: number) =>
+            handleAddCallout(calloutsApi, pid, x, y, setSelectedCallout, setEditTool),
+        }
+      : { editMode: false as const };
 
   useEffect(() => {
     (async () => {
@@ -318,7 +222,24 @@ const OmegaDmxInterfacePage = () => {
   const buyLabel = vitrineMode ? 'Demander un devis' : `Commander — ${fmt(mainPrice)} €`;
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-white/20">
+    <div
+      className={`min-h-screen bg-black text-white selection:bg-white/20 ${
+        editMode && isAdmin ? 'pb-8' : ''
+      }`}
+    >
+      {/* Mode édition admin — haut gauche */}
+      {isAdmin && (
+        <AdminCalloutEditor
+          api={calloutsApi}
+          editMode={editMode}
+          setEditMode={setEditMode}
+          tool={editTool}
+          setTool={setEditTool}
+          selected={selectedCallout}
+          setSelected={setSelectedCallout}
+        />
+      )}
+
       {/* STICKY BAR */}
       <div
         className={`fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl transition-transform duration-300 ${
@@ -462,24 +383,9 @@ const OmegaDmxInterfacePage = () => {
               <AnnotatedPhoto
                 src={BOX.dmxClose}
                 alt="OMEGA DMX Interface — deux sorties XLR DMX"
-                callouts={[
-                  {
-                    x: 48,
-                    y: 58,
-                    label: 'Univers 1',
-                    sub: 'DMX OUT · 512 canaux',
-                    side: 'left',
-                    stretch: 18,
-                  },
-                  {
-                    x: 67,
-                    y: 52,
-                    label: 'Univers 2',
-                    sub: 'DMX OUT · 512 canaux',
-                    side: 'right',
-                    stretch: 16,
-                  },
-                ]}
+                photoId={PHOTO_IDS.dmxClose}
+                callouts={calloutsApi.getCallouts(PHOTO_IDS.dmxClose)}
+                {...photoEditProps(PHOTO_IDS.dmxClose)}
               />
               <p className="mt-3 text-center text-xs text-white/35">
                 Photo réelle — repères centrés sur les 2 sorties XLR
@@ -497,24 +403,9 @@ const OmegaDmxInterfacePage = () => {
               <AnnotatedPhoto
                 src={BOX.antennes}
                 alt="Connecteur d’antenne RP-SMA et antennes interchangeables"
-                callouts={[
-                  {
-                    x: 42,
-                    y: 40,
-                    label: 'Connecteur RP-SMA',
-                    sub: 'Antenne amovible, changeable en 2 s',
-                    side: 'right',
-                    stretch: 18,
-                  },
-                  {
-                    x: 26,
-                    y: 16,
-                    label: 'Antennes au choix',
-                    sub: 'Courte ou longue — selon la portée',
-                    side: 'left',
-                    stretch: 14,
-                  },
-                ]}
+                photoId={PHOTO_IDS.antennes}
+                callouts={calloutsApi.getCallouts(PHOTO_IDS.antennes)}
+                {...photoEditProps(PHOTO_IDS.antennes)}
               />
             </Reveal>
             <Reveal delay={100} className="order-1 lg:order-2">
@@ -575,57 +466,18 @@ const OmegaDmxInterfacePage = () => {
               <AnnotatedPhoto
                 src={BOX.sidePorts}
                 alt="Face latérale — sorties DMX et antenne"
-                callouts={[
-                  {
-                    x: 83,
-                    y: 36,
-                    label: 'Univers 1',
-                    sub: 'XLR DMX OUT',
-                    side: 'left',
-                    stretch: 14,
-                  },
-                  {
-                    x: 83,
-                    y: 58,
-                    label: 'Univers 2',
-                    sub: 'XLR DMX OUT',
-                    side: 'left',
-                    stretch: 14,
-                    labelDy: 6,
-                  },
-                  {
-                    x: 50,
-                    y: 8,
-                    label: 'Antenne',
-                    sub: 'Sans fil OMEGA',
-                    side: 'left',
-                    stretch: 18,
-                  },
-                ]}
+                photoId={PHOTO_IDS.sidePorts}
+                callouts={calloutsApi.getCallouts(PHOTO_IDS.sidePorts)}
+                {...photoEditProps(PHOTO_IDS.sidePorts)}
               />
             </Reveal>
             <Reveal delay={80}>
               <AnnotatedPhoto
                 src={BOX.antenneUsb}
                 alt="Connecteur antenne et USB-C"
-                callouts={[
-                  {
-                    x: 40,
-                    y: 48,
-                    label: 'Antenne RP-SMA',
-                    sub: 'Interchangeable',
-                    side: 'left',
-                    stretch: 14,
-                  },
-                  {
-                    x: 58,
-                    y: 60,
-                    label: 'USB-C',
-                    sub: 'Alim. / liaison PC',
-                    side: 'right',
-                    stretch: 16,
-                  },
-                ]}
+                photoId={PHOTO_IDS.antenneUsb}
+                callouts={calloutsApi.getCallouts(PHOTO_IDS.antenneUsb)}
+                {...photoEditProps(PHOTO_IDS.antenneUsb)}
               />
             </Reveal>
           </div>
