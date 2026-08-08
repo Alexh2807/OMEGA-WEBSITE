@@ -4,7 +4,7 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 08/08/2026 18:13:47
+ * Dernière mise à jour: 08/08/2026 18:28:49
  */
 
 // Liste de toutes les images disponibles dans /public
@@ -118,7 +118,6 @@ export const productImages = [
   "/products/omega-mousse-2.webp",
   "/products/omega-mousse.webp",
   "/products/p1021126.webp",
-  "/products/p1021127.webp",
   "/products/p1021128.webp",
   "/products/p1021129.webp",
   "/products/p1021130.webp",
