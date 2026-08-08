@@ -466,16 +466,14 @@ export const AdminCalloutEditor: React.FC<Props> = ({
             {/* ── 3D / Parallax ── */}
             <div>
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
-                Rotation image seule
+                Transformation
               </div>
               <p className="mb-3 text-[10px] text-white/40">
-                {PHOTO_LABELS[activeImageId] || activeImageId} —{' '}
-                <strong className="text-white/60">seule la photo</strong> tourne. Les traits,
-                annotations et textes restent fixes sur le cadre.
+                {PHOTO_LABELS[activeImageId] || activeImageId}
               </p>
 
               <div className="space-y-3">
-                <Field label="Orientation conteneur">
+                <Field label="Orientation photo seule (0 / 90 / 180 / 270)">
                   <div className="grid grid-cols-4 gap-1">
                     {([0, 90, 180, 270] as ImageOrient[]).map((deg) => (
                       <button
@@ -493,43 +491,51 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     ))}
                   </div>
                   <p className="mt-1 text-[9px] text-white/30">
-                    90° / 270° : le cadre s’adapte (swap largeur/hauteur)
+                    Redresse la photo uniquement — traits & textes restent en place
                   </p>
                 </Field>
 
-                <Field label={`Tilt Y (gauche/droite) · ${transform.rotateY.toFixed(0)}°`}>
-                  <input
-                    type="range"
-                    min={-45}
-                    max={45}
-                    step={1}
-                    value={transform.rotateY}
-                    onChange={(e) => patchTransform({ rotateY: Number(e.target.value) })}
-                    className="w-full accent-amber-400"
-                  />
-                </Field>
-                <Field label={`Tilt X (haut/bas) · ${transform.rotateX.toFixed(0)}°`}>
-                  <input
-                    type="range"
-                    min={-40}
-                    max={40}
-                    step={1}
-                    value={transform.rotateX}
-                    onChange={(e) => patchTransform({ rotateX: Number(e.target.value) })}
-                    className="w-full accent-amber-400"
-                  />
-                </Field>
-                <Field label={`Tilt Z fin · ${transform.rotateZ.toFixed(0)}°`}>
-                  <input
-                    type="range"
-                    min={-45}
-                    max={45}
-                    step={1}
-                    value={transform.rotateZ}
-                    onChange={(e) => patchTransform({ rotateZ: Number(e.target.value) })}
-                    className="w-full accent-amber-400"
-                  />
-                </Field>
+                <div className="rounded-lg border border-sky-400/25 bg-sky-400/5 px-2.5 py-2">
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-sky-200/90">
+                    Tilt 3D — élément entier (carte cliquée)
+                  </div>
+                  <p className="mb-2 text-[9px] text-white/40">
+                    Cadre arrondi + photo + annotations bougent ensemble
+                  </p>
+                  <Field label={`Tilt Y (gauche/droite) · ${transform.rotateY.toFixed(0)}°`}>
+                    <input
+                      type="range"
+                      min={-45}
+                      max={45}
+                      step={1}
+                      value={transform.rotateY}
+                      onChange={(e) => patchTransform({ rotateY: Number(e.target.value) })}
+                      className="w-full accent-sky-400"
+                    />
+                  </Field>
+                  <Field label={`Tilt X (haut/bas) · ${transform.rotateX.toFixed(0)}°`}>
+                    <input
+                      type="range"
+                      min={-40}
+                      max={40}
+                      step={1}
+                      value={transform.rotateX}
+                      onChange={(e) => patchTransform({ rotateX: Number(e.target.value) })}
+                      className="w-full accent-sky-400"
+                    />
+                  </Field>
+                  <Field label={`Tilt Z · ${transform.rotateZ.toFixed(0)}°`}>
+                    <input
+                      type="range"
+                      min={-45}
+                      max={45}
+                      step={1}
+                      value={transform.rotateZ}
+                      onChange={(e) => patchTransform({ rotateZ: Number(e.target.value) })}
+                      className="w-full accent-sky-400"
+                    />
+                  </Field>
+                </div>
                 <Field label={`Perspective · ${transform.perspective}px`}>
                   <input
                     type="range"

@@ -10,13 +10,17 @@ type Props = Omit<AnnotatedPhotoProps, 'className' | 'imageTransform'> & {
   onSelectImage?: (photoId: string) => void;
   cover?: boolean;
   aspectClass?: string;
-  /** Cadre arrondi (fixe) — la rotation s’applique uniquement à l’image */
   framed?: boolean;
 };
 
 /**
- * Cadre fixe (coins arrondis + callouts).
- * Orient / tilt / parallax → UNIQUEMENT sur la photo, pas sur les traits ni textes.
+ * Deux couches de rotation distinctes :
+ *
+ * 1) orient 0/90/180/270  → UNIQUEMENT la balise <img>
+ *    (redresser la photo sans bouger les callouts)
+ *
+ * 2) tilt X/Y/Z + scale + parallax → l’ÉLÉMENT ENTIER cliquable
+ *    (= la carte arrondie sélectionnée en édition : cadre + image + traits + textes)
  */
 export const EditableImage: React.FC<Props> = ({
   transform,
@@ -120,24 +124,26 @@ export const EditableImage: React.FC<Props> = ({
   const liveX = editMode ? 0 : parallax.x;
   const liveY = editMode ? 0 : parallax.y;
 
-  const rotX = (transform.rotateX || 0) + liveY * 0.55;
-  const rotY = (transform.rotateY || 0) + liveX * 0.7;
-  const rotZ = orient + (transform.rotateZ || 0);
+  // ── TILT : sur l’élément entier (carte cliquable) ──
+  const tiltX = (transform.rotateX || 0) + liveY * 0.55;
+  const tiltY = (transform.rotateY || 0) + liveX * 0.7;
+  const tiltZ = transform.rotateZ || 0;
   const tx = liveX * 0.35;
   const ty = liveY * 0.35;
 
-  /** Transform IMAGE ONLY */
-  const imageOnlyTransform = [
-    `rotateX(${rotX.toFixed(2)}deg)`,
-    `rotateY(${rotY.toFixed(2)}deg)`,
-    `rotateZ(${rotZ.toFixed(2)}deg)`,
+  const elementTransform = [
+    `rotateX(${tiltX.toFixed(2)}deg)`,
+    `rotateY(${tiltY.toFixed(2)}deg)`,
+    `rotateZ(${tiltZ.toFixed(2)}deg)`,
     `translate3d(${tx.toFixed(2)}%, ${ty.toFixed(2)}%, 0)`,
     `scale(${transform.scale ?? 1})`,
   ].join(' ');
 
+  // ── ORIENT : uniquement sur l’image ──
+  const imageOnlyTransform =
+    orient === 0 ? undefined : `rotateZ(${orient}deg)`;
+
   const hasNatural = natural.w > 0 && natural.h > 0;
-  // À 90°/270° le cadre change de ratio pour accueillir la photo redressée,
-  // mais le cadre lui-même ne tourne pas (callouts restent droits).
   const frameAspect =
     hasNatural && !cover
       ? swapped
@@ -162,14 +168,14 @@ export const EditableImage: React.FC<Props> = ({
       }}
     >
       {/*
-        CADRE FIXE (coins arrondis) — ne tourne PAS.
-        Callouts dessus restent horizontaux / lisibles.
+        ★ ÉLÉMENT D’ÉDITION = carte entière (ce que tu cliques)
+        Tilt X/Y/Z + scale + parallax ici → cadre + image + traits + textes.
       */}
       <div
         ref={cardRef}
         data-editable-card
         className={[
-          'relative h-full w-full overflow-hidden bg-zinc-950',
+          'relative h-full w-full overflow-hidden bg-zinc-950 transition-transform duration-300 ease-out will-change-transform',
           framed ? 'rounded-2xl border border-white/10 shadow-lg' : '',
           editMode && imageSelected
             ? 'ring-2 ring-amber-400/90 ring-offset-2 ring-offset-black'
@@ -179,6 +185,11 @@ export const EditableImage: React.FC<Props> = ({
         ]
           .filter(Boolean)
           .join(' ')}
+        style={{
+          transform: elementTransform,
+          transformOrigin: 'center center',
+          transformStyle: 'preserve-3d',
+        }}
       >
         <AnnotatedPhoto
           {...photoProps}
@@ -189,8 +200,7 @@ export const EditableImage: React.FC<Props> = ({
           imgClassName={
             cover
               ? `h-full w-full object-cover ${imgClassName || ''}`
-              : // À 90/270 l’img remplit mieux le cadre swappé
-                swapped
+              : swapped
                 ? `h-full w-full object-cover ${imgClassName || ''}`
                 : `h-full w-full object-contain ${imgClassName || ''}`
           }
@@ -199,7 +209,9 @@ export const EditableImage: React.FC<Props> = ({
 
         {editMode && (
           <div className="pointer-events-none absolute right-2 top-2 z-30 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-white/80">
-            {imageSelected ? `image seule · ${orient}°` : 'cliquer'}
+            {imageSelected
+              ? `élément · tilt carte · photo ${orient}°`
+              : 'cliquer'}
           </div>
         )}
       </div>
