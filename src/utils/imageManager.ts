@@ -4,7 +4,7 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 08/08/2026 17:18:31
+ * Dernière mise à jour: 08/08/2026 17:31:39
  */
 
 // Liste de toutes les images disponibles dans /public
@@ -56,6 +56,12 @@ export const productImages = [
   "/products/captures/feat-C-general.png",
   "/products/captures/feat-C-lyreled.png",
   "/products/captures/feat-C-scene-active.png",
+  "/products/captures/tour/01-general.png",
+  "/products/captures/tour/02-page-afx.png",
+  "/products/captures/tour/03-page-beam-controle.png",
+  "/products/captures/tour/04-editeur-lyre.png",
+  "/products/captures/tour/05-scene-active.png",
+  "/products/captures/tour/06-editeur-scene.png",
   "/products/el-fuego-sagrador.webp",
   "/products/hazer-co2-generated.webp",
   "/products/hazer-co2-remake.webp",
@@ -92,6 +98,15 @@ export const productImages = [
   "/products/omega-dmx-soft-plan2d.webp",
   "/products/omega-dmx-soft-stage.webp",
   "/products/omega-dmx-soft-stage3d.webp",
+  "/products/omega-dmx-v2-3d.webp",
+  "/products/omega-dmx-v2-connexion.webp",
+  "/products/omega-dmx-v2-controle.webp",
+  "/products/omega-dmx-v2-couleur.webp",
+  "/products/omega-dmx-v2-dimmer-page.webp",
+  "/products/omega-dmx-v2-effet-3d.webp",
+  "/products/omega-dmx-v2-page-afx.webp",
+  "/products/omega-dmx-v2-page-beam.webp",
+  "/products/omega-dmx-v2-sortie-dmx.webp",
   "/products/omega-mousse-2.webp",
   "/products/omega-mousse.webp",
   "/products/placeholder.webp"

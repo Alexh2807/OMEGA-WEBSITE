@@ -1,57 +1,150 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowLeft,
   ArrowRight,
   Boxes,
   MonitorPlay,
   Move,
   Palette,
   Layers,
-  Zap,
+  Wifi,
   Shield,
-  Gauge,
   Sparkles,
-  CircuitBoard,
   Ban,
-  Download,
   Radio,
-  KeyRound,
+  LayoutGrid,
+  Bug,
+  EyeOff,
+  Wrench,
   Check,
+  ShoppingCart,
 } from 'lucide-react';
 
-/* Apparition au scroll — même pattern que la fiche boîtier. */
+/* ================================================================== */
+/*  OMEGADMX Logiciel — Product Experience + parallax                 */
+/*  Captures RÉELLES de l'app Windows (public/products/omega-dmx-v2-) */
+/* ================================================================== */
+
+const IMG = {
+  afx: '/products/omega-dmx-v2-page-afx.webp',
+  beam: '/products/omega-dmx-v2-page-beam.webp',
+  color: '/products/omega-dmx-v2-couleur.webp',
+  dmx: '/products/omega-dmx-v2-sortie-dmx.webp',
+  conn: '/products/omega-dmx-v2-connexion.webp',
+  dimmer: '/products/omega-dmx-v2-dimmer-page.webp',
+  effet: '/products/omega-dmx-v2-effet-3d.webp',
+  controle: '/products/omega-dmx-v2-controle.webp',
+  box: '/products/omega-dmx-px-hero-box.webp',
+};
+
+const FEATURES = [
+  {
+    id: 'pages',
+    kicker: 'Pages de lyres',
+    title: 'Une page = une machine (ou un groupe)',
+    text: 'Onglets par lyre, scènes & presets, plateau 3D et contrôles en live. Changez de machine sans perdre le fil du show.',
+    img: IMG.afx,
+    icon: LayoutGrid,
+    points: ['Onglets multi-machines', 'Scènes & presets par page', 'Plateau 3D + position'],
+  },
+  {
+    id: 'controle',
+    kicker: 'Contrôle complet',
+    title: 'Dimmer, gobos, couleur, mouvements',
+    text: 'Sur une Beam réelle : intensité, strobe, gobos, iris, roue de couleur, FX cercle / huit / swing et plan 2D d’implantation.',
+    img: IMG.beam,
+    icon: Wrench,
+    reverse: true,
+    points: ['Gobos & optiques', 'FX mouvement', 'Canaux DMX mappés'],
+  },
+  {
+    id: 'couleur',
+    kicker: 'Couleur RGBW',
+    title: 'Mélange précis, canal par canal',
+    text: 'Roue de couleur, faders R/V/B/Blanc, ambre, outils de mélange, FX rainbow et flash — le look sous les yeux.',
+    img: IMG.color,
+    icon: Palette,
+    points: ['Mélange RGBW live', 'Presets de teintes', 'FX rainbow / flash'],
+  },
+  {
+    id: '3d',
+    kicker: 'Vue 3D',
+    title: 'Concevez avant d’allumer la salle',
+    text: 'Le plateau scénique 3D reproduit faisceaux et mouvements pendant que vous programmez. Perspective face, dessus, côté…',
+    img: IMG.effet,
+    icon: Boxes,
+    reverse: true,
+    points: ['Faisceaux temps réel', 'Vues Face / Dessus / Côté', 'Effets visibles en 3D'],
+  },
+  {
+    id: 'sortie',
+    kicker: 'Sortie DMX',
+    title: 'Les 512 canaux sous les yeux',
+    text: 'Moniteur de sortie DMX : univers, canaux actifs et valeurs live — pour le debug en régie sans deviner.',
+    img: IMG.dmx,
+    icon: Layers,
+    points: ['Grille 512 canaux', 'Valeurs en live', 'Multi-univers'],
+  },
+  {
+    id: 'connexion',
+    kicker: 'Connexion boîtier',
+    title: 'WiFi, USB ou Bluetooth',
+    text: 'Paramètres Interface DMX : détection automatique du boîtier OMEGA (ou Sunlite), choix du port, liaison fiable.',
+    img: IMG.conn,
+    icon: Wifi,
+    reverse: true,
+    points: ['USB / WiFi / Bluetooth', 'Détection auto', 'Port COM avancé'],
+  },
+  {
+    id: 'dimmer',
+    kicker: 'Dimmer de page',
+    title: 'Intensité et blackout par page',
+    text: 'Réglez le niveau d’une page entière, multiplié par le Dimmer Master — et blackout de page en un clic.',
+    img: IMG.dimmer,
+    icon: EyeOff,
+    points: ['Dimmer de page', 'Blackout ciblé', 'Contrôle master'],
+  },
+];
+
+const MORE = [
+  { icon: Move, t: 'Mouvements auto', d: 'Cercle, huit, swing, wave, déphasage multi-lyres.' },
+  { icon: LayoutGrid, t: 'Masquage de pages', d: 'Masquez une page sans la perdre — récupérable dans le gestionnaire.' },
+  { icon: Bug, t: 'Signalement rapide', d: 'Aide → Signaler un problème : ticket + suivi, même compte OMEGA.' },
+  { icon: Radio, t: 'Monitoring signal', d: 'Qualité de liaison des cartes sans fil sous contrôle.' },
+  { icon: Shield, t: 'Show protégé', d: 'Sauvegarde continue dans le boîtier OMEGA.' },
+  { icon: Ban, t: 'Sans abonnement', d: 'Logiciel inclus avec le boîtier. Licence optionnelle pour interfaces tierces.' },
+];
+
+/** Révélation + léger décalage 3D au scroll */
 const Reveal: React.FC<{
   children: React.ReactNode;
   className?: string;
   delay?: number;
 }> = ({ children, className = '', delay = 0 }) => {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
+  const [on, setOn] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((e) => {
+    const io = new IntersectionObserver(
+      (ents) =>
+        ents.forEach((e) => {
           if (e.isIntersecting) {
-            setVisible(true);
-            obs.unobserve(e.target);
+            setOn(true);
+            io.unobserve(e.target);
           }
         }),
-      { threshold: 0.12 },
+      { threshold: 0.1, rootMargin: '0px 0px -6% 0px' },
     );
-    obs.observe(el);
-    return () => obs.disconnect();
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
-
   return (
     <div
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+      className={`transition-all duration-[900ms] ease-out ${
+        on ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-14'
       } ${className}`}
     >
       {children}
@@ -59,373 +152,314 @@ const Reveal: React.FC<{
   );
 };
 
-const GALLERY = [
-  {
-    src: '/products/omega-dmx-real-3d-faisceaux.webp',
-    alt: 'OMEGADMX — plateau 3D avec faisceaux et scènes',
-    label: 'Vue 3D · scènes',
-    title: 'Faisceaux visibles pendant la programmation',
-    text: 'Capture réelle : plateau 3D, scènes/presets, roue de couleur et pad PAN/TILT sur une lyre AFX Light Show.',
-  },
-  {
-    src: '/products/omega-dmx-real-controle.webp',
-    alt: 'OMEGADMX — contrôle gobos dimmer couleur',
-    label: 'Contrôle complet',
-    title: 'Dimmer, gobos, couleur, mouvements',
-    text: 'Capture réelle Beam 18R : intensité, strobe, gobos, roue de couleur, FX cercle/huit/swing et plan 2D.',
-  },
-  {
-    src: '/products/omega-dmx-real-couleur.webp',
-    alt: 'OMEGADMX — mélange RGBW',
-    label: 'Couleur RGBW',
-    title: 'Mélange précis canal par canal',
-    text: 'Capture réelle : roue de couleur, faders R/V/B/Blanc, ambre, FX rainbow et flash.',
-  },
-  {
-    src: '/products/omega-dmx-real-sortie-dmx.webp',
-    alt: 'OMEGADMX — moniteur sortie DMX',
-    label: 'Sortie DMX',
-    title: 'Les 512 canaux sous les yeux',
-    text: 'Capture réelle du moniteur de sortie : univers 1, valeurs live pour le debug en régie.',
-  },
-  {
-    src: '/products/omega-dmx-real-effet-cercle.webp',
-    alt: 'OMEGADMX — effet cercle 3D',
-    label: 'FX mouvement',
-    title: 'Cercle, huit, swing…',
-    text: 'Capture réelle d’un effet de mouvement avec le plateau scénique 3D.',
-  },
-  {
-    src: '/products/omega-dmx-real-connexion.webp',
-    alt: 'OMEGADMX — connexion interface',
-    label: 'Connexion',
-    title: 'WiFi, USB, Bluetooth',
-    text: 'Capture réelle des paramètres Interface DMX : détection boîtier OMEGA ou Sunlite.',
-  },
-];
+/** Cadre UI en perspective (style product shot) */
+const ScreenFrame: React.FC<{
+  src: string;
+  alt: string;
+  tilt?: 'left' | 'right' | 'none';
+  className?: string;
+}> = ({ src, alt, tilt = 'none', className = '' }) => {
+  const rot =
+    tilt === 'left' ? 'rotateY(8deg) rotateX(4deg)' : tilt === 'right' ? 'rotateY(-8deg) rotateX(4deg)' : 'none';
+  return (
+    <div
+      className={`relative ${className}`}
+      style={{ perspective: '1400px' }}
+    >
+      <div
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.85)] transition-transform duration-700 will-change-transform"
+        style={{
+          transform: rot,
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        <div className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-tr from-blue-500/10 via-transparent to-purple-500/10" />
+        <img src={src} alt={alt} className="block w-full h-auto object-cover" loading="lazy" />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+      </div>
+    </div>
+  );
+};
 
-const FEATURES = [
-  {
-    icon: Boxes,
-    t: 'Vue 3D temps réel',
-    d: 'Faisceaux, positions et mouvements visibles pendant que vous programmez.',
-  },
-  {
-    icon: Move,
-    t: 'Effets de mouvement',
-    d: 'Cercle, huit, swing, wave — avec amplitude, vitesse et déphasage multi-lyres.',
-  },
-  {
-    icon: Palette,
-    t: 'Couleur & attributs',
-    d: 'RVB, blanc, gobos, dimmer, FX : un pilotage fin de chaque canal.',
-  },
-  {
-    icon: Layers,
-    t: 'Scènes & console',
-    d: 'Pages machines, scènes générales, faders et blackout pour la régie live.',
-  },
-  {
-    icon: CircuitBoard,
-    t: '2 univers DMX',
-    d: '1024 canaux avec le boîtier OMEGA — ou licence pour une interface tierce.',
-  },
-  {
-    icon: Radio,
-    t: 'Sans fil OMEGA',
-    d: 'Monitoring du signal et pilotage jusqu’à longue portée avec les cartes OMEGA.',
-  },
-  {
-    icon: Shield,
-    t: 'Show protégé',
-    d: 'Sauvegarde continue dans le boîtier : le spectacle continue même si le PC lâche.',
-  },
-  {
-    icon: KeyRound,
-    t: 'Licence flexible',
-    d: 'Gratuit avec boîtier OMEGA. Licence optionnelle pour Sunlite et autres interfaces.',
-  },
-];
+/** Parallax layer driven by scroll */
+const useParallax = (speed = 0.15) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2 - window.innerHeight / 2;
+        el.style.transform = `translate3d(0, ${(-mid * speed).toFixed(1)}px, 0)`;
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [speed]);
+  return ref;
+};
+
+const ParallaxImg: React.FC<{ src: string; alt: string; speed?: number; className?: string }> = ({
+  src,
+  alt,
+  speed = 0.12,
+  className = '',
+}) => {
+  const ref = useParallax(speed);
+  return (
+    <div className={`overflow-hidden ${className}`}>
+      <div ref={ref} className="will-change-transform">
+        <img src={src} alt={alt} className="w-full h-auto scale-110 object-cover" loading="lazy" />
+      </div>
+    </div>
+  );
+};
 
 const OmegaDmxLogicielPage = () => {
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* HERO */}
-      <section className="relative pt-28 pb-16 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-950/40 via-black to-black" />
-        <div className="absolute top-20 right-0 w-[480px] h-[480px] bg-purple-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[360px] h-[360px] bg-blue-600/10 rounded-full blur-3xl" />
+    <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 overflow-x-hidden">
+      {/* ─── HERO PARALLAX ─── */}
+      <section className="relative min-h-[100svh] flex items-end pb-20 pt-28">
+        <div className="absolute inset-0 overflow-hidden">
+          <ParallaxImg
+            src={IMG.afx}
+            alt="OMEGADMX — page machine et vue 3D"
+            speed={0.18}
+            className="absolute inset-0 h-full"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/40" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
+        </div>
 
-        <div className="container mx-auto px-6 relative">
-          <Link
-            to="/omega-dmx-interface"
-            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-8"
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-300/90 mb-4">
+            Logiciel de pilotage · Captures réelles
+          </p>
+          <h1 className="max-w-4xl text-5xl md:text-7xl lg:text-8xl font-semibold tracking-tight leading-[1.02]">
+            OMEGADMX
+            <span className="block text-white/40 font-normal text-3xl md:text-5xl mt-3">
+              La régie, en 3D.
+            </span>
+          </h1>
+          <p className="mt-6 max-w-xl text-lg text-white/65 leading-relaxed">
+            Pages de lyres, éditeurs, masquage, connexion boîtier, sortie DMX, signalements —
+            le logiciel inclus avec l’interface OMEGA, sans abonnement.
+          </p>
+          <div className="mt-10 flex flex-wrap gap-4">
+            <Link
+              to="/omega-dmx-interface"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black hover:bg-white/90 transition"
+            >
+              <ShoppingCart size={18} />
+              Voir le boîtier
+            </Link>
+            <a
+              href="#features"
+              className="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-sm font-semibold hover:bg-white/5 transition"
+            >
+              Explorer les fonctions
+              <ArrowRight size={16} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FLOATING TRIPTYCH ─── */}
+      <section className="relative py-24 md:py-32 border-t border-white/5">
+        <div className="mx-auto max-w-7xl px-5">
+          <Reveal>
+            <p className="text-center text-xs font-semibold uppercase tracking-[0.28em] text-white/40">
+              Dans le logiciel
+            </p>
+            <h2 className="mt-4 text-center text-3xl md:text-5xl font-semibold tracking-tight">
+              De la page machine au moniteur DMX
+            </h2>
+          </Reveal>
+
+          <div
+            className="mt-16 grid gap-6 md:grid-cols-3 items-end"
+            style={{ perspective: '1600px' }}
           >
-            <ArrowLeft size={16} />
-            Voir le boîtier OMEGA DMX
-          </Link>
-
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/25 rounded-full px-4 py-2 mb-6">
-                <MonitorPlay className="text-purple-400" size={16} />
-                <span className="text-purple-300 text-sm font-medium tracking-wider uppercase">
-                  Logiciel de pilotage
-                </span>
-              </div>
-              <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-5">
-                OMEGADMX
-                <span className="block bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                  Le logiciel de régie
-                </span>
-              </h1>
-              <p className="text-xl text-gray-300 leading-relaxed max-w-xl mb-8">
-                Programmez vos lyres en 3D, enchaînez les scènes et pilotez jusqu’à 2 univers DMX.
-                Inclus avec le boîtier OMEGA — sans abonnement.
-              </p>
-
-              <div className="flex flex-wrap gap-3 mb-8">
-                {['Vue 3D', 'Effets mouvement', 'Sans abonnement', 'Windows'].map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex items-center gap-1.5 text-sm bg-white/5 border border-white/10 text-gray-200 px-3 py-1.5 rounded-full"
-                  >
-                    <Check size={14} className="text-blue-400" />
-                    {t}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-4">
-                <Link
-                  to="/omega-dmx-interface"
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-7 py-3.5 rounded-full font-semibold hover:shadow-xl hover:shadow-blue-500/25 transition-all"
-                >
-                  Boîtier + logiciel inclus
-                  <ArrowRight size={18} />
-                </Link>
-                <Link
-                  to="/contact"
-                  className="inline-flex items-center gap-2 border border-white/15 text-white px-7 py-3.5 rounded-full font-semibold hover:bg-white/5 transition-colors"
-                >
-                  Demander une démo
-                </Link>
-              </div>
-
-              <p className="mt-5 text-sm text-gray-500">
-                Licence optionnelle pour piloter une interface d’une autre marque (Sunlite…).
-              </p>
-            </div>
-
-            <Reveal>
-              <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gray-950 shadow-2xl shadow-blue-900/20">
-                <img
-                  src="/products/omega-dmx-real-controle.webp"
-                  alt="OMEGADMX — contrôle complet d’une lyre (capture réelle)"
-                  className="w-full h-auto"
-                />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black via-black/70 to-transparent p-5">
-                  <div className="text-xs font-semibold tracking-wider text-blue-300 mb-1">
-                    CAPTURE RÉELLE · EFFET CERCLE
-                  </div>
-                  <div className="text-white font-bold">Plateau 3D · PAN/TILT automatiques</div>
-                </div>
-              </div>
-            </Reveal>
-          </div>
-        </div>
-      </section>
-
-      {/* POURQUOI */}
-      <section className="py-20 border-t border-white/5">
-        <div className="container mx-auto px-6">
-          <Reveal>
-            <div className="text-center max-w-3xl mx-auto mb-14">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Pensé pour la régie, pas pour le labo
-              </h2>
-              <p className="text-gray-400 text-lg">
-                Une interface claire, des mouvements prêts à l’emploi, une vue 3D pour anticiper le
-                rendu — et la solidité d’un boîtier qui peut sauver le show si le PC s’arrête.
-              </p>
-            </div>
-          </Reveal>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {FEATURES.map((f, i) => (
-              <Reveal key={f.t} delay={i * 60}>
-                <div className="h-full p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-blue-500/30 transition-colors">
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center mb-4">
-                    <f.icon className="text-blue-400" size={22} />
-                  </div>
-                  <h3 className="font-bold text-white mb-1.5">{f.t}</h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">{f.d}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* GALERIE */}
-      <section className="py-20 bg-gradient-to-b from-black via-blue-950/10 to-black">
-        <div className="container mx-auto px-6">
-          <Reveal>
-            <div className="text-center max-w-2xl mx-auto mb-12">
-              <div className="inline-flex items-center gap-2 text-purple-400 text-sm font-semibold tracking-wider uppercase mb-3">
-                <Sparkles size={16} />
-                Dans le logiciel
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-3">De la 3D au live</h2>
-              <p className="text-gray-400">
-                Quelques écrans tirés d’OMEGADMX : programmation, effets et lecture en conditions
-                de show.
-              </p>
-            </div>
-          </Reveal>
-
-          <div className="space-y-10">
-            {GALLERY.map((g, i) => (
-              <Reveal key={g.src} delay={(i % 3) * 80}>
-                <div
-                  className={`grid lg:grid-cols-2 gap-8 items-center ${
-                    i % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''
-                  }`}
-                >
-                  <div className="rounded-2xl overflow-hidden border border-white/10 bg-black">
-                    <img src={g.src} alt={g.alt} className="w-full h-auto object-cover" loading="lazy" />
-                  </div>
-                  <div>
-                    <span className="inline-block text-xs font-semibold tracking-wider uppercase text-blue-400 mb-3">
-                      {g.label}
-                    </span>
-                    <h3 className="text-2xl md:text-3xl font-bold text-white mb-3">{g.title}</h3>
-                    <p className="text-gray-400 text-lg leading-relaxed">{g.text}</p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* MOUVEMENTS */}
-      <section className="py-20 border-t border-white/5">
-        <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <Reveal>
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Effets de mouvement en un clic
-              </h2>
-              <p className="text-gray-400 text-lg mb-6 leading-relaxed">
-                Plus besoin de dessiner chaque point de trajectoire à la main. Choisissez un type de
-                mouvement, ajustez l’amplitude et la vitesse, décalez les lyres entre elles : le
-                rendu 3D suit en direct.
-              </p>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {['Cercle', 'Huit', 'Swing', 'Wave', 'Déphasage multi-lyres'].map((m) => (
-                  <span
-                    key={m}
-                    className="text-sm bg-white/5 border border-white/10 text-gray-200 px-4 py-2 rounded-full"
-                  >
-                    {m}
-                  </span>
-                ))}
-              </div>
-              <ul className="space-y-3 text-gray-300">
-                {[
-                  'Amplitude PAN / TILT indépendantes',
-                  'Vitesse en Hz, déphasage en degrés',
-                  'Position de repos et trajectoire sur pad',
-                ].map((line) => (
-                  <li key={line} className="flex items-start gap-2">
-                    <Check className="text-green-400 mt-0.5 flex-shrink-0" size={18} />
-                    <span>{line}</span>
-                  </li>
-                ))}
-              </ul>
+            <Reveal delay={0}>
+              <ScreenFrame src={IMG.beam} alt="Contrôle Beam — gobos et FX" tilt="left" />
             </Reveal>
             <Reveal delay={100}>
-              <div className="rounded-3xl overflow-hidden border border-white/10">
-                <img
-                  src="/products/omega-dmx-real-effet-cercle.webp"
-                  alt="Effet de mouvement circulaire sur lyre en 3D"
-                  className="w-full"
-                />
-              </div>
+              <ScreenFrame src={IMG.afx} alt="Page AFX — 3D et scènes" tilt="none" className="md:-translate-y-8" />
+            </Reveal>
+            <Reveal delay={200}>
+              <ScreenFrame src={IMG.dmx} alt="Moniteur sortie DMX 512" tilt="right" />
             </Reveal>
           </div>
         </div>
       </section>
 
-      {/* MODÈLE ÉCO */}
-      <section className="py-20 bg-gradient-to-b from-gray-950 to-black">
-        <div className="container mx-auto px-6">
-          <Reveal>
-            <div className="max-w-4xl mx-auto rounded-3xl border border-white/10 bg-white/[0.03] p-8 md:p-12">
-              <div className="grid md:grid-cols-2 gap-10">
-                <div>
-                  <div className="inline-flex items-center gap-2 text-green-400 text-sm font-semibold mb-3">
-                    <Ban size={16} />
-                    Sans abonnement
-                  </div>
-                  <h2 className="text-3xl font-bold mb-4">Comment c’est financé ?</h2>
-                  <p className="text-gray-400 leading-relaxed">
-                    Avec un boîtier OMEGA DMX, le logiciel est inclus : l’achat du matériel finance
-                    le développement. Pour piloter une interface d’une autre marque, une licence
-                    OMEGADMX prend le relais.
-                  </p>
+      {/* ─── FEATURE CHAPTERS ─── */}
+      <div id="features">
+        {FEATURES.map((f, i) => (
+          <section
+            key={f.id}
+            id={f.id}
+            className="border-t border-white/5 py-20 md:py-28 scroll-mt-24"
+          >
+            <div
+              className={`mx-auto grid max-w-7xl items-center gap-12 px-5 lg:grid-cols-2 lg:gap-16 ${
+                f.reverse ? 'lg:[&>*:first-child]:order-2' : ''
+              }`}
+            >
+              <Reveal>
+                <ScreenFrame
+                  src={f.img}
+                  alt={f.title}
+                  tilt={f.reverse ? 'left' : 'right'}
+                />
+              </Reveal>
+              <Reveal delay={120}>
+                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-blue-400/90">
+                  <f.icon size={14} />
+                  {f.kicker}
                 </div>
-                <div className="space-y-4">
-                  <div className="p-4 rounded-2xl bg-black/40 border border-white/10">
-                    <div className="font-bold text-white mb-1">Boîtier OMEGA DMX</div>
-                    <div className="text-sm text-gray-400">
-                      Logiciel gratuit · 2 univers · sauvegarde show dans le boîtier
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-black/40 border border-white/10">
-                    <div className="font-bold text-white mb-1">Licence logiciel</div>
-                    <div className="text-sm text-gray-400">
-                      Interfaces tierces (ex. Sunlite) · activation sur 2 postes
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-4 mt-10 pt-8 border-t border-white/10">
-                <Link
-                  to="/omega-dmx-interface"
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-7 py-3.5 rounded-full font-semibold"
-                >
-                  Découvrir le boîtier
-                  <ArrowRight size={18} />
-                </Link>
-                <Link
-                  to="/contact"
-                  className="inline-flex items-center gap-2 border border-white/15 px-7 py-3.5 rounded-full font-semibold hover:bg-white/5"
-                >
-                  Nous contacter
-                </Link>
-              </div>
+                <h3 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight">{f.title}</h3>
+                <p className="mt-4 text-base md:text-lg text-white/55 leading-relaxed">{f.text}</p>
+                <ul className="mt-8 space-y-3">
+                  {f.points.map((p) => (
+                    <li key={p} className="flex items-start gap-3 text-sm md:text-base text-white/75">
+                      <Check className="mt-0.5 shrink-0 text-blue-400" size={18} />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </Reveal>
             </div>
-          </Reveal>
+          </section>
+        ))}
+      </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto mt-12">
-            {[
-              { icon: Zap, t: 'Rapide', d: 'Fluide le jour J' },
-              { icon: Shield, t: 'Fiable', d: 'Show sécurisé' },
-              { icon: Gauge, t: 'Stable', d: 'Sortie DMX solide' },
-              { icon: Download, t: 'Mises à jour', d: 'Incluses, en un clic' },
-            ].map((h, i) => (
-              <Reveal key={h.t} delay={i * 80}>
-                <div className="text-center p-5 rounded-2xl bg-white/5 border border-white/10">
-                  <h.icon className="mx-auto text-blue-400 mb-2" size={24} />
-                  <div className="font-bold text-white">{h.t}</div>
-                  <div className="text-xs text-gray-400 mt-1">{h.d}</div>
+      {/* ─── FULL BLEED SORTIE DMX ─── */}
+      <section className="relative min-h-[70svh] flex items-end">
+        <div className="absolute inset-0 overflow-hidden">
+          <ParallaxImg src={IMG.dmx} alt="Sortie DMX" speed={0.14} className="absolute inset-0 h-full" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/20" />
+        </div>
+        <div className="relative z-10 mx-auto max-w-7xl px-5 pb-16 w-full">
+          <Reveal>
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300/90">
+              <MonitorPlay size={14} />
+              Moniteur live
+            </div>
+            <h2 className="mt-4 max-w-2xl text-3xl md:text-5xl font-semibold tracking-tight">
+              Ce qui sort vraiment sur le DMX
+            </h2>
+            <p className="mt-4 max-w-lg text-white/60 text-lg">
+              Plus de « ça devrait marcher ». La grille 512 canaux affiche les valeurs actives en
+              temps réel.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── MORE FEATURES GRID ─── */}
+      <section className="border-t border-white/5 py-24 md:py-32 bg-zinc-950/40">
+        <div className="mx-auto max-w-7xl px-5">
+          <Reveal>
+            <h2 className="text-center text-3xl md:text-4xl font-semibold tracking-tight">
+              Et encore…
+            </h2>
+            <p className="mt-3 text-center text-white/45 max-w-xl mx-auto">
+              Masquage de pages, signalement rapide, monitoring, sauvegarde boîtier — le quotidien de
+              la régie.
+            </p>
+          </Reveal>
+          <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {MORE.map((m, i) => (
+              <Reveal key={m.t} delay={i * 50}>
+                <div className="h-full rounded-2xl border border-white/10 bg-black/50 p-7 hover:border-white/20 transition">
+                  <m.icon className="text-blue-400" size={24} strokeWidth={1.5} />
+                  <h3 className="mt-5 text-lg font-semibold">{m.t}</h3>
+                  <p className="mt-2 text-sm text-white/50 leading-relaxed">{m.d}</p>
                 </div>
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ─── GALLERY STRIP ─── */}
+      <section className="border-t border-white/5 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-5">
+          <Reveal>
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-10">
+              Galerie — captures réelles
+            </h2>
+          </Reveal>
+          <div className="grid md:grid-cols-2 gap-5">
+            {[
+              { src: IMG.afx, cap: 'Page machine · scènes & 3D' },
+              { src: IMG.beam, cap: 'Contrôle Beam · gobos & FX' },
+              { src: IMG.color, cap: 'Couleur RGBW & intensité' },
+              { src: IMG.dmx, cap: 'Sortie DMX 512 canaux' },
+              { src: IMG.conn, cap: 'Connexion boîtier' },
+              { src: IMG.dimmer, cap: 'Dimmer / blackout de page' },
+            ].map((g, i) => (
+              <Reveal key={g.cap} delay={(i % 2) * 60}>
+                <figure className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
+                  <div className="overflow-hidden">
+                    <img
+                      src={g.src}
+                      alt={g.cap}
+                      className="aspect-[16/10] w-full object-cover object-top transition duration-700 group-hover:scale-[1.03]"
+                      loading="lazy"
+                    />
+                  </div>
+                  <figcaption className="px-5 py-3 text-sm text-white/45 border-t border-white/5">
+                    {g.cap}
+                  </figcaption>
+                </figure>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── CTA ─── */}
+      <section className="relative border-t border-white/5 py-28 overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <img src={IMG.box} alt="" className="w-full h-full object-cover" />
+        </div>
+        <div className="absolute inset-0 bg-black/80" />
+        <div className="relative z-10 mx-auto max-w-3xl px-5 text-center">
+          <Reveal>
+            <Sparkles className="mx-auto text-blue-400 mb-4" size={28} />
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight">
+              Logiciel inclus.
+              <span className="block text-white/40">Sans abonnement.</span>
+            </h2>
+            <p className="mt-5 text-white/55 max-w-md mx-auto">
+              Avec le boîtier OMEGA DMX, OMEGADMX est fourni. Licence optionnelle pour les
+              interfaces d’autres marques.
+            </p>
+            <div className="mt-10 flex flex-wrap justify-center gap-4">
+              <Link
+                to="/omega-dmx-interface"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-10 py-4 text-sm font-semibold text-black hover:bg-white/90"
+              >
+                Découvrir OMEGA DMX
+                <ArrowRight size={16} />
+              </Link>
+              <Link
+                to="/contact"
+                className="inline-flex items-center gap-2 rounded-full border border-white/25 px-8 py-4 text-sm font-semibold hover:bg-white/5"
+              >
+                Demander une démo
+              </Link>
+            </div>
+          </Reveal>
         </div>
       </section>
     </div>

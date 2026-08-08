@@ -29,18 +29,18 @@ import toast from 'react-hot-toast';
 /*  Scroll immersif, visuels plein cadre, CTA permanent.             */
 /* ================================================================== */
 
-/* Visuels : boîtier marketing + CAPTURES RÉELLES OMEGADMX (app Windows). */
+/* Visuels : boîtier marketing + CAPTURES RÉELLES OMEGADMX v2. */
 const ASSETS = {
   heroBox: '/products/omega-dmx-px-hero-box.webp',
-  softUi: '/products/omega-dmx-real-controle.webp',
-  softStage: '/products/omega-dmx-real-3d-faisceaux.webp',
-  softPlace: '/products/omega-dmx-real-couleur.webp',
-  softLive: '/products/omega-dmx-real-effet-cercle.webp',
-  softColor: '/products/omega-dmx-real-couleur.webp',
-  softMove: '/products/omega-dmx-real-controle.webp',
-  softPlan: '/products/omega-dmx-real-3d-faisceaux.webp',
-  softDmx: '/products/omega-dmx-real-sortie-dmx.webp',
-  softConn: '/products/omega-dmx-real-connexion.webp',
+  softUi: '/products/omega-dmx-v2-page-beam.webp',
+  softStage: '/products/omega-dmx-v2-page-afx.webp',
+  softPlace: '/products/omega-dmx-v2-couleur.webp',
+  softLive: '/products/omega-dmx-v2-effet-3d.webp',
+  softColor: '/products/omega-dmx-v2-couleur.webp',
+  softMove: '/products/omega-dmx-v2-page-beam.webp',
+  softPlan: '/products/omega-dmx-v2-page-afx.webp',
+  softDmx: '/products/omega-dmx-v2-sortie-dmx.webp',
+  softConn: '/products/omega-dmx-v2-connexion.webp',
 };
 
 const PRICE_TTC = 429;
