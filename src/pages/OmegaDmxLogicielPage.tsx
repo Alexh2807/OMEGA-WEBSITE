@@ -61,46 +61,46 @@ const Reveal: React.FC<{
 
 const GALLERY = [
   {
-    src: '/products/omega-dmx-px-soft-ui.jpg',
-    alt: 'Interface OMEGADMX avec vue 3D et effets',
-    label: 'Vue 3D · effet cercle',
-    title: 'Mouvements automatiques en 3D',
-    text: 'Cercle, huit, swing, wave : amplitude, vitesse et déphasage entre lyres. Le plateau 3D montre chaque faisceau pendant que vous réglez.',
+    src: '/products/omega-dmx-real-3d-faisceaux.png',
+    alt: 'OMEGADMX — plateau 3D avec faisceaux et scènes',
+    label: 'Vue 3D · scènes',
+    title: 'Faisceaux visibles pendant la programmation',
+    text: 'Capture réelle : plateau 3D, scènes/presets, roue de couleur et pad PAN/TILT sur une lyre AFX Light Show.',
   },
   {
-    src: '/products/omega-dmx-px-soft-stage.jpg',
-    alt: 'Plateau scénique multi-projecteurs',
-    label: 'Scène multi-lyres',
-    title: 'Concevez avant d’allumer la salle',
-    text: 'Placez vos projecteurs, orientez les faisceaux, testez les scènes — sans brancher un seul projecteur.',
+    src: '/products/omega-dmx-real-controle.png',
+    alt: 'OMEGADMX — contrôle gobos dimmer couleur',
+    label: 'Contrôle complet',
+    title: 'Dimmer, gobos, couleur, mouvements',
+    text: 'Capture réelle Beam 18R : intensité, strobe, gobos, roue de couleur, FX cercle/huit/swing et plan 2D.',
   },
   {
-    src: '/products/omega-dmx-px-soft-color.jpg',
-    alt: 'Mixage couleur et canaux DMX',
-    label: 'Couleur & canaux',
-    title: 'Couleur, gobos, dimmer',
-    text: 'Faders précis par canal, presets, isolation d’attributs : un contrôle de régie, pas un jouet.',
+    src: '/products/omega-dmx-real-couleur.png',
+    alt: 'OMEGADMX — mélange RGBW',
+    label: 'Couleur RGBW',
+    title: 'Mélange précis canal par canal',
+    text: 'Capture réelle : roue de couleur, faders R/V/B/Blanc, ambre, FX rainbow et flash.',
   },
   {
-    src: '/products/omega-dmx-px-soft-live.png',
-    alt: 'Capture live OMEGADMX',
-    label: 'Console live',
-    title: 'Jouez le show en live',
-    text: 'Scènes, faders, pages de machines et blackout : pensé pour le jour J, pas seulement pour la préprod.',
+    src: '/products/omega-dmx-real-sortie-dmx.png',
+    alt: 'OMEGADMX — moniteur sortie DMX',
+    label: 'Sortie DMX',
+    title: 'Les 512 canaux sous les yeux',
+    text: 'Capture réelle du moniteur de sortie : univers 1, valeurs live pour le debug en régie.',
   },
   {
-    src: '/products/omega-dmx-px-soft-placement.jpg',
-    alt: 'Plan d’implantation 2D et 3D',
-    label: 'Plan 2D',
-    title: 'Implantation claire',
-    text: 'Glissez-déposez vos lyres sur le plan, gérez symétrie et inversions sans vous perdre dans un tableur.',
+    src: '/products/omega-dmx-real-effet-cercle.png',
+    alt: 'OMEGADMX — effet cercle 3D',
+    label: 'FX mouvement',
+    title: 'Cercle, huit, swing…',
+    text: 'Capture réelle d’un effet de mouvement avec le plateau scénique 3D.',
   },
   {
-    src: '/products/omega-dmx-px-soft-move.jpg',
-    alt: 'Contrôle PAN/TILT',
-    label: 'Mouvement',
-    title: 'PAN / TILT maîtrisés',
-    text: 'Pad de trajectoire, types de mouvement et réglages fins pour des balayages propres et synchronisés.',
+    src: '/products/omega-dmx-real-connexion.png',
+    alt: 'OMEGADMX — connexion interface',
+    label: 'Connexion',
+    title: 'WiFi, USB, Bluetooth',
+    text: 'Capture réelle des paramètres Interface DMX : détection boîtier OMEGA ou Sunlite.',
   },
 ];
 
@@ -220,8 +220,8 @@ const OmegaDmxLogicielPage = () => {
             <Reveal>
               <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gray-950 shadow-2xl shadow-blue-900/20">
                 <img
-                  src="/products/omega-dmx-px-soft-ui.jpg"
-                  alt="OMEGADMX — plateau scénique 3D avec effet de mouvement"
+                  src="/products/omega-dmx-real-controle.png"
+                  alt="OMEGADMX — contrôle complet d’une lyre (capture réelle)"
                   className="w-full h-auto"
                 />
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black via-black/70 to-transparent p-5">
@@ -348,7 +348,7 @@ const OmegaDmxLogicielPage = () => {
             <Reveal delay={100}>
               <div className="rounded-3xl overflow-hidden border border-white/10">
                 <img
-                  src="/products/omega-dmx-px-soft-live.png"
+                  src="/products/omega-dmx-real-effet-cercle.png"
                   alt="Effet de mouvement circulaire sur lyre en 3D"
                   className="w-full"
                 />

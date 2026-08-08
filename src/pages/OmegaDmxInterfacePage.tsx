@@ -29,15 +29,18 @@ import toast from 'react-hot-toast';
 /*  Scroll immersif, visuels plein cadre, CTA permanent.             */
 /* ================================================================== */
 
+/* Visuels : boîtier marketing + CAPTURES RÉELLES OMEGADMX (app Windows). */
 const ASSETS = {
   heroBox: '/products/omega-dmx-px-hero-box.jpg',
-  softUi: '/products/omega-dmx-px-soft-ui.jpg',
-  softStage: '/products/omega-dmx-px-soft-stage.jpg',
-  softPlace: '/products/omega-dmx-px-soft-placement.jpg',
-  softLive: '/products/omega-dmx-px-soft-live.png',
-  softColor: '/products/omega-dmx-px-soft-color.jpg',
-  softMove: '/products/omega-dmx-px-soft-move.jpg',
-  softPlan: '/products/omega-dmx-px-soft-plan.jpg',
+  softUi: '/products/omega-dmx-real-controle.png',
+  softStage: '/products/omega-dmx-real-3d-faisceaux.png',
+  softPlace: '/products/omega-dmx-real-couleur.png',
+  softLive: '/products/omega-dmx-real-effet-cercle.png',
+  softColor: '/products/omega-dmx-real-couleur.png',
+  softMove: '/products/omega-dmx-real-controle.png',
+  softPlan: '/products/omega-dmx-real-3d-faisceaux.png',
+  softDmx: '/products/omega-dmx-real-sortie-dmx.png',
+  softConn: '/products/omega-dmx-real-connexion.png',
 };
 
 const PRICE_TTC = 429;
@@ -295,34 +298,43 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
-      {/* ─── FEATURE CHAPTERS ─── */}
+      {/* ─── FEATURE CHAPTERS (captures réelles) ─── */}
       {[
         {
-          kicker: 'Mouvement',
-          title: 'Effets automatiques, rendu immédiat',
-          text: 'Cercle, huit, swing, wave. Amplitude, vitesse, déphasage entre lyres — le plateau 3D suit en direct pendant que vous réglez.',
-          img: ASSETS.softLive,
-          icon: Move,
-          points: ['Cercle · Huit · Swing · Wave', 'Déphasage multi-lyres', 'Pad PAN / TILT'],
-        },
-        {
-          kicker: 'Implantation',
-          title: 'Placez vos machines comme sur le terrain',
-          text: 'Plateau 3D et plan 2D : glissez vos projecteurs, gérez la symétrie et les inversions sans tableur.',
-          img: ASSETS.softPlace,
+          kicker: 'Vue 3D & scènes',
+          title: 'Faisceaux en direct pendant que vous programmez',
+          text: 'Le plateau scénique 3D reproduit vos lyres et leurs faisceaux. Scènes & presets, roue de couleur, pad PAN/TILT et FX de mouvement — le tout visible avant d’allumer la salle.',
+          img: ASSETS.softStage,
           icon: Boxes,
-          reverse: true,
-          points: ['Vue 3D temps réel', 'Plan 2D d’implantation', 'Symétrie & inversions'],
+          points: ['Plateau 3D temps réel', 'Scènes & presets par machine', 'Roue de couleur + position'],
         },
         {
-          kicker: 'Couleur & canaux',
-          title: 'Un contrôle de régie, pas un jouet',
-          text: 'Faders RVB, blanc, gobos, dimmer, FX : chaque attribut sous la main, pour des looks propres et reproductibles.',
+          kicker: 'Contrôle complet',
+          title: 'Dimmer, gobos, couleur, mouvements',
+          text: 'Sur une lyre réelle (ex. Beam 18R) : intensité, strobe, gobos, iris, roue de couleur RGBW, effets cercle/huit/swing et plan 2D d’implantation.',
+          img: ASSETS.softUi,
+          icon: Move,
+          reverse: true,
+          points: ['Gobos & optiques', 'FX mouvement (cercle, huit, swing)', 'Canaux DMX mappés à l’écran'],
+        },
+        {
+          kicker: 'Couleur RGBW',
+          title: 'Mélange précis, canal par canal',
+          text: 'Roue de couleur, faders Rouge / Vert / Bleu / Blanc, presets ambre, outils de mélange et FX rainbow / flash.',
           img: ASSETS.softColor,
           icon: Palette,
-          points: ['Mixage couleur précis', 'Gobos & dimmer', 'Scènes prêtes au live'],
+          points: ['Mélange RGBW live', 'Presets de teintes', 'FX rainbow & flash'],
         },
-      ].map((ch, i) => (
+        {
+          kicker: 'Sortie DMX',
+          title: 'Les 512 canaux sous les yeux',
+          text: 'Moniteur de sortie DMX : visualisez l’univers 1 (ou 2), les canaux actifs et les valeurs en temps réel — idéal pour le debug en régie.',
+          img: ASSETS.softDmx,
+          icon: Layers,
+          reverse: true,
+          points: ['Grille 512 canaux', 'Valeurs live', 'Multi-univers'],
+        },
+      ].map((ch) => (
         <section
           key={ch.kicker}
           className="border-t border-white/5 py-20 md:py-28"
@@ -438,10 +450,12 @@ const OmegaDmxInterfacePage = () => {
 
           <div className="grid gap-4 md:grid-cols-2">
             {[
-              { src: ASSETS.softStage, cap: 'Plateau 3D multi-projecteurs' },
-              { src: ASSETS.softMove, cap: 'Mouvements PAN / TILT' },
-              { src: ASSETS.softPlan, cap: 'Plan d’implantation 2D' },
-              { src: ASSETS.softLive, cap: 'Capture live — effet & faisceau' },
+              { src: ASSETS.softStage, cap: 'Vue 3D + scènes + couleur (capture réelle)' },
+              { src: ASSETS.softUi, cap: 'Contrôle complet : gobos, dimmer, FX (capture réelle)' },
+              { src: ASSETS.softColor, cap: 'Mélange RGBW & intensité (capture réelle)' },
+              { src: ASSETS.softDmx, cap: 'Moniteur sortie DMX 512 canaux (capture réelle)' },
+              { src: ASSETS.softLive, cap: 'Effet cercle sur plateau 3D (capture réelle)' },
+              { src: ASSETS.softConn, cap: 'Connexion boîtier WiFi / USB / Bluetooth' },
             ].map((g, i) => (
               <Reveal key={g.cap} delay={(i % 2) * 80}>
                 <figure className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
