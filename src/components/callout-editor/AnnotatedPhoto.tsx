@@ -15,6 +15,8 @@ export type AnnotatedPhotoProps = {
   photoId: string;
   callouts: Callout[];
   className?: string;
+  imgClassName?: string;
+  objectPosition?: string;
   editMode?: boolean;
   tool?: 'select' | 'add';
   selectedId?: string | null;
@@ -52,6 +54,8 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   photoId,
   callouts,
   className = '',
+  imgClassName = '',
+  objectPosition = 'center center',
   editMode = false,
   tool = 'select',
   selectedId = null,
@@ -180,7 +184,8 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
       <img
         src={src}
         alt={alt}
-        className="pointer-events-none block h-auto w-full select-none"
+        className={`pointer-events-none block h-auto w-full select-none ${imgClassName}`}
+        style={{ objectPosition }}
         loading="lazy"
         draggable={false}
       />

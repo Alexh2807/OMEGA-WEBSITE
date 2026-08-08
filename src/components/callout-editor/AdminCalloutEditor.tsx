@@ -21,8 +21,11 @@ import {
   CalloutPathStyle,
   clamp,
   createCallout,
+  DEFAULT_TRANSFORM,
+  ImageTransform,
+  ParallaxMode,
 } from './types';
-import { PHOTO_LABELS, PhotoId } from './defaults';
+import { PHOTO_LABELS } from './defaults';
 
 export type EditorTool = 'select' | 'add';
 
@@ -34,6 +37,9 @@ type Props = {
   setTool: (t: EditorTool) => void;
   selected: { photoId: string; calloutId: string } | null;
   setSelected: (s: { photoId: string; calloutId: string } | null) => void;
+  /** Image sélectionnée pour 3D / parallax (même sans callout) */
+  selectedImageId: string | null;
+  setSelectedImageId: (id: string | null) => void;
 };
 
 const PATH_STYLES: {
@@ -77,6 +83,8 @@ export const AdminCalloutEditor: React.FC<Props> = ({
   setTool,
   selected,
   setSelected,
+  selectedImageId,
+  setSelectedImageId,
 }) => {
   const [panelOpen, setPanelOpen] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -85,6 +93,16 @@ export const AdminCalloutEditor: React.FC<Props> = ({
     if (!selected) return null;
     return api.getCallouts(selected.photoId).find((c) => c.id === selected.calloutId) ?? null;
   })();
+
+  const activeImageId = selected?.photoId || selectedImageId;
+  const transform: ImageTransform = activeImageId
+    ? api.getTransform(activeImageId)
+    : DEFAULT_TRANSFORM;
+
+  const patchTransform = (p: Partial<ImageTransform>) => {
+    if (!activeImageId) return;
+    api.updateTransform(activeImageId, p);
+  };
 
   useEffect(() => {
     if (!editMode) return;
@@ -99,6 +117,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
           return;
         }
         setSelected(null);
+        setSelectedImageId(null);
         return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
@@ -139,7 +158,16 @@ export const AdminCalloutEditor: React.FC<Props> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editMode, selected, selectedCallout, api, setSelected, setTool, tool]);
+  }, [
+    editMode,
+    selected,
+    selectedCallout,
+    api,
+    setSelected,
+    setSelectedImageId,
+    setTool,
+    tool,
+  ]);
 
   const handleSave = async () => {
     const { error } = await api.save();
@@ -225,6 +253,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                   if (api.dirty) api.revert();
                   setEditMode(false);
                   setSelected(null);
+                  setSelectedImageId(null);
                 }}
               >
                 <X size={14} />
@@ -241,21 +270,32 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                 </div>
                 <ol className="list-decimal space-y-0.5 pl-3.5">
                   <li>
-                    <strong className="text-white/70">Ajouter</strong> → cliquez le point à montrer
-                    sur la photo
+                    <strong className="text-white/70">Cliquez une image</strong> de la page pour la
+                    sélectionner (3D / parallax)
                   </li>
                   <li>
-                    <strong className="text-white/70">Glissez la carte</strong> (texte) où vous
-                    voulez
+                    <strong className="text-white/70">Ajouter</strong> → posez un point sur
+                    n’importe quelle image
                   </li>
                   <li>
-                    Choisissez le <strong className="text-white/70">style de fil</strong> à droite
+                    <strong className="text-white/70">Glissez la carte</strong> texte, choisissez le
+                    fil
                   </li>
                   <li>
                     <strong className="text-white/70">Enregistrer</strong> pour publier
                   </li>
                 </ol>
               </div>
+
+              {activeImageId && (
+                <div className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-2.5 py-2 text-[11px] text-sky-100">
+                  Image :{' '}
+                  <strong>{PHOTO_LABELS[activeImageId] || activeImageId}</strong>
+                  <span className="ml-1 text-sky-200/60">
+                    · {api.getCallouts(activeImageId).length} repère(s)
+                  </span>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-1.5">
                 <ToolBtn
@@ -352,20 +392,27 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                 </p>
               )}
 
-              {selected && (
+              {activeImageId && (
                 <div className="rounded-lg border border-white/10 bg-white/5 p-2">
                   <div className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider text-white/40">
                     <Move size={10} />
-                    {PHOTO_LABELS[selected.photoId as PhotoId] || selected.photoId}
+                    Repères · {PHOTO_LABELS[activeImageId] || activeImageId}
                   </div>
                   <div className="flex max-h-28 flex-col gap-0.5 overflow-y-auto">
-                    {api.getCallouts(selected.photoId).map((c) => (
+                    {api.getCallouts(activeImageId).length === 0 && (
+                      <p className="px-1 py-1 text-[10px] text-white/35">
+                        Aucun repère — outil Ajouter puis clic sur l’image
+                      </p>
+                    )}
+                    {api.getCallouts(activeImageId).map((c) => (
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => setSelected({ photoId: selected.photoId, calloutId: c.id })}
+                        onClick={() =>
+                          setSelected({ photoId: activeImageId, calloutId: c.id })
+                        }
                         className={`rounded px-2 py-1 text-left text-[11px] transition ${
-                          c.id === selected.calloutId
+                          selected?.calloutId === c.id
                             ? 'bg-amber-400/20 text-amber-100'
                             : 'text-white/60 hover:bg-white/5'
                         }`}
@@ -389,7 +436,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
         </div>
       </div>
 
-      {panelOpen && selectedCallout && selected && (
+      {panelOpen && activeImageId && (
         <div
           className="fixed z-[60] w-[min(340px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-white/15 bg-black/92 shadow-2xl backdrop-blur-xl"
           style={{
@@ -405,13 +452,201 @@ export const AdminCalloutEditor: React.FC<Props> = ({
             <button
               type="button"
               className="rounded p-1 text-white/40 hover:bg-white/10 hover:text-white"
-              onClick={() => setSelected(null)}
+              onClick={() => {
+                setSelected(null);
+                setSelectedImageId(null);
+              }}
             >
               <X size={14} />
             </button>
           </div>
 
           <div className="space-y-4 p-3">
+            {/* ── 3D / Parallax ── */}
+            <div>
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
+                Image 3D & parallax
+              </div>
+              <p className="mb-3 text-[10px] text-white/40">
+                {PHOTO_LABELS[activeImageId] || activeImageId} — rotation comme une carte 3D +
+                mouvement gauche/droite
+              </p>
+
+              <div className="space-y-3">
+                <Field label={`Rotation Y (gauche/droite) · ${transform.rotateY.toFixed(0)}°`}>
+                  <input
+                    type="range"
+                    min={-45}
+                    max={45}
+                    step={1}
+                    value={transform.rotateY}
+                    onChange={(e) => patchTransform({ rotateY: Number(e.target.value) })}
+                    className="w-full accent-amber-400"
+                  />
+                </Field>
+                <Field label={`Rotation X (haut/bas) · ${transform.rotateX.toFixed(0)}°`}>
+                  <input
+                    type="range"
+                    min={-40}
+                    max={40}
+                    step={1}
+                    value={transform.rotateX}
+                    onChange={(e) => patchTransform({ rotateX: Number(e.target.value) })}
+                    className="w-full accent-amber-400"
+                  />
+                </Field>
+                <Field label={`Rotation Z (plane) · ${transform.rotateZ.toFixed(0)}°`}>
+                  <input
+                    type="range"
+                    min={-45}
+                    max={45}
+                    step={1}
+                    value={transform.rotateZ}
+                    onChange={(e) => patchTransform({ rotateZ: Number(e.target.value) })}
+                    className="w-full accent-amber-400"
+                  />
+                </Field>
+                <Field label={`Perspective · ${transform.perspective}px`}>
+                  <input
+                    type="range"
+                    min={400}
+                    max={1600}
+                    step={50}
+                    value={transform.perspective}
+                    onChange={(e) => patchTransform({ perspective: Number(e.target.value) })}
+                    className="w-full accent-amber-400"
+                  />
+                </Field>
+                <Field label={`Échelle · ${transform.scale.toFixed(2)}`}>
+                  <input
+                    type="range"
+                    min={0.7}
+                    max={1.3}
+                    step={0.01}
+                    value={transform.scale}
+                    onChange={(e) => patchTransform({ scale: Number(e.target.value) })}
+                    className="w-full accent-amber-400"
+                  />
+                </Field>
+
+                <Field label="Parallax (animation)">
+                  <div className="flex gap-1">
+                    {(
+                      [
+                        ['none', 'Off'],
+                        ['scroll', 'Scroll'],
+                        ['mouse', 'Souris'],
+                      ] as const
+                    ).map(([val, lab]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => patchTransform({ parallaxMode: val as ParallaxMode })}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${
+                          transform.parallaxMode === val
+                            ? 'border-amber-400/60 bg-amber-400/15 text-amber-100'
+                            : 'border-white/10 text-white/50 hover:bg-white/5'
+                        }`}
+                      >
+                        {lab}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                {transform.parallaxMode !== 'none' && (
+                  <>
+                    <Field label={`Amplitude G/D · ${transform.parallaxX}`}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={0.5}
+                        value={transform.parallaxX}
+                        onChange={(e) => patchTransform({ parallaxX: Number(e.target.value) })}
+                        className="w-full accent-amber-400"
+                      />
+                    </Field>
+                    <Field label={`Amplitude H/B · ${transform.parallaxY}`}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={0.5}
+                        value={transform.parallaxY}
+                        onChange={(e) => patchTransform({ parallaxY: Number(e.target.value) })}
+                        className="w-full accent-amber-400"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                <Field label="Focus image (object-position)">
+                  <select
+                    className="field-input"
+                    value={transform.objectPosition}
+                    onChange={(e) => patchTransform({ objectPosition: e.target.value })}
+                  >
+                    <option value="center center">Centre</option>
+                    <option value="center top">Haut</option>
+                    <option value="center bottom">Bas</option>
+                    <option value="left center">Gauche</option>
+                    <option value="right center">Droite</option>
+                    <option value="center 30%">Haut 30%</option>
+                    <option value="center 60%">Bas 60%</option>
+                  </select>
+                </Field>
+
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/15 px-2 py-1 text-[10px] text-white/60 hover:bg-white/5"
+                    onClick={() =>
+                      patchTransform({
+                        rotateY: 12,
+                        rotateX: 4,
+                        parallaxMode: 'mouse',
+                        parallaxX: 8,
+                        parallaxY: 4,
+                        perspective: 900,
+                      })
+                    }
+                  >
+                    Preset carte 3D
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/15 px-2 py-1 text-[10px] text-white/60 hover:bg-white/5"
+                    onClick={() =>
+                      patchTransform({
+                        rotateY: 0,
+                        rotateX: 0,
+                        rotateZ: 0,
+                        parallaxMode: 'scroll',
+                        parallaxX: 6,
+                        parallaxY: 10,
+                      })
+                    }
+                  >
+                    Preset scroll
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/15 px-2 py-1 text-[10px] text-white/60 hover:bg-white/5"
+                    onClick={() => patchTransform({ ...DEFAULT_TRANSFORM })}
+                  >
+                    Reset 3D
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Callout ── */}
+            {selectedCallout && selected && (
+              <>
+            <div className="border-t border-white/10 pt-3 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+              Repère sélectionné
+            </div>
             <Field label="Titre">
               <input
                 className="field-input"
@@ -652,6 +887,14 @@ export const AdminCalloutEditor: React.FC<Props> = ({
               <Trash2 size={13} />
               Supprimer ce repère
             </button>
+              </>
+            )}
+
+            {!selectedCallout && (
+              <p className="border-t border-white/10 pt-3 text-[11px] text-white/40">
+                Sélectionnez un repère sur l’image, ou utilisez <strong className="text-white/60">Ajouter</strong> pour en créer un.
+              </p>
+            )}
           </div>
 
           <style>{`

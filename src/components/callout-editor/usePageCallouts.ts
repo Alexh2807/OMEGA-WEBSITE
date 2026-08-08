@@ -4,20 +4,27 @@ import {
   CALLOUTS_SETTINGS_KEY,
   Callout,
   CalloutDesign,
+  DEFAULT_TRANSFORM,
+  ImageTransform,
   normalizeConfig,
+  normalizeTransform,
   PageCalloutsConfig,
   PAGE_ID,
 } from './types';
-import { DEFAULT_PAGE_CALLOUTS, PhotoId } from './defaults';
+import { DEFAULT_PAGE_CALLOUTS } from './defaults';
 
 function cloneConfig(cfg: PageCalloutsConfig): PageCalloutsConfig {
   return structuredClone(cfg);
 }
 
+function snapshotOf(cfg: PageCalloutsConfig): string {
+  return JSON.stringify({ photos: cfg.photos, transforms: cfg.transforms || {} });
+}
+
 export function usePageCallouts() {
   const [config, setConfig] = useState<PageCalloutsConfig>(() => cloneConfig(DEFAULT_PAGE_CALLOUTS));
   const [savedSnapshot, setSavedSnapshot] = useState<string>(() =>
-    JSON.stringify(DEFAULT_PAGE_CALLOUTS.photos),
+    snapshotOf(DEFAULT_PAGE_CALLOUTS),
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,9 +41,8 @@ export function usePageCallouts() {
         .maybeSingle();
 
       if (qErr) {
-        // Table absente ou RLS : on garde les defaults
         setConfig(cloneConfig(DEFAULT_PAGE_CALLOUTS));
-        setSavedSnapshot(JSON.stringify(DEFAULT_PAGE_CALLOUTS.photos));
+        setSavedSnapshot(snapshotOf(DEFAULT_PAGE_CALLOUTS));
         setError(null);
         return;
       }
@@ -44,14 +50,14 @@ export function usePageCallouts() {
       if (data?.value) {
         const normalized = normalizeConfig(data.value, DEFAULT_PAGE_CALLOUTS);
         setConfig(normalized);
-        setSavedSnapshot(JSON.stringify(normalized.photos));
+        setSavedSnapshot(snapshotOf(normalized));
       } else {
         setConfig(cloneConfig(DEFAULT_PAGE_CALLOUTS));
-        setSavedSnapshot(JSON.stringify(DEFAULT_PAGE_CALLOUTS.photos));
+        setSavedSnapshot(snapshotOf(DEFAULT_PAGE_CALLOUTS));
       }
     } catch {
       setConfig(cloneConfig(DEFAULT_PAGE_CALLOUTS));
-      setSavedSnapshot(JSON.stringify(DEFAULT_PAGE_CALLOUTS.photos));
+      setSavedSnapshot(snapshotOf(DEFAULT_PAGE_CALLOUTS));
     } finally {
       setLoading(false);
     }
@@ -61,15 +67,32 @@ export function usePageCallouts() {
     load();
   }, [load]);
 
-  const dirty = useMemo(
-    () => JSON.stringify(config.photos) !== savedSnapshot,
-    [config.photos, savedSnapshot],
-  );
+  const dirty = useMemo(() => snapshotOf(config) !== savedSnapshot, [config, savedSnapshot]);
 
   const getCallouts = useCallback(
-    (photoId: PhotoId | string): Callout[] => config.photos[photoId] ?? [],
+    (photoId: string): Callout[] => config.photos[photoId] ?? [],
     [config.photos],
   );
+
+  const getTransform = useCallback(
+    (photoId: string): ImageTransform =>
+      normalizeTransform(config.transforms?.[photoId] ?? DEFAULT_TRANSFORM),
+    [config.transforms],
+  );
+
+  const updateTransform = useCallback((photoId: string, patch: Partial<ImageTransform>) => {
+    setConfig((prev) => {
+      const current = normalizeTransform(prev.transforms?.[photoId] ?? DEFAULT_TRANSFORM);
+      return {
+        ...prev,
+        version: 2,
+        transforms: {
+          ...(prev.transforms || {}),
+          [photoId]: { ...current, ...patch },
+        },
+      };
+    });
+  }, []);
 
   const setPhotoCallouts = useCallback((photoId: string, callouts: Callout[]) => {
     setConfig((prev) => ({
@@ -146,8 +169,16 @@ export function usePageCallouts() {
 
   const revert = useCallback(() => {
     try {
-      const photos = JSON.parse(savedSnapshot) as PageCalloutsConfig['photos'];
-      setConfig({ version: 1, pageId: PAGE_ID, photos });
+      const snap = JSON.parse(savedSnapshot) as {
+        photos: PageCalloutsConfig['photos'];
+        transforms: PageCalloutsConfig['transforms'];
+      };
+      setConfig({
+        version: 2,
+        pageId: PAGE_ID,
+        photos: snap.photos,
+        transforms: snap.transforms || {},
+      });
     } catch {
       setConfig(cloneConfig(DEFAULT_PAGE_CALLOUTS));
     }
@@ -157,9 +188,10 @@ export function usePageCallouts() {
     setSaving(true);
     setError(null);
     const payload: PageCalloutsConfig = {
-      version: 1,
+      version: 2,
       pageId: PAGE_ID,
       photos: config.photos,
+      transforms: config.transforms || {},
       updatedAt: new Date().toISOString(),
     };
     try {
@@ -179,7 +211,7 @@ export function usePageCallouts() {
         setSaving(false);
         return { error: msg };
       }
-      setSavedSnapshot(JSON.stringify(payload.photos));
+      setSavedSnapshot(snapshotOf(payload));
       setConfig(payload);
       setSaving(false);
       return { error: null };
@@ -189,7 +221,7 @@ export function usePageCallouts() {
       setSaving(false);
       return { error: msg };
     }
-  }, [config.photos]);
+  }, [config.photos, config.transforms]);
 
   return {
     config,
@@ -198,6 +230,8 @@ export function usePageCallouts() {
     dirty,
     error,
     getCallouts,
+    getTransform,
+    updateTransform,
     setPhotoCallouts,
     updateCallout,
     updateCalloutDesign,

@@ -42,7 +42,7 @@ import {
   SvgBackupBox,
   SvgMultiDevice,
 } from '../components/OmegaDmxSystemSvgs';
-import { AnnotatedPhoto } from '../components/callout-editor/AnnotatedPhoto';
+import { EditableImage } from '../components/callout-editor/EditableImage';
 import {
   AdminCalloutEditor,
   handleAddCallout,
@@ -135,7 +135,7 @@ const OmegaDmxInterfacePage = () => {
   const navigate = useNavigate();
   const heroRef = useRef<HTMLElement>(null);
 
-  /* ── Édition admin des callouts ── */
+  /* ── Édition admin : callouts + 3D sur toute image ── */
   const calloutsApi = usePageCallouts();
   const [editMode, setEditMode] = useState(false);
   const [editTool, setEditTool] = useState<EditorTool>('select');
@@ -143,22 +143,36 @@ const OmegaDmxInterfacePage = () => {
     photoId: string;
     calloutId: string;
   } | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
 
-  const photoEditProps = (photoId: string) =>
-    editMode && isAdmin
+  const imageProps = (photoId: string) => ({
+    photoId,
+    callouts: calloutsApi.getCallouts(photoId),
+    transform: calloutsApi.getTransform(photoId),
+    imageSelected: selectedImageId === photoId || selectedCallout?.photoId === photoId,
+    ...(editMode && isAdmin
       ? {
           editMode: true as const,
           tool: editTool,
-          selectedId: selectedCallout?.photoId === photoId ? selectedCallout.calloutId : null,
+          selectedId:
+            selectedCallout?.photoId === photoId ? selectedCallout.calloutId : null,
+          onSelectImage: (pid: string) => {
+            setSelectedImageId(pid);
+            if (selectedCallout?.photoId !== pid) setSelectedCallout(null);
+          },
           onSelect: (pid: string, cid: string | null) => {
+            setSelectedImageId(pid);
             if (!cid) setSelectedCallout(null);
             else setSelectedCallout({ photoId: pid, calloutId: cid });
           },
           onChangeCallout: calloutsApi.updateCallout,
-          onAddAt: (pid: string, x: number, y: number) =>
-            handleAddCallout(calloutsApi, pid, x, y, setSelectedCallout, setEditTool),
+          onAddAt: (pid: string, x: number, y: number) => {
+            setSelectedImageId(pid);
+            handleAddCallout(calloutsApi, pid, x, y, setSelectedCallout, setEditTool);
+          },
         }
-      : { editMode: false as const };
+      : { editMode: false as const }),
+  });
 
   useEffect(() => {
     (async () => {
@@ -237,6 +251,8 @@ const OmegaDmxInterfacePage = () => {
           setTool={setEditTool}
           selected={selectedCallout}
           setSelected={setSelectedCallout}
+          selectedImageId={selectedImageId}
+          setSelectedImageId={setSelectedImageId}
         />
       )}
 
@@ -273,13 +289,18 @@ const OmegaDmxInterfacePage = () => {
         className="relative flex min-h-[100svh] flex-col justify-end overflow-hidden pb-16 pt-28"
       >
         <div className="pointer-events-none absolute inset-0">
-          <img
-            src={BOX.hero}
-            alt="OMEGA DMX Interface — boîtier réel, 2 sorties XLR"
-            className="h-full w-full object-cover object-[center_60%]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/25" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/20 to-transparent" />
+          <div className="pointer-events-auto absolute inset-0">
+            <EditableImage
+              src={BOX.hero}
+              alt="OMEGA DMX Interface — boîtier réel, 2 sorties XLR"
+              cover
+              className="h-full w-full"
+              aspectClass="h-full w-full"
+              {...imageProps(PHOTO_IDS.hero)}
+            />
+          </div>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/25" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/75 via-black/20 to-transparent" />
         </div>
 
         <div className="relative z-10 mx-auto w-full max-w-7xl px-5">
@@ -380,12 +401,10 @@ const OmegaDmxInterfacePage = () => {
             </Reveal>
 
             <Reveal delay={100}>
-              <AnnotatedPhoto
+              <EditableImage
                 src={BOX.dmxClose}
                 alt="OMEGA DMX Interface — deux sorties XLR DMX"
-                photoId={PHOTO_IDS.dmxClose}
-                callouts={calloutsApi.getCallouts(PHOTO_IDS.dmxClose)}
-                {...photoEditProps(PHOTO_IDS.dmxClose)}
+                {...imageProps(PHOTO_IDS.dmxClose)}
               />
               <p className="mt-3 text-center text-xs text-white/35">
                 Photo réelle — repères centrés sur les 2 sorties XLR
@@ -400,12 +419,10 @@ const OmegaDmxInterfacePage = () => {
         <div className="mx-auto max-w-7xl px-5">
           <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
             <Reveal className="order-2 lg:order-1">
-              <AnnotatedPhoto
+              <EditableImage
                 src={BOX.antennes}
                 alt="Connecteur d’antenne RP-SMA et antennes interchangeables"
-                photoId={PHOTO_IDS.antennes}
-                callouts={calloutsApi.getCallouts(PHOTO_IDS.antennes)}
-                {...photoEditProps(PHOTO_IDS.antennes)}
+                {...imageProps(PHOTO_IDS.antennes)}
               />
             </Reveal>
             <Reveal delay={100} className="order-1 lg:order-2">
@@ -463,21 +480,17 @@ const OmegaDmxInterfacePage = () => {
 
           <div className="mt-14 grid gap-5 md:grid-cols-2">
             <Reveal>
-              <AnnotatedPhoto
+              <EditableImage
                 src={BOX.sidePorts}
                 alt="Face latérale — sorties DMX et antenne"
-                photoId={PHOTO_IDS.sidePorts}
-                callouts={calloutsApi.getCallouts(PHOTO_IDS.sidePorts)}
-                {...photoEditProps(PHOTO_IDS.sidePorts)}
+                {...imageProps(PHOTO_IDS.sidePorts)}
               />
             </Reveal>
             <Reveal delay={80}>
-              <AnnotatedPhoto
+              <EditableImage
                 src={BOX.antenneUsb}
                 alt="Connecteur antenne et USB-C"
-                photoId={PHOTO_IDS.antenneUsb}
-                callouts={calloutsApi.getCallouts(PHOTO_IDS.antenneUsb)}
-                {...photoEditProps(PHOTO_IDS.antenneUsb)}
+                {...imageProps(PHOTO_IDS.antenneUsb)}
               />
             </Reveal>
           </div>
@@ -502,21 +515,27 @@ const OmegaDmxInterfacePage = () => {
           <div className="mt-12 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
             {GALLERY.map((g, i) => (
               <Reveal key={g.src} delay={i * 40}>
-                <button
-                  type="button"
-                  onClick={() => setLightbox(i)}
-                  className="group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-950 text-left transition hover:border-white/25"
-                >
-                  <img
+                <div className="group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-950 text-left transition hover:border-white/25">
+                  <EditableImage
                     src={g.src}
                     alt={g.cap}
-                    className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                    loading="lazy"
+                    cover
+                    aspectClass="aspect-[16/10]"
+                    className="w-full"
+                    {...imageProps(`gallery${i}`)}
                   />
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-[11px] text-white/70 opacity-0 transition group-hover:opacity-100 sm:text-xs">
+                  {!editMode && (
+                    <button
+                      type="button"
+                      onClick={() => setLightbox(i)}
+                      className="absolute inset-0 z-10"
+                      aria-label={`Agrandir : ${g.cap}`}
+                    />
+                  )}
+                  <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-[11px] text-white/70 opacity-0 transition group-hover:opacity-100 sm:text-xs">
                     {g.cap}
                   </span>
-                </button>
+                </div>
               </Reveal>
             ))}
           </div>
@@ -783,14 +802,17 @@ const OmegaDmxInterfacePage = () => {
           {/* Bandeau capture */}
           <Reveal delay={60}>
             <div className="relative mt-12 overflow-hidden rounded-2xl border border-white/10">
-              <img
+              <EditableImage
                 src={BOX.softAfx}
                 alt="OMEGADMX — page machine avec plateau 3D"
-                className="max-h-[52vh] w-full object-cover object-top"
-                loading="lazy"
+                cover
+                className="max-h-[52vh] w-full"
+                aspectClass="max-h-[52vh] w-full"
+                imgClassName="max-h-[52vh] object-top"
+                {...imageProps(PHOTO_IDS.softAfx)}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 p-6 md:p-8">
                 <p className="text-sm text-white/70 md:text-base">
                   Page machine, plateau 3D, contrôles live — connecté à votre boîtier en USB, WiFi
                   ou Bluetooth.
@@ -904,18 +926,21 @@ const OmegaDmxInterfacePage = () => {
           {/* Mini galerie logiciel */}
           <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
-              { src: BOX.softBeam, cap: 'Contrôle Beam' },
-              { src: BOX.softColor, cap: 'Mélange couleur' },
-              { src: BOX.soft3d, cap: 'Effets 3D' },
-              { src: BOX.softDmx, cap: 'Sortie DMX' },
+              { src: BOX.softBeam, cap: 'Contrôle Beam', id: PHOTO_IDS.softBeam },
+              { src: BOX.softColor, cap: 'Mélange couleur', id: PHOTO_IDS.softColor },
+              { src: BOX.soft3d, cap: 'Effets 3D', id: PHOTO_IDS.soft3d },
+              { src: BOX.softDmx, cap: 'Sortie DMX', id: PHOTO_IDS.softDmx },
             ].map((g, i) => (
               <Reveal key={g.cap} delay={i * 50}>
                 <figure className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
-                  <img
+                  <EditableImage
                     src={g.src}
                     alt={g.cap}
-                    className="aspect-video w-full object-cover object-top"
-                    loading="lazy"
+                    cover
+                    aspectClass="aspect-video"
+                    className="w-full"
+                    imgClassName="object-top"
+                    {...imageProps(g.id)}
                   />
                   <figcaption className="border-t border-white/5 px-3 py-2 text-[11px] text-white/40">
                     {g.cap}

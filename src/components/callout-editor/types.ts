@@ -48,10 +48,48 @@ export type Callout = {
   labelDy?: number;
 };
 
+/** Transform 3D + parallax par image */
+export type ParallaxMode = 'none' | 'scroll' | 'mouse';
+
+export type ImageTransform = {
+  /** Rotation plane (°) */
+  rotateZ: number;
+  /** Inclinaison 3D haut/bas (°) */
+  rotateX: number;
+  /** Inclinaison 3D gauche/droite (°) — effet “carte 3D” */
+  rotateY: number;
+  /** Perspective CSS (px) */
+  perspective: number;
+  /** Échelle 0.5–1.5 */
+  scale: number;
+  /** Amplitude parallax horizontal (% translate / tilt) */
+  parallaxX: number;
+  /** Amplitude parallax vertical */
+  parallaxY: number;
+  parallaxMode: ParallaxMode;
+  /** object-position CSS ex. "center 40%" */
+  objectPosition: string;
+};
+
+export const DEFAULT_TRANSFORM: ImageTransform = {
+  rotateZ: 0,
+  rotateX: 0,
+  rotateY: 0,
+  perspective: 900,
+  scale: 1,
+  parallaxX: 0,
+  parallaxY: 0,
+  parallaxMode: 'none',
+  objectPosition: 'center center',
+};
+
 export type PageCalloutsConfig = {
-  version: 1;
+  version: 1 | 2;
   pageId: string;
+  /** Callouts par photoId (toute image de la page) */
   photos: Record<string, Callout[]>;
+  /** Transforms 3D / parallax par photoId */
+  transforms?: Record<string, ImageTransform>;
   updatedAt?: string;
 };
 
@@ -263,6 +301,30 @@ export function normalizeCallout(raw: unknown): Callout | null {
   });
 }
 
+export function normalizeTransform(raw: unknown): ImageTransform {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_TRANSFORM };
+  const t = raw as Record<string, unknown>;
+  const mode =
+    t.parallaxMode === 'scroll' || t.parallaxMode === 'mouse' || t.parallaxMode === 'none'
+      ? t.parallaxMode
+      : DEFAULT_TRANSFORM.parallaxMode;
+  return {
+    rotateZ: typeof t.rotateZ === 'number' ? clamp(t.rotateZ, -180, 180) : 0,
+    rotateX: typeof t.rotateX === 'number' ? clamp(t.rotateX, -60, 60) : 0,
+    rotateY: typeof t.rotateY === 'number' ? clamp(t.rotateY, -60, 60) : 0,
+    perspective:
+      typeof t.perspective === 'number' ? clamp(t.perspective, 200, 2000) : DEFAULT_TRANSFORM.perspective,
+    scale: typeof t.scale === 'number' ? clamp(t.scale, 0.5, 1.6) : 1,
+    parallaxX: typeof t.parallaxX === 'number' ? clamp(t.parallaxX, 0, 30) : 0,
+    parallaxY: typeof t.parallaxY === 'number' ? clamp(t.parallaxY, 0, 30) : 0,
+    parallaxMode: mode,
+    objectPosition:
+      typeof t.objectPosition === 'string' && t.objectPosition.trim()
+        ? t.objectPosition
+        : DEFAULT_TRANSFORM.objectPosition,
+  };
+}
+
 export function normalizeConfig(raw: unknown, defaults: PageCalloutsConfig): PageCalloutsConfig {
   if (!raw || typeof raw !== 'object') return structuredClone(defaults);
   const r = raw as Record<string, unknown>;
@@ -284,10 +346,23 @@ export function normalizeConfig(raw: unknown, defaults: PageCalloutsConfig): Pag
     const arr = Array.isArray(photosIn[key]) ? (photosIn[key] as unknown[]) : [];
     photos[key] = arr.map(normalizeCallout).filter((c): c is Callout => !!c);
   }
+
+  const transformsIn =
+    r.transforms && typeof r.transforms === 'object'
+      ? (r.transforms as Record<string, unknown>)
+      : {};
+  const transforms: Record<string, ImageTransform> = {
+    ...(defaults.transforms || {}),
+  };
+  for (const key of Object.keys(transformsIn)) {
+    transforms[key] = normalizeTransform(transformsIn[key]);
+  }
+
   return {
-    version: 1,
+    version: 2,
     pageId: PAGE_ID,
     photos,
+    transforms,
     updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : undefined,
   };
 }

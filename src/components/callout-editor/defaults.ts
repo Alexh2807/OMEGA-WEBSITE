@@ -1,26 +1,57 @@
 import { Callout, createCallout, PageCalloutsConfig, PAGE_ID } from './types';
 
 export const PHOTO_IDS = {
+  hero: 'hero',
   dmxClose: 'dmxClose',
   antennes: 'antennes',
   sidePorts: 'sidePorts',
   antenneUsb: 'antenneUsb',
+  softAfx: 'softAfx',
+  softBeam: 'softBeam',
+  softColor: 'softColor',
+  soft3d: 'soft3d',
+  softDmx: 'softDmx',
+  gallery0: 'gallery0',
+  gallery1: 'gallery1',
+  gallery2: 'gallery2',
+  gallery3: 'gallery3',
+  gallery4: 'gallery4',
+  gallery5: 'gallery5',
+  gallery6: 'gallery6',
+  gallery7: 'gallery7',
+  gallery8: 'gallery8',
 } as const;
 
-export type PhotoId = (typeof PHOTO_IDS)[keyof typeof PHOTO_IDS];
+export type PhotoId = (typeof PHOTO_IDS)[keyof typeof PHOTO_IDS] | string;
 
-export const PHOTO_LABELS: Record<PhotoId, string> = {
+export const PHOTO_LABELS: Record<string, string> = {
+  hero: 'Hero produit',
   dmxClose: 'Gros plan XLR (Univers 1 & 2)',
   antennes: 'Antennes RP-SMA',
   sidePorts: 'Face latérale DMX',
   antenneUsb: 'Antenne & USB-C',
+  softAfx: 'Capture logiciel AFX',
+  softBeam: 'Capture Beam',
+  softColor: 'Capture couleur',
+  soft3d: 'Capture effets 3D',
+  softDmx: 'Capture sortie DMX',
+  gallery0: 'Galerie 1',
+  gallery1: 'Galerie 2',
+  gallery2: 'Galerie 3',
+  gallery3: 'Galerie 4',
+  gallery4: 'Galerie 5',
+  gallery5: 'Galerie 6',
+  gallery6: 'Galerie 7',
+  gallery7: 'Galerie 8',
+  gallery8: 'Galerie 9',
 };
 
 const c = (p: Parameters<typeof createCallout>[0]): Callout => createCallout(p);
 
 export const DEFAULT_PAGE_CALLOUTS: PageCalloutsConfig = {
-  version: 1,
+  version: 2,
   pageId: PAGE_ID,
+  transforms: {},
   photos: {
     [PHOTO_IDS.dmxClose]: [
       c({
