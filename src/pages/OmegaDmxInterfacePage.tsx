@@ -8,14 +8,13 @@ import {
   Ban,
   Save,
   MonitorPlay,
-  Boxes,
-  Move,
-  Palette,
   Radio,
   Zap,
   Shield,
   ChevronDown,
   Check,
+  Antenna,
+  Cable,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Product } from '../types';
@@ -25,26 +24,35 @@ import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import toast from 'react-hot-toast';
 
 /* ================================================================== */
-/*  OMEGA DMX — Product Experience (inspiré Tesla / GoPro / MDG)     */
-/*  Scroll immersif, visuels plein cadre, CTA permanent.             */
+/*  OMEGA DMX Interface — Product Experience                           */
+/*  Photos RÉELLES du boîtier (P102…) + callouts animés               */
 /* ================================================================== */
 
-/* Visuels : boîtier marketing + CAPTURES RÉELLES OMEGADMX v2. */
-const ASSETS = {
-  heroBox: '/products/omega-dmx-px-hero-box.webp',
-  softUi: '/products/omega-dmx-v2-page-beam.webp',
-  softStage: '/products/omega-dmx-v2-page-afx.webp',
-  softPlace: '/products/omega-dmx-v2-couleur.webp',
-  softLive: '/products/omega-dmx-v2-effet-3d.webp',
-  softColor: '/products/omega-dmx-v2-couleur.webp',
-  softMove: '/products/omega-dmx-v2-page-beam.webp',
-  softPlan: '/products/omega-dmx-v2-page-afx.webp',
-  softDmx: '/products/omega-dmx-v2-sortie-dmx.webp',
-  softConn: '/products/omega-dmx-v2-connexion.webp',
+const BOX = {
+  hero: '/products/p1021135.webp',
+  dmxClose: '/products/omega-box-dmx-close.webp',
+  sidePorts: '/products/omega-box-side-ports.webp',
+  antennes: '/products/omega-box-antennes.webp',
+  antenneUsb: '/products/omega-box-antenne-usb.webp',
+  topPorts: '/products/omega-box-top-ports.webp',
+  angle: '/products/omega-box-angle.webp',
+  detail: '/products/omega-box-detail.webp',
+  soft: '/products/omega-dmx-v2-page-afx.webp',
 };
 
 const PRICE_TTC = 429;
 const PRICE_HT = PRICE_TTC / 1.2;
+
+type Callout = {
+  /** 0–100 % position du point sur l'image */
+  x: number;
+  y: number;
+  label: string;
+  sub?: string;
+  /** côté de l'étiquette */
+  side?: 'left' | 'right';
+  color?: string;
+};
 
 const Reveal: React.FC<{
   children: React.ReactNode;
@@ -78,6 +86,113 @@ const Reveal: React.FC<{
       } ${className}`}
     >
       {children}
+    </div>
+  );
+};
+
+/**
+ * Photo produit + fils/callouts animés (repères sur ports, antenne…).
+ * Les positions sont en % pour rester responsive.
+ */
+const AnnotatedPhoto: React.FC<{
+  src: string;
+  alt: string;
+  callouts: Callout[];
+  className?: string;
+}> = ({ src, alt, callouts, className = '' }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) setActive(true);
+      },
+      { threshold: 0.25 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={`relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 ${className}`}>
+      <img src={src} alt={alt} className="block w-full h-auto object-cover" loading="lazy" />
+
+      {/* Callouts */}
+      {callouts.map((c, i) => {
+        const side = c.side || (c.x > 50 ? 'right' : 'left');
+        const color = c.color || '#38bdf8';
+        const labelX = side === 'right' ? Math.min(c.x + 18, 92) : Math.max(c.x - 18, 8);
+        const labelY = Math.max(c.y - 8, 8);
+
+        return (
+          <div
+            key={i}
+            className="pointer-events-none absolute inset-0"
+            style={{
+              opacity: active ? 1 : 0,
+              transition: `opacity 0.6s ease ${0.2 + i * 0.15}s`,
+            }}
+          >
+            {/* SVG wire */}
+            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <line
+                x1={c.x}
+                y1={c.y}
+                x2={labelX}
+                y2={labelY}
+                stroke={color}
+                strokeWidth="0.35"
+                strokeDasharray="1.2 0.8"
+                className={active ? 'omx-wire-draw' : ''}
+                style={{
+                  filter: `drop-shadow(0 0 2px ${color})`,
+                  animationDelay: `${0.25 + i * 0.15}s`,
+                }}
+              />
+            </svg>
+
+            {/* Hotspot pulse */}
+            <span
+              className="absolute block h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                left: `${c.x}%`,
+                top: `${c.y}%`,
+                background: color,
+                boxShadow: `0 0 0 0 ${color}`,
+                animation: active ? 'omxPulse 2s ease-out infinite' : 'none',
+                animationDelay: `${0.3 + i * 0.15}s`,
+              }}
+            />
+            <span
+              className="absolute block h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white/80"
+              style={{ left: `${c.x}%`, top: `${c.y}%`, background: color }}
+            />
+
+            {/* Label card */}
+            <div
+              className="absolute max-w-[46%] -translate-x-1/2 -translate-y-full rounded-xl border border-white/15 bg-black/80 px-3 py-2 backdrop-blur-md shadow-xl"
+              style={{
+                left: `${labelX}%`,
+                top: `${labelY}%`,
+                borderColor: `${color}55`,
+                transform: active
+                  ? 'translate(-50%, calc(-100% - 6px))'
+                  : 'translate(-50%, calc(-100% + 8px))',
+                transition: `transform 0.55s cubic-bezier(.16,1,.3,1) ${0.3 + i * 0.12}s, opacity 0.45s ease ${0.3 + i * 0.12}s`,
+                opacity: active ? 1 : 0,
+              }}
+            >
+              <div className="text-[11px] font-bold tracking-wide" style={{ color }}>
+                {c.label}
+              </div>
+              {c.sub && <div className="mt-0.5 text-[10px] leading-snug text-white/55">{c.sub}</div>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -142,7 +257,23 @@ const OmegaDmxInterfacePage = () => {
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-blue-500/40">
-      {/* ─── STICKY PRODUCT BAR ─── */}
+      <style>{`
+        @keyframes omxPulse {
+          0% { box-shadow: 0 0 0 0 rgba(56,189,248,.55); }
+          70% { box-shadow: 0 0 0 14px rgba(56,189,248,0); }
+          100% { box-shadow: 0 0 0 0 rgba(56,189,248,0); }
+        }
+        @keyframes omxWireDraw {
+          from { stroke-dashoffset: 24; opacity: 0; }
+          to { stroke-dashoffset: 0; opacity: 1; }
+        }
+        .omx-wire-draw {
+          stroke-dasharray: 1.2 0.9;
+          animation: omxWireDraw 0.9s ease forwards;
+        }
+      `}</style>
+
+      {/* STICKY BAR */}
       <div
         className={`fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-black/90 backdrop-blur-xl transition-transform duration-300 ${
           sticky ? 'translate-y-0' : '-translate-y-full'
@@ -151,9 +282,9 @@ const OmegaDmxInterfacePage = () => {
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <img src={ASSETS.heroBox} alt="" className="h-10 w-14 object-contain" />
+            <img src={BOX.hero} alt="" className="h-10 w-14 rounded object-cover" />
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold tracking-wide">OMEGA DMX</div>
+              <div className="truncate text-sm font-semibold tracking-wide">OMEGA DMX Interface</div>
               <div className="text-xs text-white/50">
                 {fmt(mainPrice)} € {mainLabel} · logiciel inclus
               </div>
@@ -169,32 +300,35 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </div>
 
-      {/* ─── HERO ─── */}
+      {/* ─── HERO : vrai boîtier ─── */}
       <section
         ref={heroRef}
         className="relative flex min-h-[100svh] flex-col justify-end overflow-hidden pb-16 pt-28"
       >
         <div className="pointer-events-none absolute inset-0">
           <img
-            src={ASSETS.heroBox}
-            alt=""
-            className="h-full w-full object-cover object-center opacity-90"
+            src={BOX.hero}
+            alt="OMEGA DMX Interface — boîtier réel, 2 sorties XLR"
+            className="h-full w-full object-cover object-[center_60%]"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-black/40" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/25" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/20 to-transparent" />
         </div>
 
         <div className="relative z-10 mx-auto w-full max-w-7xl px-5">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">
-            Interface DMX · Fabrication OMEGA
+            Fabrication OMEGA · Design réel
           </p>
           <h1 className="max-w-4xl text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
             OMEGA DMX
+            <span className="mt-2 block text-2xl font-normal text-white/45 md:text-4xl">
+              Interface
+            </span>
           </h1>
           <p className="mt-5 max-w-xl text-lg text-white/70 md:text-xl">
-            2 univers. 1024 canaux. Logiciel inclus.
+            2 sorties DMX. 1024 canaux. Antenne interchangeable jusqu&apos;à&nbsp;1&nbsp;km.
             <br className="hidden sm:block" />
-            Sans abonnement — conçu pour la régie live.
+            Logiciel inclus — sans abonnement.
           </p>
 
           <div className="mt-10 flex flex-wrap items-end gap-6">
@@ -215,10 +349,10 @@ const OmegaDmxInterfacePage = () => {
                 {buyLabel}
               </button>
               <a
-                href="#experience"
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-sm font-semibold text-white transition hover:border-white/50 hover:bg-white/5"
+                href="#boitier"
+                className="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-sm font-semibold transition hover:border-white/50 hover:bg-white/5"
               >
-                Découvrir
+                Voir le boîtier
                 <ChevronDown size={16} />
               </a>
             </div>
@@ -226,9 +360,9 @@ const OmegaDmxInterfacePage = () => {
 
           <div className="mt-14 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-4">
             {[
-              { k: '2', v: 'univers DMX' },
+              { k: '2', v: 'sorties DMX' },
               { k: '1024', v: 'canaux' },
-              { k: '1 km', v: 'sans fil (cartes)' },
+              { k: '1 km', v: 'sans fil max.' },
               { k: '0 €', v: 'abonnement' },
             ].map((s) => (
               <div key={s.v} className="bg-black/80 px-4 py-5 text-center backdrop-blur">
@@ -240,237 +374,308 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
-      {/* ─── EXPERIENCE INTRO ─── */}
-      <section id="experience" className="scroll-mt-28 border-t border-white/5 py-24 md:py-32">
-        <div className="mx-auto max-w-4xl px-5 text-center">
-          <Reveal>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-400/90">
-              L&apos;expérience
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
-              Un boîtier. Un logiciel.
-              <span className="block text-white/45">Tout ce qu&apos;il faut pour le show.</span>
-            </h2>
-            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/55 md:text-lg">
-              OMEGA DMX remplace les empilements d&apos;interfaces et d&apos;abonnements par un
-              système clair : hardware fiable, logiciel de régie en 3D, sauvegarde du show dans le
-              boîtier.
-            </p>
-          </Reveal>
-        </div>
-      </section>
+      {/* ─── 2 SORTIES DMX + CALL OUTS ─── */}
+      <section id="boitier" className="scroll-mt-28 border-t border-white/5 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-5">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <Reveal>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400/90">
+                <Cable size={14} />
+                2 univers DMX
+              </div>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
+                Deux sorties XLR.
+                <span className="block text-white/40">Deux univers.</span>
+              </h2>
+              <p className="mt-5 text-base leading-relaxed text-white/55 md:text-lg">
+                Le boîtier embarque <strong className="text-white">2 sorties DMX physiques</strong>{' '}
+                — Univers&nbsp;1 et Univers&nbsp;2 — soit jusqu&apos;à{' '}
+                <strong className="text-white">1024 canaux</strong> en simultané.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
+                Et ce n&apos;est pas tout : ces <strong className="text-white">2 univers
+                peuvent aussi partir en sans fil</strong> via les{' '}
+                <strong className="text-white">récepteurs OMEGA</strong>, pour alléger le câblage
+                sur le terrain.
+              </p>
+              <ul className="mt-8 space-y-3">
+                {[
+                  '2 × XLR 3 points — DMX OUT',
+                  'Univers 1 + Univers 2 câblés ou radio',
+                  'Récepteurs OMEGA pour le sans-fil multi-projecteurs',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3 text-sm text-white/75 md:text-base">
+                    <Check className="mt-0.5 shrink-0 text-cyan-400" size={18} />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
 
-      {/* ─── FULL BLEED SOFTWARE ─── */}
-      <section id="logiciel" className="relative scroll-mt-28">
-        <div className="relative min-h-[70svh] md:min-h-[85svh]">
-          <img
-            src={ASSETS.softUi}
-            alt="Logiciel OMEGADMX — vue 3D et pilotage"
-            className="absolute inset-0 h-full w-full object-cover object-center"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-transparent to-transparent" />
-          <div className="relative z-10 flex min-h-[70svh] items-end px-5 pb-16 md:min-h-[85svh] md:pb-24">
-            <div className="mx-auto w-full max-w-7xl">
-              <Reveal>
-                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/60">
-                  <MonitorPlay size={14} />
-                  Logiciel OMEGADMX
-                </div>
-                <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight md:text-6xl">
-                  Concevez en 3D.
-                  <br />
-                  Jouez en live.
-                </h2>
-                <p className="mt-5 max-w-lg text-base text-white/65 md:text-lg">
-                  Faisceaux, mouvements, scènes : le logiciel inclus visualise le show avant
-                  d&apos;allumer la salle — et pilote jusqu&apos;à 2 univers DMX le jour J.
-                </p>
-                <Link
-                  to="/omega-dmx-logiciel"
-                  className="mt-8 inline-flex text-sm font-semibold text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white"
-                >
-                  Voir la présentation logiciel
-                </Link>
-              </Reveal>
-            </div>
+            <Reveal delay={100}>
+              <AnnotatedPhoto
+                src={BOX.dmxClose}
+                alt="OMEGA DMX Interface — deux sorties XLR DMX"
+                callouts={[
+                  {
+                    x: 48,
+                    y: 62,
+                    label: 'Univers 1',
+                    sub: 'Sortie DMX OUT 1 · 512 canaux',
+                    side: 'left',
+                    color: '#38bdf8',
+                  },
+                  {
+                    x: 72,
+                    y: 52,
+                    label: 'Univers 2',
+                    sub: 'Sortie DMX OUT 2 · 512 canaux',
+                    side: 'right',
+                    color: '#a78bfa',
+                  },
+                ]}
+              />
+              <p className="mt-3 text-center text-xs text-white/35">
+                Photo réelle du boîtier — repères animés sur les 2 sorties DMX
+              </p>
+            </Reveal>
           </div>
         </div>
       </section>
 
-      {/* ─── FEATURE CHAPTERS (captures réelles) ─── */}
-      {[
-        {
-          kicker: 'Vue 3D & scènes',
-          title: 'Faisceaux en direct pendant que vous programmez',
-          text: 'Le plateau scénique 3D reproduit vos lyres et leurs faisceaux. Scènes & presets, roue de couleur, pad PAN/TILT et FX de mouvement — le tout visible avant d’allumer la salle.',
-          img: ASSETS.softStage,
-          icon: Boxes,
-          points: ['Plateau 3D temps réel', 'Scènes & presets par machine', 'Roue de couleur + position'],
-        },
-        {
-          kicker: 'Contrôle complet',
-          title: 'Dimmer, gobos, couleur, mouvements',
-          text: 'Sur une lyre réelle (ex. Beam 18R) : intensité, strobe, gobos, iris, roue de couleur RGBW, effets cercle/huit/swing et plan 2D d’implantation.',
-          img: ASSETS.softUi,
-          icon: Move,
-          reverse: true,
-          points: ['Gobos & optiques', 'FX mouvement (cercle, huit, swing)', 'Canaux DMX mappés à l’écran'],
-        },
-        {
-          kicker: 'Couleur RGBW',
-          title: 'Mélange précis, canal par canal',
-          text: 'Roue de couleur, faders Rouge / Vert / Bleu / Blanc, presets ambre, outils de mélange et FX rainbow / flash.',
-          img: ASSETS.softColor,
-          icon: Palette,
-          points: ['Mélange RGBW live', 'Presets de teintes', 'FX rainbow & flash'],
-        },
-        {
-          kicker: 'Sortie DMX',
-          title: 'Les 512 canaux sous les yeux',
-          text: 'Moniteur de sortie DMX : visualisez l’univers 1 (ou 2), les canaux actifs et les valeurs en temps réel — idéal pour le debug en régie.',
-          img: ASSETS.softDmx,
-          icon: Layers,
-          reverse: true,
-          points: ['Grille 512 canaux', 'Valeurs live', 'Multi-univers'],
-        },
-      ].map((ch) => (
-        <section
-          key={ch.kicker}
-          className="border-t border-white/5 py-20 md:py-28"
-        >
-          <div
-            className={`mx-auto grid max-w-7xl items-center gap-10 px-5 lg:grid-cols-2 lg:gap-16 ${
-              ch.reverse ? 'lg:[&>*:first-child]:order-2' : ''
-            }`}
-          >
-            <Reveal delay={40}>
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50">
-                <img src={ch.img} alt={ch.title} className="w-full object-cover" loading="lazy" />
-              </div>
+      {/* ─── ANTENNES INTERCHANGEABLES ─── */}
+      <section className="border-t border-white/5 bg-zinc-950/40 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-5">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <Reveal className="order-2 lg:order-1">
+              <AnnotatedPhoto
+                src={BOX.antennes}
+                alt="Connecteur d’antenne RP-SMA et antennes interchangeables"
+                callouts={[
+                  {
+                    x: 58,
+                    y: 38,
+                    label: 'Connecteur RP-SMA',
+                    sub: 'Antenne amovible, changeable en 2 s',
+                    side: 'right',
+                    color: '#fbbf24',
+                  },
+                  {
+                    x: 35,
+                    y: 72,
+                    label: 'Antennes au choix',
+                    sub: 'Courte, longue… selon la portée voulue',
+                    side: 'left',
+                    color: '#34d399',
+                  },
+                ]}
+              />
             </Reveal>
-            <Reveal delay={120}>
-              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-blue-400/90">
-                <ch.icon size={14} />
-                {ch.kicker}
+            <Reveal delay={100} className="order-1 lg:order-2">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-amber-400/90">
+                <Antenna size={14} />
+                Sans fil jusqu&apos;à 1 km
               </div>
-              <h3 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">{ch.title}</h3>
-              <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">{ch.text}</p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
+                Antenne interchangeable.
+                <span className="block text-white/40">Portée adaptée à la salle.</span>
+              </h2>
+              <p className="mt-5 text-base leading-relaxed text-white/55 md:text-lg">
+                Le connecteur <strong className="text-white">RP-SMA</strong> permet de changer
+                d&apos;antenne selon le besoin : compacte pour la régie proche, plus longue pour
+                étendre la liaison radio.
+              </p>
+              <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
+                Avec les <strong className="text-white">récepteurs OMEGA</strong> et la bonne
+                antenne, le sans-fil peut atteindre jusqu&apos;à{' '}
+                <strong className="text-white">1&nbsp;km</strong> en conditions favorables —
+                idéal pour les grands sites et les installations multi-zones.
+              </p>
               <ul className="mt-8 space-y-3">
-                {ch.points.map((p) => (
-                  <li key={p} className="flex items-start gap-3 text-sm text-white/75 md:text-base">
-                    <Check className="mt-0.5 shrink-0 text-blue-400" size={18} />
-                    {p}
+                {[
+                  'Antenne fournie + emplacement RP-SMA standard',
+                  'Portée extensible jusqu’à 1 km (avec récepteurs OMEGA)',
+                  'Les 2 univers DMX partent aussi en radio',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3 text-sm text-white/75 md:text-base">
+                    <Check className="mt-0.5 shrink-0 text-amber-400" size={18} />
+                    {t}
                   </li>
                 ))}
               </ul>
             </Reveal>
           </div>
-        </section>
-      ))}
+        </div>
+      </section>
 
-      {/* ─── HARDWARE PILLARS ─── */}
-      <section className="border-t border-white/5 bg-zinc-950/50 py-24 md:py-32">
+      {/* ─── DESIGN + USB ─── */}
+      <section className="border-t border-white/5 py-20 md:py-28">
         <div className="mx-auto max-w-7xl px-5">
           <Reveal>
             <p className="text-center text-xs font-semibold uppercase tracking-[0.28em] text-white/40">
-              Hardware
+              Design réel
             </p>
             <h2 className="mt-4 text-center text-3xl font-semibold tracking-tight md:text-5xl">
-              Pensé pour ne pas lâcher le jour J
+              Fabriqué pour le terrain
             </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-center text-white/50">
+              Coque texturée, face avant gravée OMEGA, connectique pro — le boîtier tel qu&apos;il
+              sort de production.
+            </p>
           </Reveal>
 
-          <div className="mt-16 grid gap-5 md:grid-cols-3">
+          <div className="mt-14 grid gap-5 md:grid-cols-2">
+            <Reveal>
+              <AnnotatedPhoto
+                src={BOX.sidePorts}
+                alt="Face latérale — sorties DMX et antenne"
+                callouts={[
+                  {
+                    x: 78,
+                    y: 32,
+                    label: 'Univers 1',
+                    sub: 'XLR DMX OUT',
+                    side: 'right',
+                    color: '#38bdf8',
+                  },
+                  {
+                    x: 82,
+                    y: 58,
+                    label: 'Univers 2',
+                    sub: 'XLR DMX OUT',
+                    side: 'right',
+                    color: '#a78bfa',
+                  },
+                  {
+                    x: 48,
+                    y: 8,
+                    label: 'Antenne',
+                    sub: 'Sans fil OMEGA',
+                    side: 'left',
+                    color: '#34d399',
+                  },
+                ]}
+              />
+            </Reveal>
+            <Reveal delay={80}>
+              <AnnotatedPhoto
+                src={BOX.antenneUsb}
+                alt="Connecteur antenne et USB-C"
+                callouts={[
+                  {
+                    x: 42,
+                    y: 42,
+                    label: 'Antenne RP-SMA',
+                    sub: 'Interchangeable',
+                    side: 'left',
+                    color: '#fbbf24',
+                  },
+                  {
+                    x: 58,
+                    y: 68,
+                    label: 'USB-C',
+                    sub: 'Alimentation / liaison PC',
+                    side: 'right',
+                    color: '#38bdf8',
+                  },
+                ]}
+              />
+            </Reveal>
+          </div>
+
+          {/* Gallery strip */}
+          <div className="mt-5 grid grid-cols-2 gap-5 md:grid-cols-3">
             {[
-              {
-                icon: Layers,
-                t: '2 univers natifs',
-                d: '1024 canaux en simultané, sans dongle ni licence mensuelle pour le boîtier OMEGA.',
-              },
-              {
-                icon: Wifi,
-                t: 'Sans fil jusqu’à 1 km',
-                d: 'Avec les cartes réceptrices OMEGA : monitoring du signal et portée pensée pour le terrain.',
-              },
-              {
-                icon: Save,
-                t: 'Show dans le boîtier',
-                d: 'Sauvegarde continue. Si le PC plante, le boîtier peut garder le spectacle en vie.',
-              },
-              {
-                icon: Ban,
-                t: 'Sans abonnement',
-                d: 'Vous achetez, vous gardez. Le logiciel est inclus avec le boîtier.',
-              },
-              {
-                icon: Radio,
-                t: 'Monitoring live',
-                d: 'Qualité de liaison visible pour anticiper les projecteurs en limite de portée.',
-              },
-              {
-                icon: Shield,
-                t: 'Mises à jour',
-                d: 'Boîtier et logiciel évoluent — pas de location de fonctionnalités de base.',
-              },
-            ].map((c, i) => (
-              <Reveal key={c.t} delay={i * 50}>
-                <div className="h-full rounded-2xl border border-white/10 bg-black/60 p-7 transition hover:border-white/20">
-                  <c.icon className="text-blue-400" size={24} strokeWidth={1.5} />
-                  <h3 className="mt-5 text-lg font-semibold">{c.t}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-white/50">{c.d}</p>
-                </div>
+              { src: BOX.topPorts, cap: 'Vue dessus — double XLR' },
+              { src: BOX.angle, cap: 'Perspective produit' },
+              { src: BOX.detail, cap: 'Détail coque & face avant' },
+            ].map((g, i) => (
+              <Reveal key={g.cap} delay={i * 60}>
+                <figure className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
+                  <img
+                    src={g.src}
+                    alt={g.cap}
+                    className="aspect-[4/3] w-full object-cover"
+                    loading="lazy"
+                  />
+                  <figcaption className="border-t border-white/5 px-4 py-2.5 text-xs text-white/40">
+                    {g.cap}
+                  </figcaption>
+                </figure>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── GALLERY STRIP ─── */}
-      <section className="border-t border-white/5 py-20 md:py-28">
-        <div className="mx-auto max-w-7xl px-5">
+      {/* ─── RADIO + RÉCEPTEURS ─── */}
+      <section className="border-t border-white/5 bg-gradient-to-b from-blue-950/20 to-black py-20 md:py-28">
+        <div className="mx-auto max-w-4xl px-5 text-center">
           <Reveal>
-            <div className="mb-12 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/40">
-                  Dans le logiciel
-                </p>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
-                  De la préprod au live
-                </h2>
-              </div>
-              <Link
-                to="/omega-dmx-logiciel"
-                className="text-sm font-semibold text-white/70 underline decoration-white/20 underline-offset-4 hover:text-white hover:decoration-white"
-              >
-                Toutes les vues logiciel
-              </Link>
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-blue-400/90">
+              <Radio size={14} />
+              Système sans fil OMEGA
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
+              Câblé ou radio — les 2 univers suivent
+            </h2>
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/55 md:text-lg">
+              Utilisez les sorties XLR en filaire, ou envoyez les{' '}
+              <strong className="text-white">mêmes 2 univers en sans fil</strong> vers les
+              récepteurs OMEGA placés près des machines. Moins de câble, plus de liberté — jusqu&apos;à
+              1&nbsp;km selon l&apos;antenne et le site.
+            </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-3 text-left">
+              {[
+                { icon: Cable, t: '2× DMX OUT', d: 'Univers 1 & 2 en XLR 3 pts' },
+                { icon: Wifi, t: 'Radio OMEGA', d: 'Mêmes univers vers les récepteurs' },
+                { icon: Antenna, t: 'Antenne libre', d: 'Portée adaptée, jusqu’à 1 km' },
+              ].map((c) => (
+                <div
+                  key={c.t}
+                  className="rounded-2xl border border-white/10 bg-black/50 p-5"
+                >
+                  <c.icon className="text-blue-400" size={22} strokeWidth={1.5} />
+                  <div className="mt-3 font-semibold">{c.t}</div>
+                  <div className="mt-1 text-sm text-white/45">{c.d}</div>
+                </div>
+              ))}
             </div>
           </Reveal>
+        </div>
+      </section>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {[
-              { src: ASSETS.softStage, cap: 'Vue 3D + scènes + couleur (capture réelle)' },
-              { src: ASSETS.softUi, cap: 'Contrôle complet : gobos, dimmer, FX (capture réelle)' },
-              { src: ASSETS.softColor, cap: 'Mélange RGBW & intensité (capture réelle)' },
-              { src: ASSETS.softDmx, cap: 'Moniteur sortie DMX 512 canaux (capture réelle)' },
-              { src: ASSETS.softLive, cap: 'Effet cercle sur plateau 3D (capture réelle)' },
-              { src: ASSETS.softConn, cap: 'Connexion boîtier WiFi / USB / Bluetooth' },
-            ].map((g, i) => (
-              <Reveal key={g.cap} delay={(i % 2) * 80}>
-                <figure className="group overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
-                  <img
-                    src={g.src}
-                    alt={g.cap}
-                    className="aspect-[16/10] w-full object-cover transition duration-700 group-hover:scale-[1.02]"
-                    loading="lazy"
-                  />
-                  <figcaption className="border-t border-white/5 px-5 py-3 text-sm text-white/45">
-                    {g.cap}
-                  </figcaption>
-                </figure>
+      {/* ─── LOGICIEL (secondaire) ─── */}
+      <section className="relative border-t border-white/5">
+        <div className="relative min-h-[60svh] md:min-h-[75svh]">
+          <img
+            src={BOX.soft}
+            alt="Logiciel OMEGADMX inclus"
+            className="absolute inset-0 h-full w-full object-cover object-top"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/30" />
+          <div className="relative z-10 flex min-h-[60svh] items-end px-5 pb-16 md:min-h-[75svh] md:pb-24">
+            <div className="mx-auto w-full max-w-7xl">
+              <Reveal>
+                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/60">
+                  <MonitorPlay size={14} />
+                  Logiciel inclus
+                </div>
+                <h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
+                  OMEGADMX — la régie en 3D
+                </h2>
+                <p className="mt-4 max-w-lg text-white/65">
+                  Fourni avec le boîtier. Pas d&apos;abonnement. Vue 3D, scènes, gobos, moniteur
+                  DMX…
+                </p>
+                <Link
+                  to="/omega-dmx-logiciel"
+                  className="mt-8 inline-flex text-sm font-semibold text-white underline decoration-white/30 underline-offset-4 hover:decoration-white"
+                >
+                  Voir la présentation logiciel
+                </Link>
               </Reveal>
-            ))}
+            </div>
           </div>
         </div>
       </section>
@@ -486,12 +691,14 @@ const OmegaDmxInterfacePage = () => {
           <Reveal delay={80}>
             <dl className="mt-12 divide-y divide-white/10 border-y border-white/10">
               {[
-                ['Univers DMX', '2 (1024 canaux)'],
+                ['Sorties DMX', '2 × XLR 3 pts (Univers 1 & 2)'],
+                ['Canaux', '1024 (2 × 512)'],
+                ['Sans fil', 'Jusqu’à 1 km avec récepteurs OMEGA + antenne adaptée'],
+                ['Antenne', 'RP-SMA interchangeable'],
+                ['Liaison PC', 'USB-C / WiFi / Bluetooth'],
                 ['Logiciel', 'OMEGADMX inclus — Windows'],
                 ['Abonnement', 'Aucun'],
-                ['Sans fil', 'Jusqu’à 1 km avec cartes OMEGA (option)'],
                 ['Sauvegarde show', 'Interne au boîtier'],
-                ['Interfaces tierces', 'Licence optionnelle (ex. Sunlite)'],
                 ['Prix', `${fmt(mainPrice)} € ${mainLabel}`],
               ].map(([k, v]) => (
                 <div
@@ -507,10 +714,10 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
-      {/* ─── FINAL CTA ─── */}
+      {/* ─── CTA ─── */}
       <section className="relative overflow-hidden border-t border-white/5 py-28 md:py-36">
         <div className="pointer-events-none absolute inset-0">
-          <img src={ASSETS.heroBox} alt="" className="h-full w-full object-cover opacity-40" />
+          <img src={BOX.hero} alt="" className="h-full w-full object-cover opacity-40" />
           <div className="absolute inset-0 bg-black/75" />
         </div>
         <div className="relative z-10 mx-auto max-w-3xl px-5 text-center">
@@ -519,8 +726,8 @@ const OmegaDmxInterfacePage = () => {
               Prêt pour la régie.
             </h2>
             <p className="mx-auto mt-5 max-w-lg text-white/55">
-              OMEGA DMX Interface — {fmt(mainPrice)} € {mainLabel}. Logiciel inclus, sans
-              abonnement.
+              OMEGA DMX Interface — {fmt(mainPrice)} € {mainLabel}. 2 univers, antenne libre,
+              logiciel inclus.
             </p>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
               <button
@@ -548,6 +755,9 @@ const OmegaDmxInterfacePage = () => {
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Ban size={12} /> Sans abonnement
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Save size={12} /> Sauvegarde boîtier
               </span>
             </div>
           </Reveal>

@@ -4,7 +4,7 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 08/08/2026 17:31:39
+ * Dernière mise à jour: 08/08/2026 18:13:47
  */
 
 // Liste de toutes les images disponibles dans /public
@@ -70,6 +70,14 @@ export const productImages = [
   "/products/image.webp",
   "/products/liquide-pro-hazer-5l.webp",
   "/products/logo-omega-hq-transparent.webp",
+  "/products/omega-box-angle.webp",
+  "/products/omega-box-antenne-usb.webp",
+  "/products/omega-box-antennes.webp",
+  "/products/omega-box-detail.webp",
+  "/products/omega-box-dmx-close.webp",
+  "/products/omega-box-hero-dmx.webp",
+  "/products/omega-box-side-ports.webp",
+  "/products/omega-box-top-ports.webp",
   "/products/omega-dmx-interface.webp",
   "/products/omega-dmx-px-hero-box.webp",
   "/products/omega-dmx-px-soft-color.webp",
@@ -109,6 +117,16 @@ export const productImages = [
   "/products/omega-dmx-v2-sortie-dmx.webp",
   "/products/omega-mousse-2.webp",
   "/products/omega-mousse.webp",
+  "/products/p1021126.webp",
+  "/products/p1021127.webp",
+  "/products/p1021128.webp",
+  "/products/p1021129.webp",
+  "/products/p1021130.webp",
+  "/products/p1021131.webp",
+  "/products/p1021132.webp",
+  "/products/p1021133.webp",
+  "/products/p1021134.webp",
+  "/products/p1021135.webp",
   "/products/placeholder.webp"
 ];
 
