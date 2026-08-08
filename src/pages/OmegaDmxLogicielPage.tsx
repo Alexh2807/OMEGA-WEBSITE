@@ -61,42 +61,42 @@ const Reveal: React.FC<{
 
 const GALLERY = [
   {
-    src: '/products/omega-dmx-real-3d-faisceaux.png',
+    src: '/products/omega-dmx-real-3d-faisceaux.webp',
     alt: 'OMEGADMX — plateau 3D avec faisceaux et scènes',
     label: 'Vue 3D · scènes',
     title: 'Faisceaux visibles pendant la programmation',
     text: 'Capture réelle : plateau 3D, scènes/presets, roue de couleur et pad PAN/TILT sur une lyre AFX Light Show.',
   },
   {
-    src: '/products/omega-dmx-real-controle.png',
+    src: '/products/omega-dmx-real-controle.webp',
     alt: 'OMEGADMX — contrôle gobos dimmer couleur',
     label: 'Contrôle complet',
     title: 'Dimmer, gobos, couleur, mouvements',
     text: 'Capture réelle Beam 18R : intensité, strobe, gobos, roue de couleur, FX cercle/huit/swing et plan 2D.',
   },
   {
-    src: '/products/omega-dmx-real-couleur.png',
+    src: '/products/omega-dmx-real-couleur.webp',
     alt: 'OMEGADMX — mélange RGBW',
     label: 'Couleur RGBW',
     title: 'Mélange précis canal par canal',
     text: 'Capture réelle : roue de couleur, faders R/V/B/Blanc, ambre, FX rainbow et flash.',
   },
   {
-    src: '/products/omega-dmx-real-sortie-dmx.png',
+    src: '/products/omega-dmx-real-sortie-dmx.webp',
     alt: 'OMEGADMX — moniteur sortie DMX',
     label: 'Sortie DMX',
     title: 'Les 512 canaux sous les yeux',
     text: 'Capture réelle du moniteur de sortie : univers 1, valeurs live pour le debug en régie.',
   },
   {
-    src: '/products/omega-dmx-real-effet-cercle.png',
+    src: '/products/omega-dmx-real-effet-cercle.webp',
     alt: 'OMEGADMX — effet cercle 3D',
     label: 'FX mouvement',
     title: 'Cercle, huit, swing…',
     text: 'Capture réelle d’un effet de mouvement avec le plateau scénique 3D.',
   },
   {
-    src: '/products/omega-dmx-real-connexion.png',
+    src: '/products/omega-dmx-real-connexion.webp',
     alt: 'OMEGADMX — connexion interface',
     label: 'Connexion',
     title: 'WiFi, USB, Bluetooth',
@@ -220,7 +220,7 @@ const OmegaDmxLogicielPage = () => {
             <Reveal>
               <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gray-950 shadow-2xl shadow-blue-900/20">
                 <img
-                  src="/products/omega-dmx-real-controle.png"
+                  src="/products/omega-dmx-real-controle.webp"
                   alt="OMEGADMX — contrôle complet d’une lyre (capture réelle)"
                   className="w-full h-auto"
                 />
@@ -348,7 +348,7 @@ const OmegaDmxLogicielPage = () => {
             <Reveal delay={100}>
               <div className="rounded-3xl overflow-hidden border border-white/10">
                 <img
-                  src="/products/omega-dmx-real-effet-cercle.png"
+                  src="/products/omega-dmx-real-effet-cercle.webp"
                   alt="Effet de mouvement circulaire sur lyre en 3D"
                   className="w-full"
                 />

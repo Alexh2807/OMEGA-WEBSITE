@@ -19,7 +19,7 @@ const OmegaDmxSection = () => {
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 rounded-3xl blur-3xl opacity-60" />
             <div className="relative bg-black/60 backdrop-blur-sm rounded-3xl p-8 border border-white/5">
               <img
-                src="/products/omega-dmx-px-hero-box.jpg"
+                src="/products/omega-dmx-px-hero-box.webp"
                 alt="OMEGA DMX Interface - boîtier de pilotage DMX sans fil"
                 className="w-full h-auto object-contain rounded-xl"
                 style={{ filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.5))' }}

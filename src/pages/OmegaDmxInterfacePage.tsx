@@ -31,16 +31,16 @@ import toast from 'react-hot-toast';
 
 /* Visuels : boîtier marketing + CAPTURES RÉELLES OMEGADMX (app Windows). */
 const ASSETS = {
-  heroBox: '/products/omega-dmx-px-hero-box.jpg',
-  softUi: '/products/omega-dmx-real-controle.png',
-  softStage: '/products/omega-dmx-real-3d-faisceaux.png',
-  softPlace: '/products/omega-dmx-real-couleur.png',
-  softLive: '/products/omega-dmx-real-effet-cercle.png',
-  softColor: '/products/omega-dmx-real-couleur.png',
-  softMove: '/products/omega-dmx-real-controle.png',
-  softPlan: '/products/omega-dmx-real-3d-faisceaux.png',
-  softDmx: '/products/omega-dmx-real-sortie-dmx.png',
-  softConn: '/products/omega-dmx-real-connexion.png',
+  heroBox: '/products/omega-dmx-px-hero-box.webp',
+  softUi: '/products/omega-dmx-real-controle.webp',
+  softStage: '/products/omega-dmx-real-3d-faisceaux.webp',
+  softPlace: '/products/omega-dmx-real-couleur.webp',
+  softLive: '/products/omega-dmx-real-effet-cercle.webp',
+  softColor: '/products/omega-dmx-real-couleur.webp',
+  softMove: '/products/omega-dmx-real-controle.webp',
+  softPlan: '/products/omega-dmx-real-3d-faisceaux.webp',
+  softDmx: '/products/omega-dmx-real-sortie-dmx.webp',
+  softConn: '/products/omega-dmx-real-connexion.webp',
 };
 
 const PRICE_TTC = 429;
