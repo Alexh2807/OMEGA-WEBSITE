@@ -61,42 +61,42 @@ const Reveal: React.FC<{
 
 const GALLERY = [
   {
-    src: '/products/omega-dmx-soft-live-stage.png',
-    alt: 'Vue 3D avec effet circulaire et faisceau orange',
+    src: '/products/omega-dmx-px-soft-ui.jpg',
+    alt: 'Interface OMEGADMX avec vue 3D et effets',
     label: 'Vue 3D · effet cercle',
     title: 'Mouvements automatiques en 3D',
     text: 'Cercle, huit, swing, wave : amplitude, vitesse et déphasage entre lyres. Le plateau 3D montre chaque faisceau pendant que vous réglez.',
   },
   {
-    src: '/products/omega-dmx-soft-3d.webp',
-    alt: 'Visualisation 3D multi-projecteurs',
+    src: '/products/omega-dmx-px-soft-stage.jpg',
+    alt: 'Plateau scénique multi-projecteurs',
     label: 'Scène multi-lyres',
     title: 'Concevez avant d’allumer la salle',
     text: 'Placez vos projecteurs, orientez les faisceaux, testez les scènes — sans brancher un seul projecteur.',
   },
   {
-    src: '/products/omega-dmx-soft-color.webp',
+    src: '/products/omega-dmx-px-soft-color.jpg',
     alt: 'Mixage couleur et canaux DMX',
     label: 'Couleur & canaux',
     title: 'Couleur, gobos, dimmer',
     text: 'Faders précis par canal, presets, isolation d’attributs : un contrôle de régie, pas un jouet.',
   },
   {
-    src: '/products/omega-dmx-soft-dashboard.webp',
-    alt: 'Console et scènes OMEGADMX',
+    src: '/products/omega-dmx-px-soft-live.png',
+    alt: 'Capture live OMEGADMX',
     label: 'Console live',
     title: 'Jouez le show en live',
     text: 'Scènes, faders, pages de machines et blackout : pensé pour le jour J, pas seulement pour la préprod.',
   },
   {
-    src: '/products/omega-dmx-soft-plan2d.webp',
-    alt: 'Plan d’implantation 2D',
+    src: '/products/omega-dmx-px-soft-placement.jpg',
+    alt: 'Plan d’implantation 2D et 3D',
     label: 'Plan 2D',
     title: 'Implantation claire',
     text: 'Glissez-déposez vos lyres sur le plan, gérez symétrie et inversions sans vous perdre dans un tableur.',
   },
   {
-    src: '/products/omega-dmx-soft-move.webp',
+    src: '/products/omega-dmx-px-soft-move.jpg',
     alt: 'Contrôle PAN/TILT',
     label: 'Mouvement',
     title: 'PAN / TILT maîtrisés',
@@ -220,7 +220,7 @@ const OmegaDmxLogicielPage = () => {
             <Reveal>
               <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gray-950 shadow-2xl shadow-blue-900/20">
                 <img
-                  src="/products/omega-dmx-soft-live-stage.png"
+                  src="/products/omega-dmx-px-soft-ui.jpg"
                   alt="OMEGADMX — plateau scénique 3D avec effet de mouvement"
                   className="w-full h-auto"
                 />
@@ -348,7 +348,7 @@ const OmegaDmxLogicielPage = () => {
             <Reveal delay={100}>
               <div className="rounded-3xl overflow-hidden border border-white/10">
                 <img
-                  src="/products/omega-dmx-soft-live-stage.png"
+                  src="/products/omega-dmx-px-soft-live.png"
                   alt="Effet de mouvement circulaire sur lyre en 3D"
                   className="w-full"
                 />
