@@ -19,9 +19,13 @@ export type AnnotatedPhotoProps = {
   objectPosition?: string;
   /**
    * CSS transform appliqué UNIQUEMENT à la balise <img>
-   * (orient / tilt) — les callouts restent fixes sur le cadre.
+   * (legacy) — préférer `orient` pour 0/90/180/270.
    */
   imageTransform?: string;
+  /** Orientation photo seule (0/90/180/270) — ne tourne pas les callouts */
+  orient?: 0 | 90 | 180 | 270;
+  /** Remplir le cadre (cover) et centrer l’image */
+  coverFill?: boolean;
   editMode?: boolean;
   tool?: 'select' | 'add';
   selectedId?: string | null;
@@ -62,6 +66,8 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   imgClassName = '',
   objectPosition = 'center center',
   imageTransform,
+  orient = 0,
+  coverFill = false,
   editMode = false,
   tool = 'select',
   selectedId = null,
@@ -69,6 +75,7 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   onChangeCallout,
   onAddAt,
 }) => {
+  const swapped = orient === 90 || orient === 270;
   const boxRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(editMode);
   const [aspect, setAspect] = useState(16 / 9);
@@ -178,6 +185,8 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
       ref={boxRef}
       data-photo-id={photoId}
       className={`relative overflow-hidden rounded-2xl border bg-zinc-950 ${
+        coverFill ? 'h-full min-h-full w-full' : ''
+      } ${
         editMode
           ? tool === 'add'
             ? 'border-amber-400/80 ring-2 ring-amber-400/30 cursor-crosshair'
@@ -188,32 +197,71 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
       onClick={handleBgClick}
     >
       {/*
-        Couche IMAGE seule — orient / tilt / parallax ici uniquement.
-        Les callouts (SVG + labels) sont en absolute sur le cadre, sans transform.
+        Couche IMAGE seule — orient 0/90/180/270 ici uniquement.
+        Centrée dans le cadre. Callouts en absolute au-dessus, non transformés.
       */}
       <div
-        className="relative w-full overflow-hidden"
+        data-image-layer
+        className={
+          coverFill
+            ? 'absolute inset-0 overflow-hidden'
+            : 'relative w-full overflow-hidden'
+        }
         style={
-          imageTransform
-            ? {
-                transform: imageTransform,
-                transformOrigin: 'center center',
-                transformStyle: 'preserve-3d',
-                willChange: 'transform',
-                transition: 'transform 0.3s ease-out',
-              }
+          coverFill
+            ? { containerType: 'size' as const }
             : undefined
         }
-        data-image-layer
       >
-        <img
-          src={src}
-          alt={alt}
-          className={`pointer-events-none block h-auto w-full select-none ${imgClassName}`}
-          style={{ objectPosition }}
-          loading="lazy"
-          draggable={false}
-        />
+        {/* Wrapper centré : gère le 90/270 en swapant largeur/hauteur puis rotate */}
+        <div
+          className={
+            coverFill
+              ? 'absolute left-1/2 top-1/2 overflow-hidden'
+              : 'relative w-full'
+          }
+          style={
+            coverFill
+              ? {
+                  // 90/270 : rectangle inverse (cqh×cqw) puis rotate → remplit et centre
+                  width: swapped ? '100cqh' : '100%',
+                  height: swapped ? '100cqw' : '100%',
+                  transform: [
+                    'translate(-50%, -50%)',
+                    orient !== 0 ? `rotate(${orient}deg)` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' '),
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.3s ease-out',
+                }
+              : orient || imageTransform
+                ? {
+                    transform: [
+                      orient !== 0 ? `rotate(${orient}deg)` : '',
+                      imageTransform || '',
+                    ]
+                      .filter(Boolean)
+                      .join(' '),
+                    transformOrigin: 'center center',
+                    transition: 'transform 0.3s ease-out',
+                  }
+                : undefined
+          }
+        >
+          <img
+            src={src}
+            alt={alt}
+            className={
+              coverFill
+                ? `pointer-events-none block h-full w-full select-none object-cover object-center ${imgClassName}`
+                : `pointer-events-none block h-auto w-full select-none ${imgClassName}`
+            }
+            style={{ objectPosition }}
+            loading="lazy"
+            draggable={false}
+          />
+        </div>
       </div>
 
       {editMode && (

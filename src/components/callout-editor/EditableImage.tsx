@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnnotatedPhoto, AnnotatedPhotoProps } from './AnnotatedPhoto';
 import { ImageOrient, ImageTransform } from './types';
 
-type Props = Omit<AnnotatedPhotoProps, 'className' | 'imageTransform'> & {
+type Props = Omit<AnnotatedPhotoProps, 'className' | 'imageTransform' | 'orient'> & {
   transform: ImageTransform;
   className?: string;
   imgClassName?: string;
@@ -11,16 +11,18 @@ type Props = Omit<AnnotatedPhotoProps, 'className' | 'imageTransform'> & {
   cover?: boolean;
   aspectClass?: string;
   framed?: boolean;
+  /** Légende galerie — à l’intérieur de la carte (suit le tilt) */
+  caption?: string;
+  /** Masque dégradé + légende au survol (suit le tilt) */
+  hoverCaption?: boolean;
+  /** Clic hors édition (ex. ouvrir lightbox) — zone sur la carte */
+  onActivate?: () => void;
 };
 
 /**
- * Deux couches de rotation distinctes :
- *
- * 1) orient 0/90/180/270  → UNIQUEMENT la balise <img>
- *    (redresser la photo sans bouger les callouts)
- *
- * 2) tilt X/Y/Z + scale + parallax → l’ÉLÉMENT ENTIER cliquable
- *    (= la carte arrondie sélectionnée en édition : cadre + image + traits + textes)
+ * Cadre cliquable (tilt 3D sur l’élément entier).
+ * Orient 0/90/180/270 = photo seule, centrée dans le cadre.
+ * Overlays (légende, clic) sont DANS la carte → suivent le tilt.
  */
 export const EditableImage: React.FC<Props> = ({
   transform,
@@ -33,6 +35,9 @@ export const EditableImage: React.FC<Props> = ({
   framed = true,
   editMode = false,
   photoId,
+  caption,
+  hoverCaption = false,
+  onActivate,
   ...photoProps
 }) => {
   const outerRef = useRef<HTMLDivElement>(null);
@@ -47,7 +52,7 @@ export const EditableImage: React.FC<Props> = ({
     const el = cardRef.current;
     if (!el) return;
     const measure = () => {
-      const img = el.querySelector('img');
+      const img = el.querySelector('[data-image-layer] img') as HTMLImageElement | null;
       if (img && img.naturalWidth > 0) {
         setNatural({ w: img.naturalWidth, h: img.naturalHeight });
         return;
@@ -61,7 +66,7 @@ export const EditableImage: React.FC<Props> = ({
     ro.observe(el);
     const img = el.querySelector('img');
     if (img) {
-      if (img.complete) measure();
+      if ((img as HTMLImageElement).complete) measure();
       else img.addEventListener('load', measure);
     }
     return () => {
@@ -124,7 +129,6 @@ export const EditableImage: React.FC<Props> = ({
   const liveX = editMode ? 0 : parallax.x;
   const liveY = editMode ? 0 : parallax.y;
 
-  // ── TILT : sur l’élément entier (carte cliquable) ──
   const tiltX = (transform.rotateX || 0) + liveY * 0.55;
   const tiltY = (transform.rotateY || 0) + liveX * 0.7;
   const tiltZ = transform.rotateZ || 0;
@@ -138,10 +142,6 @@ export const EditableImage: React.FC<Props> = ({
     `translate3d(${tx.toFixed(2)}%, ${ty.toFixed(2)}%, 0)`,
     `scale(${transform.scale ?? 1})`,
   ].join(' ');
-
-  // ── ORIENT : uniquement sur l’image ──
-  const imageOnlyTransform =
-    orient === 0 ? undefined : `rotateZ(${orient}deg)`;
 
   const hasNatural = natural.w > 0 && natural.h > 0;
   const frameAspect =
@@ -167,15 +167,12 @@ export const EditableImage: React.FC<Props> = ({
         onSelectImage(photoId);
       }}
     >
-      {/*
-        ★ ÉLÉMENT D’ÉDITION = carte entière (ce que tu cliques)
-        Tilt X/Y/Z + scale + parallax ici → cadre + image + traits + textes.
-      */}
+      {/* Carte = élément d’édition : tilt ici. Overlays dedans. */}
       <div
         ref={cardRef}
         data-editable-card
         className={[
-          'relative h-full w-full overflow-hidden bg-zinc-950 transition-transform duration-300 ease-out will-change-transform',
+          'group/card relative h-full w-full overflow-hidden bg-zinc-950 transition-transform duration-300 ease-out will-change-transform',
           framed ? 'rounded-2xl border border-white/10 shadow-lg' : '',
           editMode && imageSelected
             ? 'ring-2 ring-amber-400/90 ring-offset-2 ring-offset-black'
@@ -195,17 +192,38 @@ export const EditableImage: React.FC<Props> = ({
           {...photoProps}
           photoId={photoId}
           editMode={editMode}
-          imageTransform={imageOnlyTransform}
+          orient={orient}
+          coverFill={cover || swapped}
           className="h-full w-full !rounded-none !border-0 !bg-transparent"
-          imgClassName={
-            cover
-              ? `h-full w-full object-cover ${imgClassName || ''}`
-              : swapped
-                ? `h-full w-full object-cover ${imgClassName || ''}`
-                : `h-full w-full object-contain ${imgClassName || ''}`
-          }
+          imgClassName={imgClassName}
           objectPosition={transform.objectPosition || 'center center'}
         />
+
+        {/* Overlay clic + légende — DANS la carte → suit le tilt */}
+        {!editMode && onActivate && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onActivate();
+            }}
+            className="absolute inset-0 z-10 cursor-zoom-in"
+            aria-label={caption ? `Agrandir : ${caption}` : 'Agrandir'}
+          />
+        )}
+        {hoverCaption && caption && (
+          <span
+            className={[
+              'pointer-events-none absolute inset-x-0 bottom-0 z-20',
+              'bg-gradient-to-t from-black/85 via-black/40 to-transparent',
+              'px-3 pb-2.5 pt-10 text-[11px] text-white/85 sm:text-xs',
+              'opacity-0 transition-opacity duration-300',
+              'group-hover/card:opacity-100',
+            ].join(' ')}
+          >
+            {caption}
+          </span>
+        )}
 
         {editMode && (
           <div className="pointer-events-none absolute right-2 top-2 z-30 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-white/80">

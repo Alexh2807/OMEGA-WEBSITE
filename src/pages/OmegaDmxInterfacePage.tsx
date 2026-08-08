@@ -507,13 +507,15 @@ const OmegaDmxInterfacePage = () => {
           <div className="mt-12 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
             {gallery.map((g, i) => (
               <Reveal key={g.id} delay={i * 40}>
-                {/* Pas de cadre arrondi ici : EditableImage EST le conteneur transformé */}
-                <div className="group relative w-full text-left">
+                <div className="relative w-full">
                   <EditableImage
                     src={g.src}
                     alt={g.cap}
                     cover
                     framed
+                    hoverCaption
+                    caption={g.cap}
+                    onActivate={editMode ? undefined : () => setLightbox(i)}
                     aspectClass="aspect-[16/10]"
                     className="w-full"
                     {...imageProps(g.id)}
@@ -534,17 +536,6 @@ const OmegaDmxInterfacePage = () => {
                       <X size={14} />
                     </button>
                   )}
-                  {!editMode && (
-                    <button
-                      type="button"
-                      onClick={() => setLightbox(i)}
-                      className="absolute inset-0 z-10"
-                      aria-label={`Agrandir : ${g.cap}`}
-                    />
-                  )}
-                  <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent px-3 pb-2.5 pt-8 text-[11px] text-white/70 opacity-0 transition group-hover:opacity-100 sm:text-xs">
-                    {g.cap}
-                  </span>
                 </div>
               </Reveal>
             ))}
