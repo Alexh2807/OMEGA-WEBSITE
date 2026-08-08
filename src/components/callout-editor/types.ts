@@ -51,12 +51,20 @@ export type Callout = {
 /** Transform 3D + parallax par image */
 export type ParallaxMode = 'none' | 'scroll' | 'mouse';
 
+/** Orientation conteneur (crans 90°) — tourne le bloc entier (image + callouts) */
+export type ImageOrient = 0 | 90 | 180 | 270;
+
 export type ImageTransform = {
-  /** Rotation plane (°) */
+  /**
+   * Orientation du conteneur entier : 0 / 90 / 180 / 270°.
+   * À 90° et 270°, le cadre swap largeur/hauteur.
+   */
+  orient: ImageOrient;
+  /** Inclinaison 3D fine plane en plus de orient (°) */
   rotateZ: number;
-  /** Inclinaison 3D haut/bas (°) */
+  /** Inclinaison 3D haut/bas (°) — conteneur entier */
   rotateX: number;
-  /** Inclinaison 3D gauche/droite (°) — effet “carte 3D” */
+  /** Inclinaison 3D gauche/droite (°) — conteneur entier */
   rotateY: number;
   /** Perspective CSS (px) */
   perspective: number;
@@ -72,6 +80,7 @@ export type ImageTransform = {
 };
 
 export const DEFAULT_TRANSFORM: ImageTransform = {
+  orient: 0,
   rotateZ: 0,
   rotateX: 0,
   rotateY: 0,
@@ -317,8 +326,13 @@ export function normalizeTransform(raw: unknown): ImageTransform {
     t.parallaxMode === 'scroll' || t.parallaxMode === 'mouse' || t.parallaxMode === 'none'
       ? t.parallaxMode
       : DEFAULT_TRANSFORM.parallaxMode;
+  const rawOrient = typeof t.orient === 'number' ? t.orient : 0;
+  const orient: ImageOrient =
+    rawOrient === 90 || rawOrient === 180 || rawOrient === 270 ? rawOrient : 0;
+
   return {
-    rotateZ: typeof t.rotateZ === 'number' ? clamp(t.rotateZ, -180, 180) : 0,
+    orient,
+    rotateZ: typeof t.rotateZ === 'number' ? clamp(t.rotateZ, -45, 45) : 0,
     rotateX: typeof t.rotateX === 'number' ? clamp(t.rotateX, -60, 60) : 0,
     rotateY: typeof t.rotateY === 'number' ? clamp(t.rotateY, -60, 60) : 0,
     perspective:

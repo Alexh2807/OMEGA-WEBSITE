@@ -22,6 +22,7 @@ import {
   clamp,
   createCallout,
   DEFAULT_TRANSFORM,
+  ImageOrient,
   ImageTransform,
   ParallaxMode,
 } from './types';
@@ -465,15 +466,38 @@ export const AdminCalloutEditor: React.FC<Props> = ({
             {/* ── 3D / Parallax ── */}
             <div>
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
-                Image 3D & parallax
+                Conteneur 3D (bloc entier)
               </div>
               <p className="mb-3 text-[10px] text-white/40">
-                {PHOTO_LABELS[activeImageId] || activeImageId} — rotation comme une carte 3D +
-                mouvement gauche/droite
+                {PHOTO_LABELS[activeImageId] || activeImageId} — la rotation s’applique au{' '}
+                <strong className="text-white/60">conteneur complet</strong> (photo + repères),
+                pas à l’image seule.
               </p>
 
               <div className="space-y-3">
-                <Field label={`Rotation Y (gauche/droite) · ${transform.rotateY.toFixed(0)}°`}>
+                <Field label="Orientation conteneur">
+                  <div className="grid grid-cols-4 gap-1">
+                    {([0, 90, 180, 270] as ImageOrient[]).map((deg) => (
+                      <button
+                        key={deg}
+                        type="button"
+                        onClick={() => patchTransform({ orient: deg })}
+                        className={`rounded-lg border py-2 text-center text-xs font-bold transition ${
+                          (transform.orient ?? 0) === deg
+                            ? 'border-amber-400/70 bg-amber-400/20 text-amber-100'
+                            : 'border-white/10 text-white/55 hover:bg-white/5'
+                        }`}
+                      >
+                        {deg}°
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[9px] text-white/30">
+                    90° / 270° : le cadre s’adapte (swap largeur/hauteur)
+                  </p>
+                </Field>
+
+                <Field label={`Tilt Y (gauche/droite) · ${transform.rotateY.toFixed(0)}°`}>
                   <input
                     type="range"
                     min={-45}
@@ -484,7 +508,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     className="w-full accent-amber-400"
                   />
                 </Field>
-                <Field label={`Rotation X (haut/bas) · ${transform.rotateX.toFixed(0)}°`}>
+                <Field label={`Tilt X (haut/bas) · ${transform.rotateX.toFixed(0)}°`}>
                   <input
                     type="range"
                     min={-40}
@@ -495,7 +519,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     className="w-full accent-amber-400"
                   />
                 </Field>
-                <Field label={`Rotation Z (plane) · ${transform.rotateZ.toFixed(0)}°`}>
+                <Field label={`Tilt Z fin · ${transform.rotateZ.toFixed(0)}°`}>
                   <input
                     type="range"
                     min={-45}
@@ -603,8 +627,10 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     className="rounded-lg border border-white/15 px-2 py-1 text-[10px] text-white/60 hover:bg-white/5"
                     onClick={() =>
                       patchTransform({
+                        orient: transform.orient ?? 0,
                         rotateY: 12,
                         rotateX: 4,
+                        rotateZ: 0,
                         parallaxMode: 'mouse',
                         parallaxX: 8,
                         parallaxY: 4,
@@ -619,6 +645,7 @@ export const AdminCalloutEditor: React.FC<Props> = ({
                     className="rounded-lg border border-white/15 px-2 py-1 text-[10px] text-white/60 hover:bg-white/5"
                     onClick={() =>
                       patchTransform({
+                        orient: transform.orient ?? 0,
                         rotateY: 0,
                         rotateX: 0,
                         rotateZ: 0,
