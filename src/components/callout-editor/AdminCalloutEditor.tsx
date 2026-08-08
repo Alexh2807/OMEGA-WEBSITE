@@ -466,12 +466,12 @@ export const AdminCalloutEditor: React.FC<Props> = ({
             {/* ── 3D / Parallax ── */}
             <div>
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
-                Conteneur 3D (bloc entier)
+                Rotation image seule
               </div>
               <p className="mb-3 text-[10px] text-white/40">
-                {PHOTO_LABELS[activeImageId] || activeImageId} — la rotation s’applique au{' '}
-                <strong className="text-white/60">conteneur complet</strong> (photo + repères),
-                pas à l’image seule.
+                {PHOTO_LABELS[activeImageId] || activeImageId} —{' '}
+                <strong className="text-white/60">seule la photo</strong> tourne. Les traits,
+                annotations et textes restent fixes sur le cadre.
               </p>
 
               <div className="space-y-3">

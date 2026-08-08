@@ -17,6 +17,11 @@ export type AnnotatedPhotoProps = {
   className?: string;
   imgClassName?: string;
   objectPosition?: string;
+  /**
+   * CSS transform appliqué UNIQUEMENT à la balise <img>
+   * (orient / tilt) — les callouts restent fixes sur le cadre.
+   */
+  imageTransform?: string;
   editMode?: boolean;
   tool?: 'select' | 'add';
   selectedId?: string | null;
@@ -56,6 +61,7 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   className = '',
   imgClassName = '',
   objectPosition = 'center center',
+  imageTransform,
   editMode = false,
   tool = 'select',
   selectedId = null,
@@ -181,28 +187,48 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
       onPointerDown={handleBgPointerDown}
       onClick={handleBgClick}
     >
-      <img
-        src={src}
-        alt={alt}
-        className={`pointer-events-none block h-auto w-full select-none ${imgClassName}`}
-        style={{ objectPosition }}
-        loading="lazy"
-        draggable={false}
-      />
+      {/*
+        Couche IMAGE seule — orient / tilt / parallax ici uniquement.
+        Les callouts (SVG + labels) sont en absolute sur le cadre, sans transform.
+      */}
+      <div
+        className="relative w-full overflow-hidden"
+        style={
+          imageTransform
+            ? {
+                transform: imageTransform,
+                transformOrigin: 'center center',
+                transformStyle: 'preserve-3d',
+                willChange: 'transform',
+                transition: 'transform 0.3s ease-out',
+              }
+            : undefined
+        }
+        data-image-layer
+      >
+        <img
+          src={src}
+          alt={alt}
+          className={`pointer-events-none block h-auto w-full select-none ${imgClassName}`}
+          style={{ objectPosition }}
+          loading="lazy"
+          draggable={false}
+        />
+      </div>
 
       {editMode && (
         <div className="pointer-events-none absolute left-2 top-2 z-30 rounded bg-black/75 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-white/85">
           {tool === 'add' ? (
             <span className="text-amber-300">① Cliquez l’endroit du point à montrer</span>
           ) : (
-            <span>Point = cible · Card = glisser le texte</span>
+            <span>Point = cible · Card = glisser le texte · image seule tourne</span>
           )}
         </div>
       )}
 
-      {/* SVG des fils — viewBox 0–100 pour suivre le % de l’image */}
+      {/* SVG des fils — fixés sur le cadre, indépendants de la rotation image */}
       <svg
-        className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+        className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible"
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         aria-hidden

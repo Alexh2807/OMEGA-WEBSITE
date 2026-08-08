@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnnotatedPhoto, AnnotatedPhotoProps } from './AnnotatedPhoto';
 import { ImageOrient, ImageTransform } from './types';
 
-type Props = Omit<AnnotatedPhotoProps, 'className'> & {
+type Props = Omit<AnnotatedPhotoProps, 'className' | 'imageTransform'> & {
   transform: ImageTransform;
   className?: string;
   imgClassName?: string;
@@ -10,16 +10,13 @@ type Props = Omit<AnnotatedPhotoProps, 'className'> & {
   onSelectImage?: (photoId: string) => void;
   cover?: boolean;
   aspectClass?: string;
-  /**
-   * true = ce composant EST le cadre arrondi transformé
-   * (ne pas envelopper d’un autre rounded + overflow outside)
-   */
+  /** Cadre arrondi (fixe) — la rotation s’applique uniquement à l’image */
   framed?: boolean;
 };
 
 /**
- * Cadre arrondi = bloc transformé (image + callouts solidaires).
- * orient 0/90/180/270 + tilt X/Y/Z s’appliquent sur CE conteneur, pas sur <img>.
+ * Cadre fixe (coins arrondis + callouts).
+ * Orient / tilt / parallax → UNIQUEMENT sur la photo, pas sur les traits ni textes.
  */
 export const EditableImage: React.FC<Props> = ({
   transform,
@@ -129,8 +126,8 @@ export const EditableImage: React.FC<Props> = ({
   const tx = liveX * 0.35;
   const ty = liveY * 0.35;
 
-  /** Transform sur la CARTE (cadre arrondi), jamais sur <img> seule */
-  const cardTransform = [
+  /** Transform IMAGE ONLY */
+  const imageOnlyTransform = [
     `rotateX(${rotX.toFixed(2)}deg)`,
     `rotateY(${rotY.toFixed(2)}deg)`,
     `rotateZ(${rotZ.toFixed(2)}deg)`,
@@ -139,6 +136,8 @@ export const EditableImage: React.FC<Props> = ({
   ].join(' ');
 
   const hasNatural = natural.w > 0 && natural.h > 0;
+  // À 90°/270° le cadre change de ratio pour accueillir la photo redressée,
+  // mais le cadre lui-même ne tourne pas (callouts restent droits).
   const frameAspect =
     hasNatural && !cover
       ? swapped
@@ -162,60 +161,47 @@ export const EditableImage: React.FC<Props> = ({
         onSelectImage(photoId);
       }}
     >
-      <div className="flex h-full w-full items-center justify-center" style={{ transformStyle: 'preserve-3d' }}>
-        {/*
-          ★ CARTE = conteneur arrondi TRANSFORMÉ
-          Tout ce qui est dedans (photo, fils, labels) tourne avec.
-        */}
-        <div
-          ref={cardRef}
-          data-editable-card
-          className={[
-            'relative overflow-hidden bg-zinc-950 transition-transform duration-300 ease-out will-change-transform',
-            framed ? 'rounded-2xl border border-white/10 shadow-lg' : '',
-            editMode && imageSelected
-              ? 'ring-2 ring-amber-400/90 ring-offset-2 ring-offset-black'
-              : editMode
-                ? 'ring-1 ring-white/25 hover:ring-sky-400/50'
-                : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          style={{
-            transform: cardTransform,
-            transformOrigin: 'center center',
-            transformStyle: 'preserve-3d',
-            ...(swapped && hasNatural && !cover
-              ? {
-                  height: '100%',
-                  width: 'auto',
-                  aspectRatio: `${natural.w} / ${natural.h}`,
-                }
-              : {
-                  width: '100%',
-                  height: cover ? '100%' : 'auto',
-                }),
-          }}
-        >
-          <AnnotatedPhoto
-            {...photoProps}
-            photoId={photoId}
-            editMode={editMode}
-            className="h-full w-full !rounded-none !border-0 !bg-transparent"
-            imgClassName={
-              cover
+      {/*
+        CADRE FIXE (coins arrondis) — ne tourne PAS.
+        Callouts dessus restent horizontaux / lisibles.
+      */}
+      <div
+        ref={cardRef}
+        data-editable-card
+        className={[
+          'relative h-full w-full overflow-hidden bg-zinc-950',
+          framed ? 'rounded-2xl border border-white/10 shadow-lg' : '',
+          editMode && imageSelected
+            ? 'ring-2 ring-amber-400/90 ring-offset-2 ring-offset-black'
+            : editMode
+              ? 'ring-1 ring-white/25 hover:ring-sky-400/50'
+              : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <AnnotatedPhoto
+          {...photoProps}
+          photoId={photoId}
+          editMode={editMode}
+          imageTransform={imageOnlyTransform}
+          className="h-full w-full !rounded-none !border-0 !bg-transparent"
+          imgClassName={
+            cover
+              ? `h-full w-full object-cover ${imgClassName || ''}`
+              : // À 90/270 l’img remplit mieux le cadre swappé
+                swapped
                 ? `h-full w-full object-cover ${imgClassName || ''}`
                 : `h-full w-full object-contain ${imgClassName || ''}`
-            }
-            objectPosition={transform.objectPosition || 'center center'}
-          />
+          }
+          objectPosition={transform.objectPosition || 'center center'}
+        />
 
-          {editMode && (
-            <div className="pointer-events-none absolute right-2 top-2 z-30 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-white/80">
-              {imageSelected ? `carte · ${orient}°` : 'cliquer'}
-            </div>
-          )}
-        </div>
+        {editMode && (
+          <div className="pointer-events-none absolute right-2 top-2 z-30 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-white/80">
+            {imageSelected ? `image seule · ${orient}°` : 'cliquer'}
+          </div>
+        )}
       </div>
     </div>
   );
