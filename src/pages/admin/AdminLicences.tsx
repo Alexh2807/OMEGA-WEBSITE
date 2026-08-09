@@ -2,7 +2,7 @@
  * ADMINISTRATION — LICENCES OMEGADMX
  *
  * Une licence autorise OMEGADMX à piloter une interface DMX d'une AUTRE marque
- * (Sunlite/Nicolaudie…). Elle n'est PAS nécessaire avec un boîtier OMEGA DMX : celui-ci
+ * (d'un autre fabricant). Elle n'est PAS nécessaire avec un boîtier OMEGA DMX Interface : celui-ci
  * s'authentifie auprès du logiciel par défi-réponse HMAC, le déblocage est automatique et
  * le client n'a rien à saisir.
  *
@@ -253,7 +253,7 @@ const AdminLicences: React.FC = () => {
           </h2>
           <p className="text-gray-400 text-sm mt-1">
             Nécessaires uniquement pour piloter une interface DMX d’une autre marque.
-            Avec un boîtier OMEGA DMX, le logiciel se débloque tout seul.
+            Avec un boîtier OMEGA DMX Interface, le logiciel OMEGADMX se débloque tout seul.
           </p>
         </div>
         <button

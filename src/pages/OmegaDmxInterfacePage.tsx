@@ -30,6 +30,7 @@ import {
   Gauge,
   Sparkles,
   Cpu,
+  Sliders,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Product } from '../types';
@@ -41,7 +42,10 @@ import {
   SvgWireless1024,
   SvgBackupBox,
   SvgMultiDevice,
+  SvgSignalQuality,
+  SvgMultiSession,
 } from '../components/OmegaDmxSystemSvgs';
+import OmegaDmxDuo from '../components/OmegaDmxDuo';
 import { EditableImage } from '../components/callout-editor/EditableImage';
 import {
   AdminCalloutEditor,
@@ -74,8 +78,10 @@ const BOX = {
   softConn: '/products/omega-dmx-v2-connexion.webp',
 };
 
-const PRICE_TTC = 429;
-const PRICE_HT = PRICE_TTC / 1.2;
+/* Prix public du boîtier. ⚠ Doit rester ALIGNÉ sur la fiche produit en base
+   (SKU OMGA-DMX-ITF) : cette page affiche le prix, mais c'est la base qui facture. */
+const PRICE_HT = 390;
+const PRICE_TTC = PRICE_HT * 1.2;
 
 const Reveal: React.FC<{
   children: React.ReactNode;
@@ -164,11 +170,14 @@ const OmegaDmxInterfacePage = () => {
 
   useEffect(() => {
     (async () => {
+      /* ⚠ Recherche par SKU, JAMAIS par « le nom contient dmx » : la Licence OMEGADMX
+         contient elle aussi « DMX » dans son nom. Avec l'ancien filtre + limit(1) sans
+         tri, le bouton « Commander » de cette page pouvait mettre la LICENCE au panier
+         à la place du boîtier. Le SKU est unique en base : aucune ambiguïté possible. */
       const { data } = await supabase
         .from('products')
         .select('*')
-        .ilike('name', '%dmx%')
-        .limit(1)
+        .eq('sku', 'OMGA-DMX-ITF')
         .maybeSingle();
       if (data) setDbProduct(data);
     })();
@@ -258,9 +267,10 @@ const OmegaDmxInterfacePage = () => {
           <div className="flex min-w-0 items-center gap-3">
             <img src={BOX.hero} alt="" className="h-10 w-14 rounded object-cover" />
             <div className="min-w-0">
+              <div className="truncate text-xs font-semibold uppercase tracking-[0.2em] text-white/45">Boîtier</div>
               <div className="truncate text-sm font-semibold tracking-wide">OMEGA DMX Interface</div>
               <div className="text-xs text-white/50">
-                {fmt(mainPrice)} € {mainLabel} · logiciel inclus
+                {fmt(mainPrice)} € {mainLabel} · logiciel OMEGADMX inclus
               </div>
             </div>
           </div>
@@ -291,13 +301,23 @@ const OmegaDmxInterfacePage = () => {
               {...imageProps(PHOTO_IDS.hero)}
             />
           </div>
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/25" />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/75 via-black/20 to-transparent" />
+          {/* ⚠ Voiles séparés bureau / téléphone.
+              Le dégradé HORIZONTAL (from-black/75) sert à dégager la colonne de texte à
+              gauche sur un écran large. Sur un téléphone, cette même colonne occupe TOUTE
+              la largeur : le voile couvrait donc la photo entière et le boîtier disparaissait
+              dans le noir. On le réserve au bureau, et on garde sur mobile un simple dégradé
+              vertical, plus doux, qui laisse la photo respirer derrière le titre. */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/45 to-black/10 md:via-black/55 md:to-black/25" />
+          <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-black/75 via-black/20 to-transparent md:block" />
         </div>
 
         <div className="relative z-10 mx-auto w-full max-w-7xl px-5">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">
-            Fabrication OMEGA · Design réel
+          {/* ⚠ NOMMAGE — le titre annonce D'ABORD la nature du produit. « OMEGA DMX » servi nu
+              se confondait avec le logiciel OMEGADMX (une espace d'écart). Le mot « boîtier »
+              n'est donc pas décoratif : c'est lui qui distingue les deux pages. */}
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.28em] text-white/75">
+            <Cpu size={14} strokeWidth={1.8} />
+            Le boîtier
           </p>
           <h1 className="max-w-4xl text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
             OMEGA DMX
@@ -306,10 +326,21 @@ const OmegaDmxInterfacePage = () => {
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-lg text-white/70 md:text-xl">
-            2 sorties DMX. 1024 canaux. Antenne interchangeable jusqu&apos;à&nbsp;1&nbsp;km.
+            Le premier boîtier au monde à diffuser{' '}
+            <strong className="text-white">2 univers DMX en sans fil</strong> — 1024 canaux,
+            antenne interchangeable jusqu&apos;à&nbsp;1&nbsp;km.{' '}
+            {/* ⚠ Le {' '} ci-dessus est indispensable : sur téléphone le <br> est masqué, et
+                sans lui les deux phrases se collaient — « 1 km.Livré avec le logiciel ». */}
             <br className="hidden sm:block" />
-            Logiciel OMEGADMX inclus — sans abonnement.
+            Livré avec le logiciel OMEGADMX — sans abonnement.
           </p>
+          <a
+            href="#avancee"
+            className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white/70 underline-offset-4 transition hover:text-white hover:underline"
+          >
+            Ce que ça change
+            <ArrowRight size={15} />
+          </a>
 
           <div className="mt-10 flex flex-wrap items-end gap-6">
             <div>
@@ -354,6 +385,108 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
+      {/* ─── BOÎTIER ≠ LOGICIEL — levée de doute, avant tout le reste ─── */}
+      <OmegaDmxDuo actif="boitier" />
+
+      {/* ─── L'AVANCÉE : 2 univers en sans fil + qualité de liaison par machine ───
+          ⚠ « Premier au monde » est une allégation de primauté : elle engage (DGCCRF,
+          concurrents). Elle est affichée ici à la demande expresse du client. Si elle
+          doit être nuancée un jour, c'est ICI et dans le hero qu'il faut la reprendre. */}
+      <section
+        id="avancee"
+        className="relative scroll-mt-28 overflow-hidden border-t border-white/5 py-20 md:py-28"
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(255,255,255,0.08)_0%,transparent_60%)]" />
+        <div className="relative z-10 mx-auto max-w-7xl px-5">
+          <Reveal>
+            <div className="mx-auto max-w-3xl text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/[0.06] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.26em] text-white">
+                <Sparkles size={14} strokeWidth={1.8} />
+                Une première mondiale
+              </span>
+              <h2 className="mt-6 text-3xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-6xl">
+                Le premier boîtier au monde à diffuser
+                <span className="block text-white/45">2 univers DMX en sans fil.</span>
+              </h2>
+              <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/60 md:text-lg">
+                Jusqu&apos;ici, passer en radio voulait dire se contenter d&apos;un seul
+                univers — donc 512 canaux, donc arbitrer entre les machines. Le boîtier{' '}
+                <strong className="text-white">OMEGA DMX Interface</strong> émet les{' '}
+                <strong className="text-white">deux univers simultanément</strong>, sans fil :
+                1024 canaux pour tout le parc, et plus d&apos;arbitrage à faire.
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="mt-14 grid gap-4 md:grid-cols-3">
+            {[
+              {
+                icon: Radio,
+                t: '2 univers en radio',
+                d: 'Univers 1 et Univers 2 diffusés en même temps — pas d’alternance, pas de second émetteur à ajouter.',
+              },
+              {
+                icon: Layers,
+                t: '1024 canaux réellement libres',
+                d: 'Le parc entier tient sur un seul boîtier : plus besoin de sacrifier des machines faute de canaux.',
+              },
+              {
+                icon: Antenna,
+                t: 'Filaire et radio ensemble',
+                d: 'Les mêmes deux univers partent en XLR et en radio — vous mélangez les deux sur un même show.',
+              },
+            ].map((c) => (
+              <Reveal key={c.t}>
+                <div className="h-full rounded-2xl border border-white/10 bg-zinc-950/60 p-6">
+                  <c.icon className="text-white" size={22} strokeWidth={1.5} />
+                  <div className="mt-4 font-semibold">{c.t}</div>
+                  <div className="mt-2 text-sm leading-relaxed text-white/50">{c.d}</div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* ── Qualité de liaison, récepteur par récepteur ── */}
+          <div className="mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <Reveal>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                <Gauge size={14} />
+                Qualité de liaison
+              </div>
+              <h3 className="mt-4 text-2xl font-semibold tracking-tight md:text-4xl">
+                Vous savez ce que reçoit
+                <span className="block text-white/40">chaque machine.</span>
+              </h3>
+              <p className="mt-5 text-base leading-relaxed text-white/55 md:text-lg">
+                Le boîtier ne se contente pas d&apos;émettre : il{' '}
+                <strong className="text-white">remonte le niveau de réception de chaque
+                récepteur</strong>, machine par machine. La lyre en fond de plateau, celle
+                derrière un mur porteur, celle au bout de la perche — vous voyez laquelle
+                reçoit bien avant que le public n&apos;entre, au lieu de le découvrir en plein
+                show.
+              </p>
+              <ul className="mt-6 space-y-2.5">
+                {[
+                  'Niveau de réception par récepteur, lu en direct',
+                  'Repérage immédiat de la machine en limite de portée',
+                  'Disponible aussi quand le boîtier est branché en USB',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-2.5 text-sm text-white/70">
+                    <Check className="mt-0.5 shrink-0 text-white" size={16} />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
+            <Reveal delay={80}>
+              <div className="rounded-2xl border border-white/10 bg-black/60 px-4 py-6 sm:px-6">
+                <SvgSignalQuality />
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
       {/* ─── 2 SORTIES DMX ─── */}
       <section id="boitier" className="scroll-mt-28 border-t border-white/5 py-20 md:py-28">
         <div className="mx-auto max-w-7xl px-5">
@@ -373,16 +506,15 @@ const OmegaDmxInterfacePage = () => {
                 <strong className="text-white">1024 canaux</strong> en simultané.
               </p>
               <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
-                Et ce n&apos;est pas tout : ces <strong className="text-white">2 univers
-                peuvent aussi partir en sans fil</strong> via les{' '}
-                <strong className="text-white">récepteurs OMEGA</strong>, pour alléger le câblage
-                sur le terrain.
+                Des embases <strong className="text-white">XLR 3 points verrouillables</strong>,
+                montées sur une face gravée : ce qui est branché reste branché, même après une
+                nuit de manutention et un rangement en flight-case.
               </p>
               <ul className="mt-8 space-y-3">
                 {[
-                  '2 × XLR 3 points — DMX OUT',
-                  'Univers 1 + Univers 2 câblés ou radio',
-                  'Récepteurs OMEGA pour le sans-fil multi-projecteurs',
+                  '2 × XLR 3 points — DMX OUT, verrouillage à clip',
+                  'Un univers par embase — repérage gravé, pas d’étiquette qui se décolle',
+                  'Châssis usiné : les embases ne bougent pas dans le temps',
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-3 text-sm text-white/75 md:text-base">
                     <Check className="mt-0.5 shrink-0 text-white" size={18} />
@@ -571,33 +703,53 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
-      {/* ─── RADIO + RÉCEPTEURS ─── */}
+      {/* ─── PERFORMANCES : le travail interne, invisible mais mesurable ───
+          Cette section remplace un doublon « câblé ou radio » : le sujet est traité une
+          seule fois, dans « Une première mondiale ». Ici on parle du moteur. */}
       <section className="border-t border-white/5 py-20 md:py-28">
         <div className="mx-auto max-w-4xl px-5 text-center">
           <Reveal>
             <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-              <Radio size={14} />
-              Système sans fil OMEGA
+              <Zap size={14} />
+              Optimisation interne
             </div>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
-              Câblé ou radio — les 2 univers suivent
+              Le travail qu&apos;on ne voit pas
+              <span className="block text-white/40">est celui qui tient le show.</span>
             </h2>
             <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/55 md:text-lg">
-              Utilisez les sorties XLR en filaire, ou envoyez les{' '}
-              <strong className="text-white">mêmes 2 univers en sans fil</strong> vers les
-              récepteurs OMEGA placés près des machines. Moins de câble, plus de liberté — jusqu&apos;à
-              1&nbsp;km selon l&apos;antenne et le site.
+              Un boîtier DMX se juge à ce qu&apos;il fait quand la salle est pleine et que tout
+              tourne en même temps. Le cœur du boîtier a été retravaillé pour que la sortie DMX
+              reste régulière quoi qu&apos;il arrive — pendant une rafale de faders, pendant une
+              sauvegarde, pendant une reconnexion.
             </p>
-            <div className="mt-10 grid gap-4 sm:grid-cols-3 text-left">
+            <div className="mt-10 grid gap-4 text-left sm:grid-cols-2">
               {[
-                { icon: Cable, t: '2× DMX OUT', d: 'Univers 1 & 2 en XLR 3 pts' },
-                { icon: Wifi, t: 'Radio OMEGA', d: 'Mêmes univers vers les récepteurs' },
-                { icon: Antenna, t: 'Antenne libre', d: 'Portée adaptée, jusqu’à 1 km' },
+                {
+                  icon: Gauge,
+                  t: 'Débit DMX régulier',
+                  d: 'La trame part à cadence stable au lieu de suivre les à-coups du PC : pas de saccade sur un mouvement lent.',
+                },
+                {
+                  icon: Zap,
+                  t: 'Rien ne bloque la sortie',
+                  d: 'Les tâches lourdes (écriture du show, télémétrie) ne passent jamais devant l’émission DMX.',
+                },
+                {
+                  icon: Shield,
+                  t: 'Récupération automatique',
+                  d: 'Si la radio se fige, le boîtier se répare tout seul en moins d’une seconde, sans couper la sortie câblée.',
+                },
+                {
+                  icon: Save,
+                  t: 'Mémoire interne rapide',
+                  d: 'Transferts et sauvegardes accélérés : le show monte dans le boîtier sans immobiliser la régie.',
+                },
               ].map((c) => (
                 <div key={c.t} className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
                   <c.icon className="text-white" size={22} strokeWidth={1.5} />
                   <div className="mt-3 font-semibold">{c.t}</div>
-                  <div className="mt-1 text-sm text-white/45">{c.d}</div>
+                  <div className="mt-1.5 text-sm leading-relaxed text-white/45">{c.d}</div>
                 </div>
               ))}
             </div>
@@ -632,21 +784,21 @@ const OmegaDmxInterfacePage = () => {
               <Reveal delay={80}>
                 <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
                   <Radio size={14} />
-                  1024 canaux · sans fil
+                  Un seul émetteur
                 </div>
                 <h3 className="mt-4 text-2xl font-semibold tracking-tight md:text-4xl">
-                  Deux univers. Filaire ou radio.
+                  Tout le parc, depuis un seul point.
                 </h3>
                 <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
-                  L&apos;interface envoie jusqu&apos;à <strong className="text-white">1024 canaux</strong>{' '}
-                  (Univers&nbsp;1 + Univers&nbsp;2). Les mêmes flux partent en XLR ou vers les{' '}
-                  <strong className="text-white">récepteurs OMEGA</strong> placés près des lyres et
-                  machines — moins de câble, même stabilité.
+                  Un <strong className="text-white">récepteur OMEGA</strong> par machine, un seul
+                  boîtier pour tous. Pas de répéteur à ajouter quand le plateau s&apos;agrandit,
+                  pas de zone à découper : vous posez les machines où la mise en scène les
+                  demande, y compris là où tirer une ligne DMX était impossible.
                 </p>
                 <ul className="mt-6 space-y-2.5">
                   {[
-                    '2 × 512 canaux simultanés',
-                    'Récepteurs OMEGA multi-zones',
+                    'Machines dispersées, structures éloignées, décors mobiles',
+                    'Aucun répéteur ni second émetteur à prévoir',
                     'Portée jusqu’à 1 km avec antenne adaptée',
                   ].map((t) => (
                     <li key={t} className="flex items-start gap-2.5 text-sm text-white/70">
@@ -666,7 +818,7 @@ const OmegaDmxInterfacePage = () => {
                   Sauvegarde boîtier
                 </div>
                 <h3 className="mt-4 text-2xl font-semibold tracking-tight md:text-4xl">
-                  Le show vit dans l&apos;interface.
+                  Le show vit dans le boîtier.
                 </h3>
                 <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
                   Pendant que vous travaillez dans OMEGADMX, le show est{' '}
@@ -707,12 +859,18 @@ const OmegaDmxInterfacePage = () => {
                   PC · téléphone · tablette
                 </div>
                 <h3 className="mt-4 text-2xl font-semibold tracking-tight md:text-4xl">
-                  Un boîtier, plusieurs postes.
+                  Pilotez le boîtier sans le brancher.
                 </h3>
                 <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
-                  Connectez-vous en <strong className="text-white">USB-C, WiFi ou Bluetooth</strong>{' '}
-                  depuis un ordinateur de régie, une tablette en face plateau ou un téléphone pour
-                  un contrôle de secours. Le boîtier reste le cœur stable du réseau DMX.
+                  Le boîtier crée son <strong className="text-white">propre réseau WiFi</strong> :
+                  vous vous y connectez depuis un PC, une{' '}
+                  <strong className="text-white">tablette ou un téléphone Android</strong>, sans
+                  box, sans installation réseau, sans le moindre câble entre vous et lui. Posez le
+                  boîtier près des machines et gardez la main depuis la salle.
+                </p>
+                <p className="mt-4 text-base leading-relaxed text-white/55 md:text-lg">
+                  L&apos;USB-C reste là quand vous le voulez — mais il n&apos;est plus une
+                  obligation pour travailler.
                 </p>
                 <div className="mt-6 grid grid-cols-3 gap-3">
                   {[
@@ -735,6 +893,85 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
+      {/* ─── SESSIONS SIMULTANÉES : récupération du show + reprise en secours ─── */}
+      <section id="sessions" className="scroll-mt-28 border-t border-white/5 py-20 md:py-28">
+        <div className="mx-auto max-w-7xl px-5">
+          <Reveal>
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/40">
+                Plusieurs appareils, en même temps
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
+                Deux postes sur le même boîtier.
+              </h2>
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/55 md:text-lg">
+                Les appareils ne se chassent pas l&apos;un l&apos;autre : plusieurs peuvent être
+                connectés <strong className="text-white">en même temps</strong>, et
+                n&apos;importe lequel peut <strong className="text-white">récupérer le show en
+                cours</strong> pour reprendre le travail là où il en est.
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="mt-14 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <Reveal>
+              <div className="rounded-2xl border border-white/10 bg-black/60 px-4 py-6 sm:px-6">
+                <SvgMultiSession />
+              </div>
+            </Reveal>
+            <Reveal delay={80}>
+              <div className="space-y-8">
+                <div>
+                  <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                    <MonitorPlay size={14} />
+                    Programmer depuis la salle
+                  </div>
+                  <h3 className="mt-3 text-xl font-semibold tracking-tight md:text-2xl">
+                    Voyez la lumière de face, pas de côté.
+                  </h3>
+                  <p className="mt-3 text-base leading-relaxed text-white/55">
+                    Quand la régie est fixe et mal placée — en fond de salle, en balcon, sur le
+                    côté — vous programmez sans jamais voir le rendu réel. Prenez une tablette,
+                    récupérez le show sur place et{' '}
+                    <strong className="text-white">réglez vos états depuis le point de vue du
+                    public</strong>. Le poste de régie, lui, reste connecté.
+                  </p>
+                </div>
+
+                <div className="border-t border-white/10 pt-8">
+                  <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                    <Shield size={14} />
+                    Un second appareil en secours
+                  </div>
+                  <h3 className="mt-3 text-xl font-semibold tracking-tight md:text-2xl">
+                    Le relais est déjà branché.
+                  </h3>
+                  <p className="mt-3 text-base leading-relaxed text-white/55">
+                    Gardez un deuxième appareil connecté et à jour pendant le show. Si le poste
+                    principal se fige ou s&apos;éteint, vous{' '}
+                    <strong className="text-white">reprenez la main immédiatement</strong> —
+                    aucune reconnexion à négocier, aucun fichier à retrouver, le show continue.
+                  </p>
+                </div>
+
+                <ul className="space-y-2.5 border-t border-white/10 pt-8">
+                  {[
+                    'Plusieurs appareils connectés simultanément au boîtier',
+                    'Récupération du show en cours sur n’importe lequel',
+                    'Reprise de la main sans interrompre la sortie DMX',
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-2.5 text-sm text-white/70">
+                      <Check className="mt-0.5 shrink-0 text-white" size={16} />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
       {/* ─── TRANSITION : Que permet ce boîtier ─── */}
       <section id="pourquoi" className="relative overflow-hidden border-t border-white/5 py-24 md:py-32">
         <div className="pointer-events-none absolute inset-0">
@@ -750,7 +987,7 @@ const OmegaDmxInterfacePage = () => {
               <span className="block text-white/40">et la stabilité sur le terrain.</span>
             </h2>
             <p className="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-white/60 md:text-lg">
-              Nous avons développé l&apos;interface OMEGA pour répondre à une exigence simple :
+              Nous avons développé le boîtier OMEGA DMX Interface pour répondre à une exigence simple :
               aller vite, tenir le choc, et ne jamais vous laisser tomber en conditions réelles —
               salles, festivals, tournées, installations temporaires.
             </p>
@@ -772,9 +1009,9 @@ const OmegaDmxInterfacePage = () => {
               Du boîtier au logiciel
             </p>
             <div className="mt-4 flex items-center justify-center gap-3 text-white/50">
-              <span className="text-sm">Interface OMEGA</span>
+              <span className="text-sm">Boîtier OMEGA DMX Interface</span>
               <ArrowRight size={16} className="text-white/30" />
-              <span className="text-sm font-semibold text-white">OMEGADMX</span>
+              <span className="text-sm font-semibold text-white">Logiciel OMEGADMX</span>
             </div>
           </Reveal>
         </div>
@@ -805,7 +1042,7 @@ const OmegaDmxInterfacePage = () => {
                 to="/omega-dmx-logiciel"
                 className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-semibold transition hover:border-white/50 hover:bg-white/5"
               >
-                Voir le logiciel en détail
+                Voir le logiciel OMEGADMX en détail
                 <ArrowRight size={16} />
               </Link>
             </div>
@@ -844,8 +1081,8 @@ const OmegaDmxInterfacePage = () => {
               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-t from-black via-transparent to-transparent" />
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 p-6 md:p-8">
                 <p className="text-sm text-white/70 md:text-base">
-                  Page machine, plateau 3D, contrôles live — connecté à votre boîtier en USB, WiFi
-                  ou Bluetooth.
+                  Page machine, plateau 3D, contrôles live — connecté à votre boîtier en USB ou
+                  en WiFi.
                 </p>
               </div>
             </div>
@@ -915,7 +1152,7 @@ const OmegaDmxInterfacePage = () => {
               {
                 icon: Move,
                 t: 'FX mouvements',
-                d: 'Cercle, huit, swing, wave… générés dans le logiciel, sortis en DMX par l’interface (filaire ou radio).',
+                d: 'Cercle, huit, swing, wave… générés dans le logiciel OMEGADMX, avec déphasage sur tout un groupe de machines.',
               },
               {
                 icon: Layers,
@@ -925,7 +1162,7 @@ const OmegaDmxInterfacePage = () => {
               {
                 icon: Wifi,
                 t: 'Connexion multi-appareils',
-                d: 'USB-C, WiFi ou Bluetooth. PC, tablette, téléphone — détection auto de l’interface OMEGA.',
+                d: 'USB-C ou WiFi. PC, tablette, téléphone — détection auto du boîtier OMEGA DMX Interface.',
               },
               {
                 icon: EyeOff,
@@ -935,12 +1172,17 @@ const OmegaDmxInterfacePage = () => {
               {
                 icon: Save,
                 t: 'Show dans le boîtier',
-                d: 'Sauvegarde continue côté interface : le show est protégé même si le PC se coupe.',
+                d: 'Sauvegarde continue dans le boîtier : le show est protégé même si le PC se coupe.',
+              },
+              {
+                icon: Sliders,
+                t: 'Console MIDI en quelques minutes',
+                d: 'Glissez une action sur un pad, choisissez sa couleur : votre surface de jeu est prête, sans notion de programmation.',
               },
               {
                 icon: Cpu,
                 t: 'Rapide & moderne',
-                d: 'Interface fluide, workflows terrain, stabilité au service de la régie — pensé pour l’exigence du live.',
+                d: 'Prise en main fluide, workflows terrain, stabilité au service de la régie — pensé pour l’exigence du live.',
               },
             ].map((f, i) => (
               <Reveal key={f.t} delay={i * 30}>
@@ -986,7 +1228,7 @@ const OmegaDmxInterfacePage = () => {
                   Oubliez l&apos;ancien monde. Passez à OMEGADMX.
                 </div>
                 <p className="mt-1 max-w-lg text-sm text-white/50">
-                  Boîtier + logiciel = régie complète. 2 univers, radio, sauvegarde, 11 500+
+                  Boîtier OMEGA DMX Interface + logiciel OMEGADMX = régie complète. 2 univers, radio, sauvegarde, 11 500+
                   machines, automatisations — une seule chaîne, du patch à la sortie XLR.
                 </p>
               </div>
@@ -1023,9 +1265,11 @@ const OmegaDmxInterfacePage = () => {
               {[
                 ['Sorties DMX', '2 × XLR 3 pts (Univers 1 & 2)'],
                 ['Canaux', '1024 (2 × 512) — filaire ou sans fil'],
-                ['Sans fil', 'Jusqu’à 1 km avec récepteurs OMEGA + antenne adaptée'],
+                ['Sans fil', '2 univers diffusés simultanément — une première mondiale'],
+                ['Portée radio', 'Jusqu’à 1 km avec récepteurs OMEGA + antenne adaptée'],
+                ['Qualité de liaison', 'Niveau de réception remonté par récepteur, en direct'],
                 ['Antenne', 'RP-SMA interchangeable'],
-                ['Connexion', 'USB-C / WiFi / Bluetooth — PC, tablette, téléphone'],
+                ['Connexion', 'USB-C / WiFi — PC, tablette, téléphone'],
                 ['Logiciel', 'OMEGADMX inclus — Windows'],
                 ['Librairie', '11 500+ machines gratuites dans le logiciel'],
                 ['Abonnement', 'Aucun'],

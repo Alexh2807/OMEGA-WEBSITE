@@ -18,7 +18,10 @@ import {
   Wrench,
   Check,
   ShoppingCart,
+  Sliders,
 } from 'lucide-react';
+import OmegaDmxDuo from '../components/OmegaDmxDuo';
+import { SvgMidiConsole } from '../components/OmegaDmxSystemSvgs';
 
 /* ================================================================== */
 /*  OMEGADMX Logiciel — Product Experience + parallax                 */
@@ -34,8 +37,16 @@ const IMG = {
   dimmer: '/products/omega-dmx-v2-dimmer-page.webp',
   effet: '/products/omega-dmx-v2-effet-3d.webp',
   controle: '/products/omega-dmx-v2-controle.webp',
-  box: '/products/omega-dmx-px-hero-box.webp',
+  /* ⚠ Le VRAI boîtier, photographié — surtout pas `omega-dmx-px-hero-box.webp`, qui est
+     un rendu 3D d'un ancien design (coque alu, sérigraphie « DMX OUT 1/2 ») ne
+     correspondant à aucun produit vendu. Vue de côté large : elle tient toute la
+     largeur de la section et reste lisible sous le voile noir. */
+  box: '/products/omega-box-detail.webp',
 };
+
+/** Photo produit du boîtier : le cliché entier (gravure OMEGA + les 2 XLR),
+ *  le même que le hero de la page du boîtier. */
+const PHOTO_BOITIER = '/products/p1021135.webp';
 
 const FEATURES = [
   {
@@ -87,13 +98,13 @@ const FEATURES = [
   },
   {
     id: 'connexion',
-    kicker: 'Connexion boîtier',
-    title: 'WiFi, USB ou Bluetooth',
-    text: 'Paramètres Interface DMX : détection automatique du boîtier OMEGA (ou Sunlite), choix du port, liaison fiable.',
+    kicker: 'Connexion au boîtier',
+    title: 'WiFi ou USB',
+    text: 'Réglages de connexion : détection automatique du boîtier OMEGA DMX Interface, choix du port, liaison fiable.',
     img: IMG.conn,
     icon: Wifi,
     reverse: true,
-    points: ['USB / WiFi / Bluetooth', 'Détection auto', 'Port COM avancé'],
+    points: ['USB / WiFi', 'Détection auto', 'Port COM avancé'],
   },
   {
     id: 'dimmer',
@@ -111,8 +122,8 @@ const MORE = [
   { icon: LayoutGrid, t: 'Masquage de pages', d: 'Masquez une page sans la perdre — récupérable dans le gestionnaire.' },
   { icon: Bug, t: 'Signalement rapide', d: 'Aide → Signaler un problème : ticket + suivi, même compte OMEGA.' },
   { icon: Radio, t: 'Monitoring signal', d: 'Qualité de liaison des cartes sans fil sous contrôle.' },
-  { icon: Shield, t: 'Show protégé', d: 'Sauvegarde continue dans le boîtier OMEGA.' },
-  { icon: Ban, t: 'Sans abonnement', d: 'Logiciel inclus avec le boîtier. Licence optionnelle pour interfaces tierces.' },
+  { icon: Shield, t: 'Show protégé', d: 'Sauvegarde continue dans le boîtier OMEGA DMX Interface.' },
+  { icon: Ban, t: 'Sans abonnement', d: 'Inclus avec le boîtier OMEGA DMX Interface. Licence optionnelle pour boîtiers d’autres marques.' },
 ];
 
 /** Révélation + léger décalage 3D au scroll */
@@ -239,8 +250,11 @@ const OmegaDmxLogicielPage = () => {
         </div>
 
         <div className="relative z-10 mx-auto w-full max-w-7xl px-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-300/90 mb-4">
-            Logiciel de pilotage · Captures réelles
+          {/* ⚠ NOMMAGE : « le logiciel » est annoncé AVANT le nom. Servi nu, « OMEGADMX »
+              se confond avec le boîtier OMEGA DMX Interface. Voir components/OmegaDmxDuo.tsx. */}
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.28em] text-white/75">
+            <MonitorPlay size={14} strokeWidth={1.8} />
+            Le logiciel
           </p>
           <h1 className="max-w-4xl text-5xl md:text-7xl lg:text-8xl font-semibold tracking-tight leading-[1.02]">
             OMEGADMX
@@ -250,7 +264,8 @@ const OmegaDmxLogicielPage = () => {
           </h1>
           <p className="mt-6 max-w-xl text-lg text-white/65 leading-relaxed">
             Pages de lyres, éditeurs, masquage, connexion boîtier, sortie DMX, signalements —
-            le logiciel inclus avec l’interface OMEGA, sans abonnement.
+            le programme qui tourne sur votre ordinateur. Inclus avec le boîtier OMEGA DMX
+            Interface, sans abonnement.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
             <Link
@@ -258,7 +273,7 @@ const OmegaDmxLogicielPage = () => {
               className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black hover:bg-white/90 transition"
             >
               <ShoppingCart size={18} />
-              Voir le boîtier
+              Voir le boîtier OMEGA DMX Interface
             </Link>
             <a
               href="#features"
@@ -270,6 +285,9 @@ const OmegaDmxLogicielPage = () => {
           </div>
         </div>
       </section>
+
+      {/* ─── BOÎTIER ≠ LOGICIEL — levée de doute, avant tout le reste ─── */}
+      <OmegaDmxDuo actif="logiciel" />
 
       {/* ─── FLOATING TRIPTYCH ─── */}
       <section className="relative py-24 md:py-32 border-t border-white/5">
@@ -364,6 +382,54 @@ const OmegaDmxLogicielPage = () => {
         </div>
       </section>
 
+      {/* ─── CONSOLE MIDI : le point fort à mettre en avant ─── */}
+      <section id="midi" className="scroll-mt-28 border-t border-white/5 py-24 md:py-32">
+        <div className="mx-auto max-w-7xl px-5">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <Reveal>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                <Sliders size={14} />
+                Console MIDI
+              </div>
+              <h2 className="mt-4 text-3xl md:text-5xl font-semibold tracking-tight">
+                Votre surface de jeu,
+                <span className="block text-white/40">construite en quelques minutes.</span>
+              </h2>
+              <p className="mt-5 text-base md:text-lg leading-relaxed text-white/55">
+                Branchez un contrôleur MIDI et fabriquez votre console : vous{' '}
+                <strong className="text-white">glissez une action sur un pad</strong> — une
+                scène, un blackout, un chenillard, un flash — et c&apos;est assigné. Pas de
+                tableau d&apos;apprentissage à remplir, pas de numéro de note à connaître.
+              </p>
+              <p className="mt-4 text-base md:text-lg leading-relaxed text-white/55">
+                Chaque pad reçoit ensuite{' '}
+                <strong className="text-white">la couleur que vous lui donnez</strong>, renvoyée
+                sur le contrôleur : votre grille devient lisible d&apos;un coup d&apos;œil dans
+                le noir, et vous retrouvez vos repères sans quitter le plateau des yeux.
+              </p>
+              <ul className="mt-7 space-y-2.5">
+                {[
+                  'Assignation directe : une action, un pad',
+                  'Couleur de pad choisie librement, renvoyée au contrôleur',
+                  'Faders assignables pour les niveaux et la vitesse',
+                  'Une banque par page : le même pad change de rôle selon la page active',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-2.5 text-sm text-white/70">
+                    <Check className="mt-0.5 shrink-0 text-white" size={16} />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
+            <Reveal delay={100}>
+              <div className="rounded-2xl border border-white/10 bg-black/60 px-4 py-6 sm:px-6">
+                <SvgMidiConsole />
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
       {/* ─── MORE FEATURES GRID ─── */}
       <section className="border-t border-white/5 py-24 md:py-32 bg-zinc-950/40">
         <div className="mx-auto max-w-7xl px-5">
@@ -427,39 +493,162 @@ const OmegaDmxLogicielPage = () => {
         </div>
       </section>
 
-      {/* ─── CTA ─── */}
-      <section className="relative border-t border-white/5 py-28 overflow-hidden">
-        <div className="absolute inset-0 opacity-30">
-          <img src={IMG.box} alt="" className="w-full h-full object-cover" />
-        </div>
-        <div className="absolute inset-0 bg-black/80" />
-        <div className="relative z-10 mx-auto max-w-3xl px-5 text-center">
+      {/* ─── QUAND FAUT-IL UNE LICENCE ? Les trois cas, sans zone grise ─── */}
+      <section id="licence" className="scroll-mt-28 border-t border-white/5 bg-zinc-950/40 py-24 md:py-32">
+        <div className="mx-auto max-w-5xl px-5">
           <Reveal>
-            <Sparkles className="mx-auto text-blue-400 mb-4" size={28} />
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight">
-              Logiciel inclus.
-              <span className="block text-white/40">Sans abonnement.</span>
-            </h2>
-            <p className="mt-5 text-white/55 max-w-md mx-auto">
-              Avec le boîtier OMEGA DMX, OMEGADMX est fourni. Licence optionnelle pour les
-              interfaces d’autres marques.
+            <p className="text-center text-xs font-semibold uppercase tracking-[0.28em] text-white/40">
+              Licence
             </p>
-            <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <Link
-                to="/omega-dmx-interface"
-                className="inline-flex items-center gap-2 rounded-full bg-white px-10 py-4 text-sm font-semibold text-black hover:bg-white/90"
-              >
-                Découvrir OMEGA DMX
-                <ArrowRight size={16} />
-              </Link>
-              <Link
-                to="/contact"
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 px-8 py-4 text-sm font-semibold hover:bg-white/5"
-              >
-                Demander une démo
-              </Link>
+            <h2 className="mt-4 text-center text-3xl md:text-5xl font-semibold tracking-tight">
+              Quand faut-il payer ? Presque jamais.
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-center text-white/50">
+              Le logiciel OMEGADMX est gratuit et sans abonnement dans deux cas sur trois.
+            </p>
+          </Reveal>
+
+          <div className="mt-12 grid gap-4 md:grid-cols-3">
+            {[
+              {
+                icon: MonitorPlay,
+                cas: 'Le logiciel seul',
+                prix: 'Gratuit',
+                d: 'Sans aucun boîtier : programmez, préparez vos shows, travaillez en 3D. Aucune licence à acheter.',
+                fort: true,
+              },
+              {
+                icon: Boxes,
+                cas: 'Avec un boîtier OMEGA',
+                prix: 'Gratuit',
+                d: 'Le boîtier OMEGA DMX Interface débloque le logiciel tout seul : rien à saisir, rien à activer.',
+                fort: true,
+              },
+              {
+                icon: Wrench,
+                cas: 'Avec une interface d’une autre marque',
+                prix: 'Licence requise',
+                d: 'Pour piloter une interface DMX tierce, d’un autre fabricant, une licence OMEGADMX est nécessaire.',
+                fort: false,
+              },
+            ].map((c) => (
+              <Reveal key={c.cas}>
+                <div
+                  className={`h-full rounded-2xl border p-6 ${
+                    c.fort ? 'border-white/35 bg-white/[0.05]' : 'border-white/10 bg-black/40'
+                  }`}
+                >
+                  <c.icon className="text-white" size={22} strokeWidth={1.5} />
+                  <div className="mt-4 text-sm text-white/50">{c.cas}</div>
+                  <div className="mt-1 text-xl font-semibold tracking-tight">{c.prix}</div>
+                  <p className="mt-3 text-sm leading-relaxed text-white/50">{c.d}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* ── Le cas d'une interface tierce, avec sa limite dite franchement ──
+               ⚠ Aucune marque concurrente n'est nommée ici (demande explicite). On parle
+               d'« interface d'une autre marque » : le propos vaut pour toutes, et citer un
+               fabricant reviendrait à lui faire de la publicité sur notre propre page. */}
+          <Reveal delay={80}>
+            <div className="mt-12 rounded-2xl border border-white/15 bg-black/50 p-7 md:p-9">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                <Radio size={14} />
+                Vous avez déjà une interface DMX
+              </div>
+              <h3 className="mt-4 text-xl font-semibold tracking-tight md:text-2xl">
+                Gardez votre interface, changez de logiciel.
+              </h3>
+              <p className="mt-4 text-base leading-relaxed text-white/55">
+                Vous possédez une interface DMX{' '}
+                <strong className="text-white">d’une autre marque</strong> et vous ne voulez pas
+                la remplacer : prenez la licence OMEGADMX et gardez votre matériel. OMEGADMX
+                envoie alors les données <strong className="text-white">directement dans votre
+                boîtier</strong>.
+              </p>
+              <div className="mt-6 rounded-xl border border-white/20 bg-white/[0.04] p-5">
+                <div className="text-sm font-semibold text-white">
+                  À savoir avant d’acheter : les canaux restent ceux de votre interface
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-white/55">
+                  OMEGADMX respecte strictement le nombre de canaux débloqué sur votre boîtier
+                  et <strong className="text-white">n’en ajoute aucun</strong>. Si votre
+                  interface est en 256 canaux extensibles à 512, OMEGADMX ne fournit pas cette
+                  extension : elle reste à acheter auprès du fabricant de votre boîtier. Le
+                  logiciel ne contourne ni ne remplace la licence de canaux de votre matériel.
+                </p>
+              </div>
             </div>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ─── CTA ─── */}
+      <section className="relative border-t border-white/5 py-28 overflow-hidden">
+        {/* Fond d'origine, conservé tel quel : l'image large du boîtier à 30 %, sous un
+            voile noir à 80 %. ⚠ Ne pas la rabaisser pour « faire ressortir » la carte —
+            ce rendu est voulu. */}
+        <div className="absolute inset-0 opacity-30">
+          <img src={IMG.box} alt="" className="h-full w-full object-cover" />
+        </div>
+        <div className="absolute inset-0 bg-black/80" />
+
+        <div className="relative z-10 mx-auto max-w-6xl px-5">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <Reveal className="order-2 lg:order-1">
+              <Sparkles className="text-blue-400 mb-4" size={28} />
+              <h2 className="text-4xl md:text-5xl font-semibold tracking-tight">
+                Logiciel inclus.
+                <span className="block text-white/40">Sans abonnement.</span>
+              </h2>
+              <p className="mt-5 max-w-md text-white/55">
+                Avec le boîtier OMEGA DMX Interface, le logiciel OMEGADMX est fourni. Licence
+                optionnelle pour les boîtiers d’autres marques.
+              </p>
+              <div className="mt-10 flex flex-wrap gap-4">
+                <Link
+                  to="/omega-dmx-interface"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-10 py-4 text-sm font-semibold text-black hover:bg-white/90"
+                >
+                  Découvrir le boîtier OMEGA DMX Interface
+                  <ArrowRight size={16} />
+                </Link>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/25 px-8 py-4 text-sm font-semibold hover:bg-white/5"
+                >
+                  Demander une démo
+                </Link>
+              </div>
+            </Reveal>
+
+            {/* ── La photo réelle du boîtier ── */}
+            <Reveal delay={100} className="order-1 lg:order-2">
+              <Link to="/omega-dmx-interface" className="group block">
+                <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-black/60 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9)]">
+                  <img
+                    src={PHOTO_BOITIER}
+                    alt="Boîtier OMEGA DMX Interface — coque texturée, face gravée OMEGA et deux sorties XLR"
+                    className="block h-auto w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    loading="lazy"
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/50">
+                      Le boîtier
+                    </div>
+                    <div className="mt-1 text-lg font-semibold tracking-tight">
+                      OMEGA DMX Interface
+                    </div>
+                    <div className="mt-0.5 text-sm text-white/50">
+                      Photo réelle — 2 sorties XLR, antenne interchangeable
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </Reveal>
+          </div>
         </div>
       </section>
     </div>

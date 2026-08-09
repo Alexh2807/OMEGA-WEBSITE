@@ -686,9 +686,25 @@ Deno.serve(async (req) => {
       return json({ error: 'Archivage impossible : ' + eUp.message }, req, 500);
     }
 
-    await admin.from('invoices').update({
+    /* ⚠ L'ERREUR DE CETTE ÉCRITURE DOIT ÊTRE LUE.
+       Elle ne l'était pas, et c'est ce qui a rendu le défaut invisible : le déclencheur
+       d'inaltérabilité refusait la mise à jour (la colonne `pdf_at` ne figurait pas parmi
+       les colonnes de suivi autorisées), l'erreur partait à la poubelle, et la fonction
+       répondait « archivé » avec une URL valide. Le fichier était bien sur le serveur ;
+       la facture, elle, ne le savait pas. Le client demandait sa facture et lisait
+       « pas encore éditée », alors qu'elle existait depuis le premier clic.
+       Une écriture qu'on ne vérifie pas est une écriture qu'on ne fait pas. */
+    const { error: eMaj } = await admin.from('invoices').update({
       pdf_storage_path: chemin, pdf_sha256: empreinte, pdf_at: new Date().toISOString(),
     }).eq('id', invoice_id);
+    if (eMaj) {
+      return json({
+        error:
+          "Le document a été fabriqué et archivé, mais la facture n'a pas pu l'enregistrer : " +
+          eMaj.message +
+          ". Le client ne pourrait pas le télécharger — corrigez avant de continuer.",
+      }, req, 500);
+    }
 
     const { data: lien } = await admin.storage.from('factures').createSignedUrl(chemin, 300);
     return json({ url: lien?.signedUrl, archive: false, sha256: empreinte, chemin }, req);

@@ -1,13 +1,74 @@
 import React from 'react';
 
 /**
- * Illustrations système B/W animées — style diagramme produit pro.
- * Uniquement noir / blanc / gris, traits nets, animations discrètes.
+ * Illustrations système animées — style diagramme technique produit.
+ * Strictement monochrome (noir / blanc / gris), traits nets, mouvement discret.
+ * Chaque SVG est autonome : styles, filtres et dégradés portent un préfixe propre
+ * pour éviter toute collision d'ID quand plusieurs illustrations coexistent.
  */
 
-const frame = 'w-full h-auto max-w-md mx-auto';
+const frame = 'w-full h-auto max-w-lg mx-auto select-none';
 
-/** 1024 canaux sans fil : boîtier → radio → récepteurs → machines */
+/** Police et graisses communes aux légendes */
+const FONT = 'ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif';
+
+/** Bloc de style partagé : respect de prefers-reduced-motion. */
+const reducedMotion = `
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; }
+  }
+`;
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1 — 1024 canaux sans fil
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Un boîtier au centre, tout le parc autour, sans un câble.
+ *
+ * Le message n'est plus « voici la chaîne technique » (3 récepteurs alignés) mais
+ * « voici l'échelle » : l'onde part du boîtier et atteint 21 machines réparties sur
+ * trois arcs de plus en plus lointains. Chaque machine s'allume au PASSAGE de l'onde
+ * (retard proportionnel à sa distance), ce qui rend la diffusion lisible d'un coup d'œil.
+ */
+
+/** Trois couronnes de machines autour du boîtier. Position calculée, pas dessinée à la main. */
+const RINGS = [
+  { r: 92, n: 5, taille: 1 },
+  { r: 143, n: 7, taille: 0.86 },
+  { r: 194, n: 9, taille: 0.72 },
+];
+
+/** Centre d'émission : le boîtier, posé en bas au milieu. */
+const HUB = { x: 240, y: 272 };
+
+type Machine = {
+  x: number;
+  y: number;
+  angle: number;
+  echelle: number;
+  retard: number;
+  cle: string;
+};
+
+const MACHINES: Machine[] = RINGS.flatMap((ring, ri) =>
+  Array.from({ length: ring.n }, (_, i) => {
+    // Réparties sur un demi-tour, sans jamais coller aux bords bas du cadre.
+    const t = ring.n === 1 ? 0.5 : i / (ring.n - 1);
+    const deg = 166 - t * 152;
+    const rad = (deg * Math.PI) / 180;
+    return {
+      x: HUB.x + ring.r * Math.cos(rad),
+      y: HUB.y - ring.r * Math.sin(rad) * 0.82, // aplati : lecture « plateau », pas « cercle »
+      angle: 90 - deg, // le faisceau part du boîtier vers l'extérieur
+      echelle: ring.taille,
+      // L'onde met d'autant plus de temps à arriver que la machine est loin.
+      retard: (ring.r / 210) * 1.5,
+      cle: `${ri}-${i}`,
+    };
+  })
+);
+
 export const SvgWireless1024: React.FC<{ className?: string }> = ({ className = '' }) => (
   <svg
     viewBox="0 0 480 320"
@@ -15,139 +76,161 @@ export const SvgWireless1024: React.FC<{ className?: string }> = ({ className = 
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     role="img"
-    aria-label="1024 canaux DMX en sans fil via récepteurs OMEGA"
+    aria-label="Un boîtier OMEGA diffuse le DMX en sans fil à tout un parc de machines"
   >
     <defs>
+      <radialGradient id="wl-halo" cx="50%" cy="90%" r="70%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.16" />
+        <stop offset="55%" stopColor="#ffffff" stopOpacity="0.05" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="wl-beam" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </linearGradient>
+      <filter id="wl-glow" x="-200%" y="-200%" width="500%" height="500%">
+        <feGaussianBlur stdDeviation="2.6" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
       <style>{`
-        .omx-w-pulse { animation: omxWPulse 2.4s ease-in-out infinite; }
-        .omx-w-pulse2 { animation: omxWPulse 2.4s ease-in-out infinite 0.4s; }
-        .omx-w-pulse3 { animation: omxWPulse 2.4s ease-in-out infinite 0.8s; }
-        .omx-w-dash { stroke-dasharray: 6 8; animation: omxWDash 1.8s linear infinite; }
-        .omx-w-beam { animation: omxWBeam 2s ease-in-out infinite; transform-origin: center bottom; }
-        .omx-w-beam2 { animation: omxWBeam 2s ease-in-out infinite 0.35s; transform-origin: center bottom; }
-        .omx-w-beam3 { animation: omxWBeam 2s ease-in-out infinite 0.7s; transform-origin: center bottom; }
-        @keyframes omxWPulse {
-          0%, 100% { opacity: 0.15; }
-          50% { opacity: 0.85; }
-        }
-        @keyframes omxWDash {
-          to { stroke-dashoffset: -28; }
-        }
-        @keyframes omxWBeam {
-          0%, 100% { opacity: 0.35; }
-          50% { opacity: 0.95; }
-        }
+        .wl-onde { animation: wlOnde 3s cubic-bezier(.2,.6,.35,1) infinite;
+                   transform-box: fill-box; transform-origin: 50% 100%; }
+        .wl-rx   { animation: wlRx 3s ease-out infinite; }
+        .wl-fx   { animation: wlFx 3s ease-out infinite; }
+        .wl-hub  { animation: wlHub 3s ease-in-out infinite; }
+        .wl-ant  { animation: wlAnt 3s ease-in-out infinite; }
+        @keyframes wlOnde { 0% { opacity:.75; transform:scale(.06);} 80% { opacity:0; transform:scale(1);} 100% { opacity:0; } }
+        @keyframes wlRx   { 0%,4% { opacity:.16;} 12% { opacity:1;} 55%,100% { opacity:.3;} }
+        @keyframes wlFx   { 0%,6% { opacity:.14;} 16% { opacity:.95;} 70%,100% { opacity:.4;} }
+        @keyframes wlHub  { 0%,100% { opacity:.45;} 8% { opacity:1;} }
+        @keyframes wlAnt  { 0%,100% { opacity:.3;} 6% { opacity:1;} }
+        ${reducedMotion}
       `}</style>
     </defs>
 
-    {/* Fond grille technique légère */}
-    <g opacity="0.12" stroke="#fff" strokeWidth="0.5">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <line key={`h${i}`} x1="20" y1={40 + i * 28} x2="460" y2={40 + i * 28} />
+    <rect width="480" height="320" fill="url(#wl-halo)" />
+
+    {/* Repères de portée — le sol du plateau */}
+    <g stroke="#fff" opacity="0.1">
+      {RINGS.map((ring) => (
+        <ellipse
+          key={ring.r}
+          cx={HUB.x}
+          cy={HUB.y}
+          rx={ring.r}
+          ry={ring.r * 0.82}
+          strokeWidth="0.7"
+          strokeDasharray="2 5"
+        />
       ))}
-      {Array.from({ length: 12 }).map((_, i) => (
-        <line key={`v${i}`} x1={40 + i * 36} y1="30" x2={40 + i * 36} y2="290" />
+    </g>
+
+    {/* Ondes : elles partent du boîtier et balaient tout le plateau */}
+    <g stroke="#fff" fill="none">
+      {[0, 1, 2].map((i) => (
+        <ellipse
+          key={i}
+          className="wl-onde"
+          cx={HUB.x}
+          cy={HUB.y}
+          rx="212"
+          ry="174"
+          strokeWidth={1.6 - i * 0.35}
+          style={{ animationDelay: `${i}s` }}
+        />
       ))}
     </g>
 
-    {/* ── Boîtier OMEGA (émetteur) ── */}
-    <g transform="translate(36, 110)">
-      <rect x="0" y="20" width="72" height="52" rx="6" stroke="#fff" strokeWidth="1.6" fill="#0a0a0a" />
-      <rect x="8" y="28" width="40" height="28" rx="2" stroke="#fff" strokeWidth="1" opacity="0.7" />
-      <text x="12" y="46" fill="#fff" fontSize="7" fontFamily="system-ui,sans-serif" letterSpacing="0.5">
-        OMEGA
-      </text>
-      {/* XLR doubles */}
-      <circle cx="62" cy="36" r="5" stroke="#fff" strokeWidth="1.2" />
-      <circle cx="62" cy="54" r="5" stroke="#fff" strokeWidth="1.2" />
-      {/* Antenne */}
-      <line x1="36" y1="20" x2="36" y2="4" stroke="#fff" strokeWidth="1.5" />
-      <circle cx="36" cy="2" r="2.5" fill="#fff" />
-      <text x="8" y="90" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.7">
-        Interface
-      </text>
-      <text x="4" y="104" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.45">
-        2 univers · 1024 ch
-      </text>
+    {/* ── Le parc : 21 machines, chacune avec son récepteur ── */}
+    {MACHINES.map((m) => (
+      <g key={m.cle} transform={`translate(${m.x.toFixed(1)},${m.y.toFixed(1)})`}>
+        <g transform={`rotate(${m.angle.toFixed(1)}) scale(${m.echelle})`}>
+          {/* faisceau, vers l'extérieur */}
+          <path
+            className="wl-fx"
+            d="M-7 -4 L-17 -40 H17 L7 -4 Z"
+            fill="url(#wl-beam)"
+            style={{ animationDelay: `${m.retard.toFixed(2)}s` }}
+          />
+          {/* tête + lyre */}
+          <rect x="-9" y="-9" width="18" height="10" rx="3.5" fill="#080808" stroke="#fff" strokeWidth="1.2" />
+          <path d="M-9 1 v5 M9 1 v5" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" />
+          <path d="M-6 6 h12 v4 h-12 z" fill="#080808" stroke="#fff" strokeWidth="1.1" />
+          {/* récepteur sans fil, collé à la machine */}
+          <circle
+            className="wl-rx"
+            cx="0"
+            cy="12"
+            r="2.6"
+            fill="#fff"
+            filter="url(#wl-glow)"
+            style={{ animationDelay: `${m.retard.toFixed(2)}s` }}
+          />
+        </g>
+      </g>
+    ))}
+
+    {/* ── Le boîtier, seul émetteur ── */}
+    <g transform={`translate(${HUB.x - 34},${HUB.y - 22})`}>
+      <ellipse className="wl-hub" cx="34" cy="26" rx="46" ry="14" fill="#fff" opacity="0.12" />
+      <rect x="0" y="0" width="68" height="30" rx="7" fill="#0a0a0a" stroke="#fff" strokeWidth="1.7" />
+      <rect x="7" y="7" width="26" height="16" rx="2.5" stroke="#fff" strokeWidth="0.9" opacity="0.55" />
+      <rect x="10" y="11" width="14" height="3" rx="1.5" fill="#fff" opacity="0.5" />
+      <circle cx="47" cy="10" r="4.5" stroke="#fff" strokeWidth="1" />
+      <circle cx="47" cy="21" r="4.5" stroke="#fff" strokeWidth="1" />
+      <circle className="wl-hub" cx="60" cy="15" r="2.6" fill="#fff" />
+      {/* antenne : l'onde en part */}
+      <path d="M22 0 V-16" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      <circle className="wl-ant" cx="22" cy="-19" r="3.2" fill="#fff" filter="url(#wl-glow)" />
     </g>
 
-    {/* Ondes radio animées */}
-    <g transform="translate(130, 140)" stroke="#fff" fill="none">
-      <path className="omx-w-pulse" d="M0 20 Q12 8 24 20" strokeWidth="1.4" />
-      <path className="omx-w-pulse2" d="M0 20 Q18 0 36 20" strokeWidth="1.2" opacity="0.6" />
-      <path className="omx-w-pulse3" d="M0 20 Q24 -8 48 20" strokeWidth="1" opacity="0.4" />
-    </g>
-
-    {/* Flux de données canaux */}
-    <path
-      className="omx-w-dash"
-      d="M118 146 H200"
-      stroke="#fff"
-      strokeWidth="1.2"
-      opacity="0.7"
-    />
-    <text x="145" y="136" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.55">
-      U1 + U2
+    {/* Légende */}
+    <text
+      x={HUB.x}
+      y={HUB.y + 26}
+      textAnchor="middle"
+      fill="#fff"
+      fontSize="9"
+      fontFamily={FONT}
+      fontWeight="600"
+      letterSpacing="1.4"
+    >
+      UN SEUL BOÎTIER
     </text>
 
-    {/* ── Récepteurs OMEGA ── */}
-    {[0, 1, 2].map((i) => (
-      <g key={i} transform={`translate(${210 + i * 78}, 118)`}>
-        <rect x="0" y="24" width="40" height="36" rx="4" stroke="#fff" strokeWidth="1.3" fill="#0a0a0a" />
-        <line x1="20" y1="24" x2="20" y2="10" stroke="#fff" strokeWidth="1.3" />
-        <circle cx="20" cy="8" r="2" fill="#fff" />
-        {/* LED pulse */}
-        <circle
-          className={i === 0 ? 'omx-w-pulse' : i === 1 ? 'omx-w-pulse2' : 'omx-w-pulse3'}
-          cx="20"
-          cy="42"
-          r="3"
-          fill="#fff"
-        />
-        <text x="2" y="76" fill="#fff" fontSize="7" fontFamily="system-ui,sans-serif" opacity="0.5">
-          RX {i + 1}
-        </text>
-        {/* Câble vers machine */}
-        <line x1="20" y1="60" x2="20" y2="88" stroke="#fff" strokeWidth="1" opacity="0.5" />
-      </g>
-    ))}
-
-    {/* ── Machines (lyres / spots) ── */}
-    {[0, 1, 2].map((i) => (
-      <g key={`m${i}`} transform={`translate(${206 + i * 78}, 210)`}>
-        {/* Base */}
-        <ellipse cx="24" cy="48" rx="16" ry="5" stroke="#fff" strokeWidth="1" opacity="0.4" />
-        <rect x="16" y="28" width="16" height="20" rx="2" stroke="#fff" strokeWidth="1.2" />
-        {/* Tête lyre */}
-        <rect x="10" y="12" width="28" height="18" rx="4" stroke="#fff" strokeWidth="1.3" fill="#0a0a0a" />
-        {/* Faisceau animé */}
-        <path
-          className={i === 0 ? 'omx-w-beam' : i === 1 ? 'omx-w-beam2' : 'omx-w-beam3'}
-          d="M18 12 L12 -8 L36 -8 L30 12"
-          fill="#fff"
-          opacity="0.2"
-        />
-      </g>
-    ))}
-
-    {/* Badge 1024 */}
-    <g transform="translate(360, 36)">
-      <rect x="0" y="0" width="88" height="36" rx="6" stroke="#fff" strokeWidth="1.2" fill="#0a0a0a" />
-      <text x="10" y="16" fill="#fff" fontSize="14" fontFamily="system-ui,sans-serif" fontWeight="600">
+    {/* Compteur */}
+    <g transform="translate(20,20)">
+      <text x="0" y="20" fill="#fff" fontSize="26" fontFamily={FONT} fontWeight="700" letterSpacing="-1">
         1024
       </text>
-      <text x="10" y="28" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.55">
-        canaux sans fil
+      <text x="0" y="34" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.5" letterSpacing="1">
+        CANAUX · 2 UNIVERS
       </text>
     </g>
 
-    <text x="36" y="300" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.35">
-      Câblé ou radio — les mêmes 2 univers
+    <g transform="translate(338,20)">
+      <text x="112" y="20" textAnchor="end" fill="#fff" fontSize="26" fontFamily={FONT} fontWeight="700" letterSpacing="-1">
+        0
+      </text>
+      <text x="112" y="34" textAnchor="end" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.5" letterSpacing="1">
+        CÂBLE DE DONNÉES
+      </text>
+    </g>
+
+    <text x="240" y="314" textAnchor="middle" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.4" letterSpacing="0.4">
+      Chaque machine reçoit son récepteur — jusqu&apos;à 1 km avec l&apos;antenne adaptée
     </text>
   </svg>
 );
 
-/** Sauvegarde show dans le boîtier */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2 — Sauvegarde du show dans le boîtier
+   ──────────────────────────────────────────────────────────────────────────── */
+
 export const SvgBackupBox: React.FC<{ className?: string }> = ({ className = '' }) => (
   <svg
     viewBox="0 0 480 320"
@@ -158,116 +241,162 @@ export const SvgBackupBox: React.FC<{ className?: string }> = ({ className = '' 
     aria-label="Sauvegarde continue du show dans le boîtier OMEGA"
   >
     <defs>
+      <radialGradient id="bk-vignette" cx="55%" cy="45%" r="75%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.07" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="bk-fill" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0.35" />
+      </linearGradient>
+      <filter id="bk-glow" x="-150%" y="-150%" width="400%" height="400%">
+        <feGaussianBlur stdDeviation="2" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <path id="bk-route" d="M148 128 C196 128 206 150 246 158" />
       <style>{`
-        .omx-b-flow { stroke-dasharray: 5 7; animation: omxBFlow 1.6s linear infinite; }
-        .omx-b-write { animation: omxBWrite 2.2s ease-in-out infinite; }
-        .omx-b-shield { animation: omxBShield 3s ease-in-out infinite; }
-        .omx-b-bit { animation: omxBBit 1.4s ease-in-out infinite; }
-        .omx-b-bit2 { animation: omxBBit 1.4s ease-in-out infinite 0.35s; }
-        .omx-b-bit3 { animation: omxBBit 1.4s ease-in-out infinite 0.7s; }
-        @keyframes omxBFlow { to { stroke-dashoffset: -24; } }
-        @keyframes omxBWrite {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 1; }
-        }
-        @keyframes omxBShield {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-        @keyframes omxBBit {
-          0%, 100% { opacity: 0.2; transform: translateY(0); }
-          50% { opacity: 1; transform: translateY(-3px); }
-        }
+        .bk-route { stroke-dasharray: 4 7; animation: bkRoute 1.3s linear infinite; }
+        .bk-fill  { animation: bkFill 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 0% 50%; }
+        .bk-chip  { animation: bkChip 1.8s ease-in-out infinite; }
+        .bk-ring  { animation: bkRing 3.6s ease-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+        .bk-check { stroke-dasharray: 30; stroke-dashoffset: 30; animation: bkCheck 3.6s ease-in-out infinite; }
+        .bk-cursor{ animation: bkCursor 3.6s ease-in-out infinite; }
+        @keyframes bkRoute { to { stroke-dashoffset:-22; } }
+        @keyframes bkFill  { 0% { transform:scaleX(.05);} 70%,100% { transform:scaleX(1);} }
+        @keyframes bkChip  { 0%,100% { opacity:.35;} 50% { opacity:1;} }
+        @keyframes bkRing  { 0% { opacity:.5; transform:scale(.85);} 100% { opacity:0; transform:scale(1.35);} }
+        @keyframes bkCheck { 0%,45% { stroke-dashoffset:30;} 70%,100% { stroke-dashoffset:0;} }
+        @keyframes bkCursor{ 0%,100% { opacity:0;} 50% { opacity:1;} }
+        ${reducedMotion}
       `}</style>
     </defs>
 
-    <g opacity="0.1" stroke="#fff" strokeWidth="0.5">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <line key={`h${i}`} x1="24" y1={48 + i * 30} x2="456" y2={48 + i * 30} />
+    <rect width="480" height="320" fill="url(#bk-vignette)" />
+    <g stroke="#fff" opacity="0.08" strokeWidth="0.6">
+      {Array.from({ length: 9 }).map((_, i) => (
+        <line key={`h${i}`} x1="24" y1={36 + i * 28} x2="456" y2={36 + i * 28} />
       ))}
     </g>
 
-    {/* PC / régie */}
-    <g transform="translate(40, 90)">
-      <rect x="0" y="20" width="100" height="68" rx="4" stroke="#fff" strokeWidth="1.5" fill="#0a0a0a" />
-      <rect x="8" y="28" width="84" height="48" rx="2" stroke="#fff" strokeWidth="1" opacity="0.5" />
-      {/* Mini UI */}
-      <rect x="14" y="34" width="28" height="8" rx="1" fill="#fff" opacity="0.35" />
-      <rect x="14" y="48" width="50" height="3" fill="#fff" opacity="0.2" />
-      <rect x="14" y="56" width="40" height="3" fill="#fff" opacity="0.15" />
-      <rect x="14" y="64" width="45" height="3" fill="#fff" opacity="0.12" />
-      {/* Stand */}
-      <path d="M40 88 L50 108 H70 L80 88" stroke="#fff" strokeWidth="1.2" />
-      <line x1="30" y1="108" x2="90" y2="108" stroke="#fff" strokeWidth="1.5" />
-      <text x="18" y="128" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.55">
-        OMEGADMX
+    {/* ── Poste de régie ── */}
+    <g transform="translate(38,84)">
+      <rect x="0" y="0" width="110" height="72" rx="7" fill="#080808" stroke="#fff" strokeWidth="1.5" />
+      <rect x="8" y="8" width="94" height="52" rx="3" stroke="#fff" strokeWidth="0.9" opacity="0.45" />
+      {/* mini-UI : faders */}
+      <rect x="14" y="13" width="26" height="5" rx="2" fill="#fff" opacity="0.4" />
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <g key={i}>
+          <line x1={16 + i * 14} y1="24" x2={16 + i * 14} y2="54" stroke="#fff" strokeWidth="1" opacity="0.18" />
+          <rect
+            x={13 + i * 14}
+            y={30 + ((i * 7) % 18)}
+            width="6"
+            height="3"
+            rx="1.5"
+            fill="#fff"
+            opacity={0.5 - i * 0.05}
+          />
+        </g>
+      ))}
+      <rect className="bk-cursor" x="96" y="50" width="1.6" height="7" fill="#fff" />
+      {/* pied */}
+      <path d="M44 72 L52 90 h26 l8 -18" stroke="#fff" strokeWidth="1.2" />
+      <line x1="34" y1="90" x2="96" y2="90" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+      <text x="0" y="110" fill="#fff" fontSize="10" fontFamily={FONT} fontWeight="600">
+        Logiciel OMEGADMX
       </text>
-      <text x="22" y="142" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.35">
-        PC régie
+      <text x="0" y="123" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.4">
+        PC régie · édition en cours
       </text>
     </g>
 
-    {/* Flux de sauvegarde animé */}
-    <g stroke="#fff">
-      <path className="omx-b-flow" d="M150 130 C190 130, 200 130, 240 155" strokeWidth="1.4" opacity="0.75" />
-      <circle className="omx-b-bit" cx="170" cy="128" r="2.5" fill="#fff" />
-      <circle className="omx-b-bit2" cx="195" cy="132" r="2" fill="#fff" />
-      <circle className="omx-b-bit3" cx="220" cy="145" r="2.5" fill="#fff" />
-    </g>
-    <text x="168" y="112" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.5">
-      sync show
+    {/* ── Flux de synchronisation ── */}
+    <use href="#bk-route" stroke="#fff" strokeWidth="1" opacity="0.2" />
+    <use href="#bk-route" className="bk-route" stroke="#fff" strokeWidth="1.5" opacity="0.8" />
+    <circle r="3" fill="#fff" filter="url(#bk-glow)">
+      <animateMotion dur="1.9s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear">
+        <mpath href="#bk-route" />
+      </animateMotion>
+    </circle>
+    <circle r="2" fill="#fff" opacity="0.6">
+      <animateMotion dur="1.9s" begin="0.65s" repeatCount="indefinite">
+        <mpath href="#bk-route" />
+      </animateMotion>
+    </circle>
+    <text x="164" y="112" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.5" letterSpacing="0.5">
+      sync continue
     </text>
 
-    {/* Boîtier avec mémoire */}
-    <g transform="translate(250, 120)">
-      <rect x="0" y="0" width="90" height="70" rx="8" stroke="#fff" strokeWidth="1.6" fill="#0a0a0a" />
-      <rect x="10" y="12" width="50" height="36" rx="2" stroke="#fff" strokeWidth="1" opacity="0.65" />
-      <text x="16" y="34" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif">
+    {/* ── Boîtier + mémoire ── */}
+    <g transform="translate(248,124)">
+      <rect x="0" y="0" width="100" height="76" rx="10" fill="#080808" stroke="#fff" strokeWidth="1.6" />
+      <path d="M50 0 V-18" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="50" cy="-21" r="2.8" fill="#fff" filter="url(#bk-glow)" />
+      <text x="12" y="22" fill="#fff" fontSize="8.5" fontFamily={FONT} letterSpacing="1.2" opacity="0.75">
         OMEGA
       </text>
-      {/* Antenne */}
-      <line x1="45" y1="0" x2="45" y2="-16" stroke="#fff" strokeWidth="1.4" />
-      <circle cx="45" cy="-18" r="2.5" fill="#fff" />
-      {/* Chip mémoire */}
-      <g className="omx-b-write">
-        <rect x="68" y="18" width="14" height="18" rx="1.5" stroke="#fff" strokeWidth="1" fill="#111" />
-        <line x1="71" y1="22" x2="79" y2="22" stroke="#fff" strokeWidth="0.8" />
-        <line x1="71" y1="26" x2="79" y2="26" stroke="#fff" strokeWidth="0.8" />
-        <line x1="71" y1="30" x2="79" y2="30" stroke="#fff" strokeWidth="0.8" />
+      {/* barre de remplissage mémoire */}
+      <rect x="12" y="30" width="58" height="8" rx="4" stroke="#fff" strokeWidth="1" opacity="0.4" />
+      <rect className="bk-fill" x="14" y="32" width="54" height="4" rx="2" fill="url(#bk-fill)" />
+      <text x="12" y="52" fill="#fff" fontSize="7.5" fontFamily={FONT} opacity="0.42">
+        show en mémoire
+      </text>
+      {/* puce */}
+      <g className="bk-chip" transform="translate(76,28)">
+        <rect x="0" y="0" width="16" height="20" rx="2" fill="#111" stroke="#fff" strokeWidth="1" />
+        {[0, 1, 2].map((i) => (
+          <line key={i} x1="3" y1={5 + i * 5} x2="13" y2={5 + i * 5} stroke="#fff" strokeWidth="0.8" />
+        ))}
+        <path d="M-3 4 h3 M-3 10 h3 M-3 16 h3 M16 4 h3 M16 10 h3 M16 16 h3" stroke="#fff" strokeWidth="0.8" opacity="0.6" />
       </g>
-      <text x="8" y="92" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.55">
-        Mémoire boîtier
+      <text x="0" y="94" fill="#fff" fontSize="9" fontFamily={FONT} opacity="0.55">
+        Mémoire du boîtier
       </text>
     </g>
 
-    {/* Bouclier protection */}
-    <g className="omx-b-shield" transform="translate(370, 100)">
+    {/* ── Bouclier ── */}
+    <g transform="translate(374,116)">
+      <circle className="bk-ring" cx="32" cy="40" r="40" stroke="#fff" strokeWidth="1" />
       <path
-        d="M30 8 L52 18 V40 C52 56 40 68 30 74 C20 68 8 56 8 40 V18 Z"
+        d="M32 4 L60 16 V42 C60 61 47 74 32 80 C17 74 4 61 4 42 V16 Z"
+        fill="#080808"
         stroke="#fff"
         strokeWidth="1.5"
-        fill="#0a0a0a"
       />
-      <path d="M22 40 L28 46 L40 30" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <text x="4" y="96" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.5">
+      <path
+        className="bk-check"
+        d="M20 42 L29 51 L46 30"
+        stroke="#fff"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <text x="0" y="98" fill="#fff" fontSize="9" fontFamily={FONT} opacity="0.55">
         Show protégé
       </text>
     </g>
 
-    {/* Scénario crash PC */}
-    <g transform="translate(40, 230)">
-      <rect x="0" y="0" width="400" height="48" rx="8" stroke="#fff" strokeWidth="1" opacity="0.35" fill="#0a0a0a" />
-      <text x="16" y="20" fill="#fff" fontSize="10" fontFamily="system-ui,sans-serif" opacity="0.7">
-        PC coupé · câble retiré · crash
+    {/* ── Bandeau scénario ── */}
+    <g transform="translate(38,254)">
+      <rect x="0" y="0" width="404" height="46" rx="10" fill="#080808" stroke="#fff" strokeWidth="1" opacity="0.9" />
+      <rect x="0" y="0" width="4" height="46" rx="2" fill="#fff" opacity="0.7" />
+      <text x="18" y="20" fill="#fff" fontSize="9.5" fontFamily={FONT} opacity="0.5" letterSpacing="0.4">
+        PC coupé · câble retiré · plantage
       </text>
-      <text x="16" y="36" fill="#fff" fontSize="10" fontFamily="system-ui,sans-serif" fontWeight="600">
+      <text x="18" y="36" fill="#fff" fontSize="11" fontFamily={FONT} fontWeight="600">
         → le show reste dans le boîtier
       </text>
     </g>
   </svg>
 );
 
-/** Connexion multi-appareils : PC, téléphone, tablette */
+/* ────────────────────────────────────────────────────────────────────────────
+   3 — Un boîtier, plusieurs postes
+   ──────────────────────────────────────────────────────────────────────────── */
+
 export const SvgMultiDevice: React.FC<{ className?: string }> = ({ className = '' }) => (
   <svg
     viewBox="0 0 480 320"
@@ -278,110 +407,642 @@ export const SvgMultiDevice: React.FC<{ className?: string }> = ({ className = '
     aria-label="Connexion au boîtier depuis PC, téléphone ou tablette"
   >
     <defs>
+      <radialGradient id="md-vignette" cx="50%" cy="52%" r="65%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.09" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="md-sweep" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.35" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </linearGradient>
+      <filter id="md-glow" x="-150%" y="-150%" width="400%" height="400%">
+        <feGaussianBlur stdDeviation="2.2" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <path id="md-p1" d="M120 78 C160 100 186 128 208 152" />
+      <path id="md-p2" d="M368 84 C336 108 306 132 282 152" />
+      <path id="md-p3" d="M96 236 C140 218 178 196 210 178" />
       <style>{`
-        .omx-d-wave { animation: omxDWave 2.5s ease-in-out infinite; }
-        .omx-d-wave2 { animation: omxDWave 2.5s ease-in-out infinite 0.5s; }
-        .omx-d-wave3 { animation: omxDWave 2.5s ease-in-out infinite 1s; }
-        .omx-d-link { stroke-dasharray: 4 6; animation: omxDLink 2s linear infinite; }
-        .omx-d-hub { animation: omxDHub 2.8s ease-in-out infinite; }
-        @keyframes omxDWave {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 0.9; }
-        }
-        @keyframes omxDLink { to { stroke-dashoffset: -20; } }
-        @keyframes omxDHub {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 1; }
-        }
+        .md-link  { stroke-dasharray: 3 6; animation: mdLink 1.4s linear infinite; }
+        .md-sweep { animation: mdSweep 4s linear infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+        .md-ring  { animation: mdRing 3s ease-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+        .md-ring2 { animation-delay: 1s; }
+        .md-ring3 { animation-delay: 2s; }
+        .md-led   { animation: mdLed 2s ease-in-out infinite; }
+        .md-scr   { animation: mdScr 3s ease-in-out infinite; }
+        .md-scr2  { animation-delay: 1s; }
+        .md-scr3  { animation-delay: 2s; }
+        @keyframes mdLink  { to { stroke-dashoffset:-18; } }
+        @keyframes mdSweep { to { transform: rotate(360deg); } }
+        @keyframes mdRing  { 0% { opacity:.55; transform:scale(.5);} 100% { opacity:0; transform:scale(1);} }
+        @keyframes mdLed   { 0%,100% { opacity:.25;} 50% { opacity:1;} }
+        @keyframes mdScr   { 0%,100% { opacity:.25;} 50% { opacity:.7;} }
+        ${reducedMotion}
       `}</style>
     </defs>
 
-    <g opacity="0.08" stroke="#fff" strokeWidth="0.5">
-      {Array.from({ length: 10 }).map((_, i) => (
-        <circle key={i} cx="240" cy="175" r={30 + i * 18} />
+    <rect width="480" height="320" fill="url(#md-vignette)" />
+
+    {/* Cercles de portée + balayage radar */}
+    <g transform="translate(240,168)">
+      {[38, 66, 94, 122].map((r) => (
+        <circle key={r} cx="0" cy="0" r={r} stroke="#fff" strokeWidth="0.7" opacity="0.09" />
       ))}
+      <g className="md-sweep">
+        <path d="M0 0 L122 0 A122 122 0 0 1 92 80 Z" fill="url(#md-sweep)" opacity="0.5" />
+      </g>
+      <circle className="md-ring" cx="0" cy="0" r="122" stroke="#fff" strokeWidth="1" />
+      <circle className="md-ring md-ring2" cx="0" cy="0" r="122" stroke="#fff" strokeWidth="0.9" />
+      <circle className="md-ring md-ring3" cx="0" cy="0" r="122" stroke="#fff" strokeWidth="0.8" />
     </g>
 
-    {/* Hub central = boîtier */}
-    <g transform="translate(200, 140)">
-      <circle className="omx-d-hub" cx="40" cy="40" r="48" stroke="#fff" strokeWidth="1" opacity="0.2" />
-      <rect x="10" y="22" width="60" height="44" rx="6" stroke="#fff" strokeWidth="1.6" fill="#0a0a0a" />
-      <rect x="16" y="28" width="34" height="24" rx="2" stroke="#fff" strokeWidth="1" opacity="0.6" />
-      <text x="18" y="44" fill="#fff" fontSize="7" fontFamily="system-ui,sans-serif">
+    {/* Liens animés */}
+    {['#md-p1', '#md-p2', '#md-p3'].map((p, i) => (
+      <g key={p}>
+        <use href={p} stroke="#fff" strokeWidth="1" opacity="0.16" />
+        <use href={p} className="md-link" stroke="#fff" strokeWidth="1.3" opacity="0.7" />
+        <circle r="2.4" fill="#fff" filter="url(#md-glow)">
+          <animateMotion dur="2.4s" begin={`${i * 0.5}s`} repeatCount="indefinite">
+            <mpath href={p} />
+          </animateMotion>
+        </circle>
+      </g>
+    ))}
+
+    {/* ── Hub central : le boîtier ── */}
+    <g transform="translate(204,140)">
+      <rect x="0" y="0" width="72" height="54" rx="9" fill="#080808" stroke="#fff" strokeWidth="1.7" />
+      <path d="M36 0 V-16" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+      <circle className="md-led" cx="36" cy="-19" r="2.8" fill="#fff" filter="url(#md-glow)" />
+      <rect x="9" y="10" width="36" height="24" rx="3" stroke="#fff" strokeWidth="0.9" opacity="0.5" />
+      <text x="13" y="25" fill="#fff" fontSize="7.5" fontFamily={FONT} letterSpacing="1" opacity="0.8">
         OMEGA
       </text>
-      <line x1="40" y1="22" x2="40" y2="8" stroke="#fff" strokeWidth="1.4" />
-      <circle cx="40" cy="6" r="2.5" fill="#fff" />
-      {/* LED */}
-      <circle className="omx-d-hub" cx="58" cy="48" r="2.5" fill="#fff" />
-      <text x="8" y="84" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.55">
-        Interface
+      <circle className="md-led" cx="57" cy="34" r="2.6" fill="#fff" />
+      <circle cx="57" cy="20" r="2.6" fill="#fff" opacity="0.2" />
+      <text x="0" y="72" fill="#fff" fontSize="9.5" fontFamily={FONT} fontWeight="600" opacity="0.75">
+        Boîtier
+      </text>
+      <text x="0" y="85" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.4">
+        cœur du réseau DMX
       </text>
     </g>
 
-    {/* PC */}
-    <g transform="translate(36, 48)">
-      <rect x="8" y="8" width="78" height="52" rx="3" stroke="#fff" strokeWidth="1.4" fill="#0a0a0a" />
-      <rect x="14" y="14" width="66" height="36" rx="1.5" stroke="#fff" strokeWidth="0.9" opacity="0.45" />
-      <rect x="28" y="56" width="38" height="6" stroke="#fff" strokeWidth="1" />
-      <line x1="18" y1="62" x2="86" y2="62" stroke="#fff" strokeWidth="1.3" />
-      <text x="28" y="80" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.65">
+    {/* ── Ordinateur ── */}
+    <g transform="translate(30,34)">
+      <rect x="0" y="0" width="92" height="58" rx="5" fill="#080808" stroke="#fff" strokeWidth="1.5" />
+      <rect className="md-scr" x="7" y="7" width="78" height="40" rx="2" fill="#fff" opacity="0.25" />
+      <rect x="7" y="7" width="78" height="40" rx="2" stroke="#fff" strokeWidth="0.8" opacity="0.4" />
+      <path d="M34 58 h24 l4 10 h-32 z" fill="#080808" stroke="#fff" strokeWidth="1.1" />
+      <line x1="18" y1="68" x2="74" y2="68" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+      <text x="0" y="86" fill="#fff" fontSize="9.5" fontFamily={FONT} fontWeight="600" opacity="0.7">
         Ordinateur
       </text>
-      <text x="34" y="94" fill="#fff" fontSize="7" fontFamily="system-ui,sans-serif" opacity="0.4">
-        USB · WiFi · BT
+      <text x="0" y="98" fill="#fff" fontSize="7.5" fontFamily={FONT} opacity="0.4" letterSpacing="0.4">
+        USB-C · WiFi
       </text>
-      {/* Lien vers hub */}
-      <path className="omx-d-link" d="M86 40 C130 50, 160 90, 210 155" stroke="#fff" strokeWidth="1.2" opacity="0.65" />
     </g>
 
-    {/* Tablette */}
-    <g transform="translate(360, 40)">
-      <rect x="0" y="0" width="56" height="78" rx="6" stroke="#fff" strokeWidth="1.5" fill="#0a0a0a" />
-      <rect x="6" y="10" width="44" height="52" rx="2" stroke="#fff" strokeWidth="0.9" opacity="0.45" />
-      <circle cx="28" cy="70" r="3" stroke="#fff" strokeWidth="1" />
-      <text x="6" y="98" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.65">
+    {/* ── Tablette ── */}
+    <g transform="translate(366,32)">
+      <rect x="0" y="0" width="62" height="84" rx="8" fill="#080808" stroke="#fff" strokeWidth="1.5" />
+      <rect className="md-scr md-scr2" x="6" y="9" width="50" height="60" rx="3" fill="#fff" opacity="0.25" />
+      <rect x="6" y="9" width="50" height="60" rx="3" stroke="#fff" strokeWidth="0.8" opacity="0.4" />
+      <circle cx="31" cy="76" r="3" stroke="#fff" strokeWidth="1" />
+      <text x="0" y="102" fill="#fff" fontSize="9.5" fontFamily={FONT} fontWeight="600" opacity="0.7">
         Tablette
       </text>
-      <text x="10" y="112" fill="#fff" fontSize="7" fontFamily="system-ui,sans-serif" opacity="0.4">
-        WiFi · BT
+      <text x="0" y="114" fill="#fff" fontSize="7.5" fontFamily={FONT} opacity="0.4" letterSpacing="0.4">
+        face plateau
       </text>
-      <path className="omx-d-link" d="M8 50 C-10 80, 40 120, 100 165" stroke="#fff" strokeWidth="1.2" opacity="0.65" />
     </g>
 
-    {/* Téléphone */}
-    <g transform="translate(48, 200)">
-      <rect x="0" y="0" width="34" height="60" rx="5" stroke="#fff" strokeWidth="1.4" fill="#0a0a0a" />
-      <rect x="4" y="8" width="26" height="40" rx="1.5" stroke="#fff" strokeWidth="0.8" opacity="0.45" />
-      <line x1="12" y1="54" x2="22" y2="54" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" />
-      <text x="0" y="76" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.65">
+    {/* ── Téléphone ── */}
+    <g transform="translate(52,204)">
+      <rect x="0" y="0" width="42" height="72" rx="8" fill="#080808" stroke="#fff" strokeWidth="1.5" />
+      <rect className="md-scr md-scr3" x="4" y="8" width="34" height="50" rx="3" fill="#fff" opacity="0.25" />
+      <rect x="4" y="8" width="34" height="50" rx="3" stroke="#fff" strokeWidth="0.8" opacity="0.4" />
+      <line x1="15" y1="64" x2="27" y2="64" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+      <text x="-6" y="88" fill="#fff" fontSize="9.5" fontFamily={FONT} fontWeight="600" opacity="0.7">
         Téléphone
       </text>
-      <text x="2" y="90" fill="#fff" fontSize="7" fontFamily="system-ui,sans-serif" opacity="0.4">
-        WiFi · BT
+      <text x="-6" y="100" fill="#fff" fontSize="7.5" fontFamily={FONT} opacity="0.4" letterSpacing="0.4">
+        contrôle de secours
       </text>
-      <path className="omx-d-link" d="M34 30 C90 40, 140 80, 200 155" stroke="#fff" strokeWidth="1.2" opacity="0.65" />
     </g>
 
-    {/* Ondes autour du hub */}
-    <g transform="translate(240, 180)" stroke="#fff" fill="none">
-      <circle className="omx-d-wave" cx="0" cy="0" r="22" strokeWidth="1" />
-      <circle className="omx-d-wave2" cx="0" cy="0" r="32" strokeWidth="0.9" />
-      <circle className="omx-d-wave3" cx="0" cy="0" r="42" strokeWidth="0.7" />
-    </g>
-
-    {/* Labels protocoles */}
-    <g transform="translate(300, 230)">
-      <rect x="0" y="0" width="140" height="52" rx="8" stroke="#fff" strokeWidth="1" opacity="0.4" fill="#0a0a0a" />
-      <text x="12" y="18" fill="#fff" fontSize="9" fontFamily="system-ui,sans-serif" opacity="0.8">
-        USB-C · WiFi · Bluetooth
+    {/* ── Bandeau protocoles ── */}
+    <g transform="translate(288,246)">
+      <rect x="0" y="0" width="164" height="54" rx="10" fill="#080808" stroke="#fff" strokeWidth="1" />
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#fff" opacity="0.7" />
+      <text x="16" y="21" fill="#fff" fontSize="10" fontFamily={FONT} fontWeight="600">
+        USB-C · WiFi
       </text>
-      <text x="12" y="34" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.45">
+      <text x="16" y="36" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.45">
         Un boîtier, plusieurs postes
       </text>
-      <text x="12" y="46" fill="#fff" fontSize="8" fontFamily="system-ui,sans-serif" opacity="0.45">
+      <text x="16" y="47" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.45">
         de commande
       </text>
     </g>
+  </svg>
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+   4 — Qualité du signal, récepteur par récepteur
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Le retour RSSI par machine.
+ *
+ * Ce que le régisseur veut savoir avant la première tombée de nuit : « est-ce que
+ * CETTE lyre, au fond du plateau, reçoit correctement ? ». Le boîtier remonte la
+ * qualité de liaison de chaque récepteur — donc quatre lignes indépendantes, avec
+ * un niveau qui vit, et pas un simple témoin « connecté / déconnecté ».
+ *
+ * ⚠ Les valeurs affichées sont des ORDRES DE GRANDEUR d'illustration (dBm plausibles
+ * pour du 2,4 GHz en salle). Ne pas les présenter comme une mesure du produit.
+ */
+
+const LIENS = [
+  { nom: 'RX 1 · Face',       barres: 4, dbm: '-48', retard: 0 },
+  { nom: 'RX 2 · Contre',     barres: 4, dbm: '-55', retard: 0.35 },
+  { nom: 'RX 3 · Perche cour', barres: 3, dbm: '-67', retard: 0.7 },
+  { nom: 'RX 4 · Lointain',   barres: 2, dbm: '-79', retard: 1.05 },
+];
+
+export const SvgSignalQuality: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg
+    viewBox="0 0 480 320"
+    className={`${frame} ${className}`}
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Le boîtier remonte la qualité du signal de chaque récepteur sans fil"
+  >
+    <defs>
+      <radialGradient id="sq-halo" cx="18%" cy="50%" r="80%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.1" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <filter id="sq-glow" x="-200%" y="-200%" width="500%" height="500%">
+        <feGaussianBlur stdDeviation="2.2" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <style>{`
+        .sq-retour { stroke-dasharray: 3 6; animation: sqRetour 1.6s linear infinite; }
+        .sq-barre  { animation: sqBarre 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+        .sq-scan   { animation: sqScan 2.4s ease-in-out infinite; }
+        .sq-led    { animation: sqLed 2.4s ease-in-out infinite; }
+        @keyframes sqRetour { to { stroke-dashoffset: 18; } }
+        @keyframes sqBarre  { 0%,100% { transform:scaleY(.72); opacity:.7;} 50% { transform:scaleY(1); opacity:1;} }
+        @keyframes sqScan   { 0%,100% { opacity:.25;} 50% { opacity:1;} }
+        @keyframes sqLed    { 0%,100% { opacity:.2;} 50% { opacity:1;} }
+        ${reducedMotion}
+      `}</style>
+    </defs>
+
+    <rect width="480" height="320" fill="url(#sq-halo)" />
+
+    {/* ── Le boîtier : c'est LUI qui mesure ── */}
+    <g transform="translate(26,116)">
+      <rect x="0" y="0" width="76" height="56" rx="8" fill="#0a0a0a" stroke="#fff" strokeWidth="1.7" />
+      <rect x="8" y="9" width="38" height="24" rx="3" stroke="#fff" strokeWidth="0.9" opacity="0.55" />
+      {/* mini-jauges à l'écran du boîtier */}
+      {[0, 1, 2, 3].map((i) => (
+        <rect
+          key={i}
+          className="sq-barre"
+          x={12 + i * 8}
+          y={16 + i * 2}
+          width="4"
+          height={13 - i * 2}
+          rx="1"
+          fill="#fff"
+          opacity="0.6"
+          style={{ animationDelay: `${i * 0.18}s` }}
+        />
+      ))}
+      <circle cx="60" cy="16" r="5" stroke="#fff" strokeWidth="1" />
+      <circle cx="60" cy="34" r="5" stroke="#fff" strokeWidth="1" />
+      <path d="M24 0 V-17" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      <circle className="sq-led" cx="24" cy="-20" r="3" fill="#fff" filter="url(#sq-glow)" />
+      <text x="0" y="74" fill="#fff" fontSize="9.5" fontFamily={FONT} fontWeight="600">
+        Boîtier
+      </text>
+      <text x="0" y="87" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.45">
+        mesure chaque lien
+      </text>
+    </g>
+
+    {/* ── Une ligne par récepteur ── */}
+    {LIENS.map((l, i) => {
+      const y = 42 + i * 62;
+      return (
+        <g key={l.nom}>
+          {/* retour de mesure : il remonte du récepteur VERS le boîtier */}
+          <path
+            className="sq-retour"
+            d={`M292 ${y + 22} H150 C120 ${y + 22} 112 ${y + 22} 108 144`}
+            stroke="#fff"
+            strokeWidth="1.1"
+            opacity="0.32"
+            style={{ animationDelay: `${l.retard}s` }}
+          />
+
+          {/* carte du récepteur */}
+          <g transform={`translate(292,${y})`}>
+            <rect x="0" y="0" width="164" height="44" rx="9" fill="#0a0a0a" stroke="#fff" strokeWidth="1.1" />
+            <text x="12" y="18" fill="#fff" fontSize="9" fontFamily={FONT} fontWeight="600" letterSpacing="0.3">
+              {l.nom}
+            </text>
+            <text x="12" y="32" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.42">
+              {l.dbm} dBm
+            </text>
+
+            {/* jauge 4 barres : les barres actives vivent, les inactives restent éteintes */}
+            <g transform="translate(112,10)">
+              {[0, 1, 2, 3].map((b) => {
+                const actif = b < l.barres;
+                const h = 6 + b * 5;
+                return (
+                  <rect
+                    key={b}
+                    className={actif ? 'sq-barre' : undefined}
+                    x={b * 10}
+                    y={24 - h}
+                    width="6"
+                    height={h}
+                    rx="1.5"
+                    fill="#fff"
+                    opacity={actif ? 0.95 : 0.14}
+                    style={actif ? { animationDelay: `${l.retard + b * 0.12}s` } : undefined}
+                  />
+                );
+              })}
+            </g>
+          </g>
+
+          {/* le récepteur lui-même, dans la machine */}
+          <g transform={`translate(252,${y + 12})`}>
+            <rect x="0" y="0" width="22" height="20" rx="4" fill="#0a0a0a" stroke="#fff" strokeWidth="1.1" />
+            <path d="M11 0 V-8" stroke="#fff" strokeWidth="1" strokeLinecap="round" />
+            <circle
+              className="sq-led"
+              cx="11"
+              cy="-10.5"
+              r="2"
+              fill="#fff"
+              style={{ animationDelay: `${l.retard}s` }}
+            />
+          </g>
+        </g>
+      );
+    })}
+
+    <text x="26" y="308" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.4" letterSpacing="0.4">
+      Niveau de réception lu en direct, machine par machine — y compris en liaison USB
+    </text>
+  </svg>
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+   5 — Plusieurs appareils connectés en même temps
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Deux postes vivants sur le même boîtier.
+ *
+ * Le sujet n'est pas « on peut se connecter depuis plusieurs appareils » (déjà dit
+ * par SvgMultiDevice) mais « les deux sont connectés EN MÊME TEMPS » : l'un programme,
+ * l'autre récupère le show et peut prendre la main. D'où les deux liaisons actives
+ * simultanément, et le show qui transite de l'un à l'autre.
+ */
+export const SvgMultiSession: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg
+    viewBox="0 0 480 320"
+    className={`${frame} ${className}`}
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Deux appareils connectés en même temps au boîtier, avec récupération du show et reprise en secours"
+  >
+    <defs>
+      <radialGradient id="ms-halo" cx="22%" cy="50%" r="80%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.1" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <filter id="ms-glow" x="-200%" y="-200%" width="500%" height="500%">
+        <feGaussianBlur stdDeviation="2.2" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <path id="ms-l1" d="M116 132 C168 120 196 100 232 86" />
+      <path id="ms-l2" d="M116 168 C168 180 196 206 232 224" />
+      <style>{`
+        .ms-lien { stroke-dasharray: 3 6; animation: msLien 1.5s linear infinite; }
+        .ms-show { stroke-dasharray: 4 5; animation: msShow 2.2s linear infinite; }
+        .ms-led  { animation: msLed 2.2s ease-in-out infinite; }
+        .ms-led2 { animation-delay: .5s; }
+        .ms-scr  { animation: msScr 2.8s ease-in-out infinite; }
+        .ms-relais { animation: msRelais 4s ease-in-out infinite; }
+        @keyframes msLien { to { stroke-dashoffset:-18; } }
+        @keyframes msShow { to { stroke-dashoffset:-18; } }
+        @keyframes msLed  { 0%,100% { opacity:.25;} 50% { opacity:1;} }
+        @keyframes msScr  { 0%,100% { opacity:.22;} 50% { opacity:.55;} }
+        @keyframes msRelais { 0%,55% { opacity:.25;} 70%,100% { opacity:1;} }
+        ${reducedMotion}
+      `}</style>
+    </defs>
+
+    <rect width="480" height="320" fill="url(#ms-halo)" />
+
+    {/* ── Le boîtier : il tient les deux liaisons à la fois ── */}
+    <g transform="translate(34,122)">
+      <rect x="0" y="0" width="78" height="56" rx="8" fill="#0a0a0a" stroke="#fff" strokeWidth="1.7" />
+      <rect x="9" y="10" width="38" height="24" rx="3" stroke="#fff" strokeWidth="0.9" opacity="0.55" />
+      <rect x="13" y="15" width="20" height="4" rx="1.5" fill="#fff" opacity="0.5" />
+      <rect x="13" y="24" width="26" height="2.5" rx="1" fill="#fff" opacity="0.22" />
+      <circle cx="61" cy="16" r="5" stroke="#fff" strokeWidth="1" />
+      <circle cx="61" cy="36" r="5" stroke="#fff" strokeWidth="1" />
+      <path d="M24 0 V-17" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      <circle className="ms-led" cx="24" cy="-20" r="3" fill="#fff" filter="url(#ms-glow)" />
+      {/* deux témoins de session, pas un seul */}
+      <circle className="ms-led" cx="10" cy="46" r="2.4" fill="#fff" />
+      <circle className="ms-led ms-led2" cx="20" cy="46" r="2.4" fill="#fff" />
+      <text x="0" y="74" fill="#fff" fontSize="9.5" fontFamily={FONT} fontWeight="600">
+        Boîtier
+      </text>
+      <text x="0" y="87" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.45">
+        2 sessions ouvertes
+      </text>
+    </g>
+
+    {/* Deux liaisons ACTIVES en même temps */}
+    {['#ms-l1', '#ms-l2'].map((p, i) => (
+      <g key={p}>
+        <use href={p} stroke="#fff" strokeWidth="1" opacity="0.18" />
+        <use href={p} className="ms-lien" stroke="#fff" strokeWidth="1.4" opacity="0.75" style={{ animationDelay: `${i * 0.4}s` }} />
+        <circle r="2.6" fill="#fff" filter="url(#ms-glow)">
+          <animateMotion dur="2.2s" begin={`${i * 0.6}s`} repeatCount="indefinite">
+            <mpath href={p} />
+          </animateMotion>
+        </circle>
+      </g>
+    ))}
+
+    {/* ── Poste 1 : la régie, fixe ── */}
+    <g transform="translate(232,44)">
+      <rect x="0" y="0" width="96" height="60" rx="6" fill="#0a0a0a" stroke="#fff" strokeWidth="1.5" />
+      <rect className="ms-scr" x="7" y="7" width="82" height="42" rx="2" fill="#fff" />
+      <rect x="7" y="7" width="82" height="42" rx="2" stroke="#fff" strokeWidth="0.8" opacity="0.4" />
+      <path d="M36 60 h24 l4 9 h-32 z" fill="#0a0a0a" stroke="#fff" strokeWidth="1.1" />
+      <text x="106" y="24" fill="#fff" fontSize="10" fontFamily={FONT} fontWeight="600">
+        Régie
+      </text>
+      <text x="106" y="37" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.45">
+        poste fixe · programmation
+      </text>
+      <g transform="translate(106,46)">
+        <circle className="ms-led" cx="4" cy="4" r="2.4" fill="#fff" />
+        <text x="12" y="7.5" fill="#fff" fontSize="7.5" fontFamily={FONT} opacity="0.6" letterSpacing="0.6">
+          CONNECTÉ
+        </text>
+      </g>
+    </g>
+
+    {/* ── Poste 2 : en salle, ou en secours ── */}
+    <g transform="translate(232,196)">
+      <rect x="0" y="0" width="72" height="52" rx="7" fill="#0a0a0a" stroke="#fff" strokeWidth="1.5" />
+      <rect className="ms-scr" x="6" y="6" width="60" height="40" rx="2.5" fill="#fff" style={{ animationDelay: '0.9s' }} />
+      <rect x="6" y="6" width="60" height="40" rx="2.5" stroke="#fff" strokeWidth="0.8" opacity="0.4" />
+      <text x="86" y="20" fill="#fff" fontSize="10" fontFamily={FONT} fontWeight="600">
+        Tablette en salle
+      </text>
+      <text x="86" y="33" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.45">
+        vue de face · ou secours
+      </text>
+      <g transform="translate(86,42)">
+        <circle className="ms-led ms-led2" cx="4" cy="4" r="2.4" fill="#fff" />
+        <text x="12" y="7.5" fill="#fff" fontSize="7.5" fontFamily={FONT} opacity="0.6" letterSpacing="0.6">
+          CONNECTÉ
+        </text>
+      </g>
+    </g>
+
+    {/* Le show passe de l'un à l'autre */}
+    <path
+      className="ms-show"
+      d="M280 112 V190"
+      stroke="#fff"
+      strokeWidth="1.3"
+      opacity="0.55"
+      strokeLinecap="round"
+    />
+    <path d="M280 190 l-4 -7 h8 z" fill="#fff" opacity="0.55" />
+    <text x="290" y="146" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.5">
+      le show
+    </text>
+    <text x="290" y="157" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.5">
+      se récupère
+    </text>
+
+    {/* Bandeau : la reprise */}
+    <g className="ms-relais" transform="translate(34,268)">
+      <rect x="0" y="0" width="412" height="38" rx="9" fill="#0a0a0a" stroke="#fff" strokeWidth="1" />
+      <rect x="0" y="0" width="4" height="38" rx="2" fill="#fff" opacity="0.7" />
+      <text x="16" y="16" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.5" letterSpacing="0.4">
+        Le poste principal se fige, se coupe, tombe en panne
+      </text>
+      <text x="16" y="30" fill="#fff" fontSize="10" fontFamily={FONT} fontWeight="600">
+        → le second appareil prend le relais, sans arrêter le show
+      </text>
+    </g>
+  </svg>
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+   6 — Console MIDI : pads assignés et colorés
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * La création d'une console MIDI dans le logiciel OMEGADMX.
+ *
+ * Volontairement une ILLUSTRATION et non une fausse capture d'écran : le logiciel n'a
+ * pas de visuel disponible pour cette fonction, et fabriquer une image qui ressemble à
+ * une capture reviendrait à montrer une interface qui n'existe pas telle quelle.
+ * Ici on montre le GESTE : on prend une action, on la pose sur un pad, on choisit sa
+ * couleur — la grille se remplit sous les yeux.
+ */
+
+/** Pads : nuances de gris = « couleurs » de pad, en monochrome assumé. */
+const PADS = [
+  0.9, 0.32, 0.62, 0.18,
+  0.5, 0.85, 0.24, 0.7,
+  0.28, 0.55, 0.95, 0.4,
+  0.66, 0.2, 0.44, 0.78,
+];
+
+export const SvgMidiConsole: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg
+    viewBox="0 0 480 320"
+    className={`${frame} ${className}`}
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Création d'une console MIDI dans OMEGADMX : pads assignés, couleurs choisies"
+  >
+    <defs>
+      <radialGradient id="mi-halo" cx="50%" cy="40%" r="70%">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.09" />
+        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+      <filter id="mi-glow" x="-150%" y="-150%" width="400%" height="400%">
+        <feGaussianBlur stdDeviation="2.4" result="b" />
+        <feMerge>
+          <feMergeNode in="b" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <path id="mi-drop" d="M96 96 C150 96 190 110 214 132" />
+      <style>{`
+        .mi-pad    { animation: miPad 4s ease-in-out infinite; }
+        .mi-cible  { animation: miCible 4s ease-in-out infinite; }
+        .mi-fader  { animation: miFader 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+        .mi-lien   { stroke-dasharray: 3 5; animation: miLien 1.4s linear infinite; }
+        .mi-teinte { animation: miTeinte 4s ease-in-out infinite; }
+        @keyframes miPad    { 0%,100% { opacity:.55;} 50% { opacity:1;} }
+        @keyframes miCible  { 0%,45% { opacity:0;} 60% { opacity:1;} 92%,100% { opacity:0;} }
+        @keyframes miFader  { 0%,100% { transform:scaleY(.55);} 50% { transform:scaleY(1);} }
+        @keyframes miLien   { to { stroke-dashoffset:-16; } }
+        @keyframes miTeinte { 0%,100% { opacity:.35;} 50% { opacity:1;} }
+        ${reducedMotion}
+      `}</style>
+    </defs>
+
+    <rect width="480" height="320" fill="url(#mi-halo)" />
+
+    {/* ── À gauche : les actions disponibles ── */}
+    <g transform="translate(24,60)">
+      <text x="0" y="-12" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.45" letterSpacing="1">
+        ACTIONS
+      </text>
+      {['Scène 1', 'Blackout', 'Chenillard', 'Flash'].map((a, i) => (
+        <g key={a} transform={`translate(0,${i * 30})`}>
+          <rect
+            x="0"
+            y="0"
+            width="96"
+            height="22"
+            rx="6"
+            fill="#0a0a0a"
+            stroke="#fff"
+            strokeWidth="1"
+            opacity={i === 0 ? 1 : 0.45}
+          />
+          <text x="10" y="15" fill="#fff" fontSize="9" fontFamily={FONT} opacity={i === 0 ? 0.9 : 0.4}>
+            {a}
+          </text>
+        </g>
+      ))}
+    </g>
+
+    {/* On tire l'action jusqu'au pad */}
+    <use href="#mi-drop" className="mi-lien" stroke="#fff" strokeWidth="1.2" opacity="0.5" />
+    <circle r="3" fill="#fff" filter="url(#mi-glow)">
+      <animateMotion dur="4s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.12;0.5;1" calcMode="linear">
+        <mpath href="#mi-drop" />
+      </animateMotion>
+    </circle>
+    <text x="132" y="82" fill="#fff" fontSize="8" fontFamily={FONT} opacity="0.45">
+      glisser sur un pad
+    </text>
+
+    {/* ── La grille de pads ── */}
+    <g transform="translate(214,104)">
+      <rect x="-14" y="-30" width="188" height="182" rx="12" fill="#0a0a0a" stroke="#fff" strokeWidth="1.2" />
+      <text x="-2" y="-14" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.45" letterSpacing="1">
+        CONSOLE — PAGE 1
+      </text>
+      {PADS.map((niveau, i) => {
+        const col = i % 4;
+        const rang = Math.floor(i / 4);
+        return (
+          <g key={i} transform={`translate(${col * 40},${rang * 36})`}>
+            <rect
+              className="mi-pad"
+              x="0"
+              y="0"
+              width="34"
+              height="30"
+              rx="5"
+              fill="#fff"
+              opacity={niveau * 0.9}
+              style={{ animationDelay: `${(i % 7) * 0.28}s` }}
+            />
+            <rect x="0" y="0" width="34" height="30" rx="5" stroke="#fff" strokeWidth="0.8" opacity="0.35" />
+          </g>
+        );
+      })}
+      {/* le pad qui vient d'être assigné */}
+      <rect className="mi-cible" x="-3" y="-3" width="40" height="36" rx="7" stroke="#fff" strokeWidth="2" />
+    </g>
+
+    {/* ── À droite : le choix de la couleur du pad ── */}
+    <g transform="translate(412,104)">
+      <text x="0" y="-14" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.45" letterSpacing="1">
+        COULEUR
+      </text>
+      {[0.95, 0.75, 0.55, 0.38, 0.22, 0.12].map((n, i) => (
+        <g key={i} transform={`translate(0,${i * 26})`}>
+          <rect
+            className={i === 0 ? 'mi-teinte' : undefined}
+            x="0"
+            y="0"
+            width="22"
+            height="20"
+            rx="5"
+            fill="#fff"
+            opacity={n}
+          />
+          <rect x="0" y="0" width="22" height="20" rx="5" stroke="#fff" strokeWidth="0.7" opacity="0.3" />
+        </g>
+      ))}
+    </g>
+
+    {/* ── En bas : les faders de la console ── */}
+    <g transform="translate(24,196)">
+      <text x="0" y="-10" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.45" letterSpacing="1">
+        FADERS
+      </text>
+      {[0, 1, 2, 3].map((i) => (
+        <g key={i} transform={`translate(${i * 26},0)`}>
+          <rect x="0" y="0" width="14" height="72" rx="7" stroke="#fff" strokeWidth="0.9" opacity="0.3" />
+          <rect
+            className="mi-fader"
+            x="3"
+            y="6"
+            width="8"
+            height="60"
+            rx="4"
+            fill="#fff"
+            opacity="0.7"
+            style={{ animationDelay: `${i * 0.4}s` }}
+          />
+        </g>
+      ))}
+    </g>
+
+    <text x="24" y="306" fill="#fff" fontSize="8.5" fontFamily={FONT} opacity="0.4" letterSpacing="0.4">
+      Une action, un pad, une couleur — la console se construit en quelques minutes
+    </text>
   </svg>
 );

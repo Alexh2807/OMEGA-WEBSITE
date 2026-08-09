@@ -244,6 +244,32 @@ Deno.serve(async (req: Request) => {
           } catch (e) {
             console.error('confirmer-commande : PDF non édité', e);
           }
+
+          /* ★ ET LA COMPTABILITÉ, DANS LA FOULÉE.
+             Sans cet appel, la facture existait, son PDF aussi, la licence aussi — et
+             `tiime_sent_at` restait vide : il fallait y penser à la main depuis l'écran
+             Facturation. Constaté sur FACT0009.
+             ⚠ `send-to-make` refuse une facture déjà transmise : aucun risque de doublon
+             dans Tiime si le webhook Stripe rejoue cet appel. Et un échec ne doit rien
+             casser — la facture réapparaît simplement comme « non transmise ». */
+          try {
+            const rc = await fetch(
+              `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-to-make`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                },
+                body: JSON.stringify({ invoiceId: factureId }),
+              },
+            );
+            if (!rc.ok) {
+              console.error('confirmer-commande : comptabilité', rc.status, await rc.text());
+            }
+          } catch (e) {
+            console.error('confirmer-commande : comptabilité injoignable', e);
+          }
         }
       } catch (e) {
         console.error('confirmer-commande : facture non émise', e);

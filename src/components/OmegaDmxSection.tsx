@@ -30,10 +30,15 @@ const OmegaDmxSection = () => {
           {/* Contenu à droite */}
           <div className="order-2 space-y-6">
             <span className="inline-block bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-2 text-sm font-medium tracking-wider uppercase rounded-full">
-              Nouveau · Notre boîtier DMX
+              Nouveau · Le boîtier
             </span>
 
+            {/* ⚠ NOMMAGE : « boîtier » est annoncé AVANT le nom. Sans ce mot, « OMEGA DMX »
+                seul se confond avec le logiciel OMEGADMX. Voir Header.tsx (GAMME_OMEGA). */}
             <h2 className="text-5xl md:text-6xl font-light leading-tight text-white">
+              <span className="mb-2 block text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
+                Le boîtier
+              </span>
               OMEGA DMX
               <br />
               <span className="font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
@@ -44,9 +49,9 @@ const OmegaDmxSection = () => {
             <div className="w-16 h-0.5 bg-blue-500" />
 
             <p className="text-xl text-gray-300 leading-relaxed max-w-lg">
-              Le boîtier qui pilote 2 univers DMX — 1024 canaux — sans le moindre
-              abonnement, et qui passe en sans fil jusqu'à 1 km avec les cartes
-              réceptrices OMEGA.
+              Le premier boîtier au monde à diffuser <strong className="text-white">2 univers
+              DMX en sans fil</strong> — 1024 canaux, sans le moindre abonnement, jusqu'à 1 km
+              avec les cartes réceptrices OMEGA.
             </p>
 
             {/* Points clés */}
@@ -69,9 +74,9 @@ const OmegaDmxSection = () => {
 
             {/* Prix + CTA */}
             <div className="pt-2">
-              <div className="text-4xl font-bold text-white mb-1">429€ TTC</div>
+              <div className="text-4xl font-bold text-white mb-1">468€ TTC</div>
               <div className="text-gray-400 text-sm mb-5">
-                Logiciel inclus · sans abonnement
+                Logiciel OMEGADMX inclus · sans abonnement
               </div>
 
               <div className="flex flex-wrap gap-3">
@@ -89,7 +94,7 @@ const OmegaDmxSection = () => {
                   to="/omega-dmx-logiciel"
                   className="inline-flex items-center gap-2 border border-white/15 text-white px-7 py-4 rounded-full font-semibold hover:bg-white/5 transition-colors"
                 >
-                  Voir le logiciel
+                  Voir le logiciel OMEGADMX
                 </Link>
               </div>
             </div>

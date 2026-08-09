@@ -35,8 +35,11 @@ import { supabase } from '../lib/supabase';
 const GAMME_OMEGA = [
   { to: '/machine-hazer', libelle: 'Smoke System' },
   { to: '/fluid-system', libelle: 'Fluid System' },
-  { to: '/omega-dmx-interface', libelle: 'DMX Interface' },
-  { to: '/omega-dmx-logiciel', libelle: 'Logiciel OMEGADMX' },
+  // ⚠ Le boîtier (« OMEGA DMX Interface ») et le logiciel (« OMEGADMX ») ne diffèrent que
+  // par une espace : les clients les confondaient. RÈGLE DE NOMMAGE DU SITE — le nom n'est
+  // JAMAIS servi nu, il est toujours précédé de sa nature (Boîtier / Logiciel).
+  { to: '/omega-dmx-interface', libelle: 'Boîtier — OMEGA DMX Interface' },
+  { to: '/omega-dmx-logiciel', libelle: 'Logiciel — OMEGADMX' },
   { to: '/produits', libelle: 'Tous les produits' },
 ];
 
@@ -151,10 +154,13 @@ const Header = () => {
       <nav className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
+            {/* ⚠ shrink-0 + object-contain : dans un conteneur flex, une image est COMPRESSÉE
+                horizontalement quand la place manque (flex-shrink vaut 1 par défaut). La hauteur
+                restant fixée par h-12, le logo apparaissait ÉTIRÉ sur téléphone. */}
             <img
               src="/products/logo-omega-hq-transparent.webp"
               alt="OMEGA"
-              className="h-12 w-auto"
+              className="h-12 w-auto shrink-0 object-contain"
             />
           </Link>
 

@@ -233,13 +233,28 @@ Deno.serve(async (req: Request) => {
     if (!authHeader) return json({ error: 'Non autorisé' }, 401);
 
     const token = authHeader.replace(/^Bearer\s+/i, '');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) return json({ error: 'Token invalide' }, 401);
 
-    const { data: profile } = await supabaseAdmin
-      .from('profiles').select('role').eq('id', user.id).maybeSingle();
-    if (profile?.role !== 'admin') {
-      return json({ error: 'Accès réservé aux administrateurs' }, 403);
+    /* ★ APPEL SERVEUR À SERVEUR.
+       La transmission en comptabilité était réservée aux administrateurs, ce qui laissait
+       un trou : `confirmer-commande` émet la facture dès le paiement, mais n'a aucune
+       session d'administrateur — il ne pouvait donc pas la transmettre. Constaté sur
+       FACT0009 (9 août 2026) : facture créée, PDF archivé, licence émise… et
+       `tiime_sent_at` vide. Il fallait ensuite y penser à la main, exactement le genre
+       d'étape qu'on oublie.
+       La clé de service n'existe QUE sur le serveur, jamais dans le navigateur : elle
+       vaut donc preuve d'appel interne, au même titre que pour `facture-pdf`. */
+    const cleService = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const estServeur = !!cleService && token === cleService;
+
+    if (!estServeur) {
+      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+      if (authError || !user) return json({ error: 'Token invalide' }, 401);
+
+      const { data: profile } = await supabaseAdmin
+        .from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (profile?.role !== 'admin') {
+        return json({ error: 'Accès réservé aux administrateurs' }, 403);
+      }
     }
 
     // --- 2. Chargement du document + ses lignes ---

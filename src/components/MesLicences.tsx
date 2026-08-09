@@ -72,7 +72,7 @@ const MesLicences: React.FC = () => {
     if (
       !window.confirm(
         `Libérer « ${a.machine_label || 'ce poste'} » ?\n\n` +
-          `OMEGADMX cessera d'y piloter les interfaces d'autres marques, et vous pourrez ` +
+          `Le logiciel OMEGADMX cessera d'y piloter les boîtiers d'autres marques, et vous pourrez ` +
           `activer un autre ordinateur à la place.`
       )
     )
@@ -128,7 +128,8 @@ const MesLicences: React.FC = () => {
         <KeyRound className="mx-auto text-gray-600 mb-4" size={44} />
         <h3 className="text-white font-semibold mb-2">Aucune licence logicielle</h3>
         <p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
-          OMEGADMX est inclus sans supplément avec les boîtiers OMEGA DMX : si vous en
+          Le logiciel OMEGADMX est inclus sans supplément avec les boîtiers OMEGA DMX
+          Interface : si vous en
           possédez un, aucune licence n'est nécessaire — le logiciel reconnaît votre
           matériel tout seul.
           <br />
@@ -142,7 +143,7 @@ const MesLicences: React.FC = () => {
     <div>
       <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
         <KeyRound className="text-blue-400" size={24} />
-        OMEGADMX
+        Logiciel OMEGADMX
       </h2>
       <p className="text-gray-400 text-sm mb-6">
         Vos licences logicielles et les ordinateurs sur lesquels elles sont activées.
@@ -187,7 +188,7 @@ const MesLicences: React.FC = () => {
                   )}
                   {l.motif_client && <> {l.motif_client}</>}
                   <br />
-                  Le logiciel reste utilisable avec un boîtier OMEGA DMX.
+                  Le logiciel reste utilisable avec un boîtier OMEGA DMX Interface.
                 </div>
               )}
 
@@ -197,7 +198,7 @@ const MesLicences: React.FC = () => {
 
               {postes.length === 0 ? (
                 <p className="text-gray-500 text-sm">
-                  Aucun poste activé. Ouvrez OMEGADMX, connectez votre interface DMX puis
+                  Aucun poste activé. Ouvrez le logiciel OMEGADMX, connectez votre boîtier DMX puis
                   identifiez-vous avec ce compte.
                 </p>
               ) : (

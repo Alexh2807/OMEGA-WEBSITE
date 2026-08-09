@@ -96,6 +96,7 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
   const boxRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(editMode);
   const [aspect, setAspect] = useState(16 / 9);
+  const [boxW, setBoxW] = useState(0);
   const dragRef = useRef<{
     id: string;
     mode: DragMode;
@@ -125,12 +126,27 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
     const measure = () => {
       const r = el.getBoundingClientRect();
       if (r.height > 0) setAspect(r.width / r.height);
+      if (r.width > 0) setBoxW(r.width);
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  /* ── ÉCHELLE MOBILE DES ANNOTATIONS ────────────────────────────────────────
+     Les traits sont tracés en `vector-effect: non-scaling-stroke` : leur épaisseur est
+     figée en PIXELS ÉCRAN et ne suit donc pas la taille de la photo. Sur un PC la photo
+     fait ~700 px de large et un trait de 2 px est parfaitement lisible ; sur un téléphone
+     la même photo tombe à ~333 px, le trait reste à 2 px — deux fois plus fin en
+     proportion, et physiquement invisible sur un écran haute densité.
+     On rattrape donc l'échelle à partir de la largeur RÉELLE du cadre. Le point cible et
+     le texte suivent, plus doucement (un texte grossi autant deviendrait disgracieux). */
+  const REF_W = 620;
+  const s = boxW > 0 ? Math.min(2.1, Math.max(1, REF_W / boxW)) : 1;
+  const kStroke = s;                    /* trait : rattrapage complet */
+  const kPoint = 1 + (s - 1) * 0.65;    /* pastille : rattrapage partiel */
+  const kFont = 1 + (s - 1) * 0.4;      /* texte : rattrapage léger */
 
   const pctFromEvent = (clientX: number, clientY: number) => {
     const el = boxRef.current;
@@ -231,14 +247,24 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
           alt={alt}
           className={
             coverFill
-              ? `pointer-events-none block max-h-full max-w-full select-none object-contain ${imgClassName}`
+              /* ⚠ TÉLÉPHONE : `object-cover` en dessous de md, `object-contain` au-delà.
+                 En plein cadre (hero), le conteneur devient TRÈS haut et étroit sur un
+                 téléphone (375 × 996). Une photo paysage en `contain` s'y retrouve
+                 encadrée de larges bandes noires — c'est le « vide de page » constaté.
+                 Sur écran large le cadre est presque au format de la photo, donc `contain`
+                 ne rogne rien : on garde EXACTEMENT le rendu bureau actuel, qui convient.
+                 Les photos ENCADRÉES (non coverFill) gardent `contain` partout : c'est ce
+                 qui permet au dézoom admin de révéler le haut et le bas de l'image. */
+              ? `pointer-events-none block max-h-full max-w-full select-none object-cover md:object-contain ${imgClassName}`
               : `pointer-events-none block h-auto w-full max-w-full select-none object-contain ${imgClassName}`
           }
           style={{
             objectPosition,
             width: coverFill ? '100%' : undefined,
             height: coverFill ? '100%' : undefined,
-            objectFit: 'contain',
+            /* objectFit N'EST PLUS forcé ici pour le plein cadre : le style inline
+               écraserait la bascule responsive ci-dessus. */
+            objectFit: coverFill ? undefined : 'contain',
             transform: photoTransform || undefined,
             transformOrigin: 'center center',
             transition: 'transform 0.3s ease-out',
@@ -294,7 +320,7 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
                   strokeLinejoin="round"
                   strokeDasharray={dash}
                   vectorEffect="non-scaling-stroke"
-                  style={{ strokeWidth: design.strokeWidth + 1.5 }}
+                  style={{ strokeWidth: (design.strokeWidth + 1.5) * kStroke }}
                 />
               )}
               <path
@@ -307,7 +333,7 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
                 strokeDasharray={dash}
                 vectorEffect="non-scaling-stroke"
                 style={{
-                  strokeWidth: design.strokeWidth,
+                  strokeWidth: design.strokeWidth * kStroke,
                   filter: selected ? 'drop-shadow(0 0 2px rgba(251,191,36,0.8))' : undefined,
                 }}
               />
@@ -346,8 +372,8 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
               style={{
                 left: `${c.x}%`,
                 top: `${c.y}%`,
-                width: design.pointSize,
-                height: design.pointSize,
+                width: design.pointSize * kPoint,
+                height: design.pointSize * kPoint,
                 transform: 'translate(-50%, -50%)',
                 background: main,
                 boxShadow: outline
@@ -375,7 +401,13 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
             {/* Card B — texte, glissable librement */}
             <div
               data-callout-hit="card"
-              className={`absolute max-w-[48%] whitespace-nowrap rounded px-2.5 py-1.5 ${labelClasses(
+              /* ⚠ TÉLÉPHONE : le texte doit pouvoir REVENIR À LA LIGNE.
+                 En `whitespace-nowrap`, la carte ignore son `max-w` et s'étale sur sa
+                 largeur naturelle : mesuré sur mobile, 3 cartes sur 6 sortaient du cadre,
+                 jusqu'à 26 px hors écran (texte coupé, illisible). Sous `sm` on autorise
+                 donc le retour à la ligne et la coupure des mots longs ; au-delà, on garde
+                 `nowrap` — le rendu bureau est inchangé. */
+              className={`absolute max-w-[60%] whitespace-normal break-words rounded px-2.5 py-1.5 sm:max-w-[48%] sm:whitespace-nowrap ${labelClasses(
                 design.labelStyle,
               )} ${
                 editMode
@@ -390,7 +422,14 @@ export const AnnotatedPhoto: React.FC<AnnotatedPhotoProps> = ({
                 transform: cardOnRight
                   ? 'translate(6px, -50%)'
                   : 'translate(calc(-100% - 6px), -50%)',
-                fontSize: 11,
+                /* Largeur maximale = la place RÉELLEMENT disponible entre le point
+                   d'ancrage et le bord du cadre. La carte ne peut donc plus traverser le
+                   bord, quel que soit l'endroit où l'admin l'a posée. (Sans effet au-delà
+                   de `sm`, où `nowrap` l'emporte : le bureau garde son rendu actuel.) */
+                maxWidth: cardOnRight
+                  ? `calc(${(100 - c.labelX).toFixed(2)}% - 12px)`
+                  : `calc(${c.labelX.toFixed(2)}% - 12px)`,
+                fontSize: 11 * kFont,
               }}
               title={editMode ? 'Glisser la carte texte' : undefined}
               onClick={(e) => {

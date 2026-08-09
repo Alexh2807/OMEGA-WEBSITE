@@ -160,7 +160,7 @@ const EmailConfirmationPage: React.FC = () => {
                     <h4 className="text-green-400 font-semibold mb-2">Ce que vous pouvez faire maintenant</h4>
                     <ul className="text-gray-300 text-sm space-y-1 list-disc list-inside">
                       <li>Suivre vos commandes et vos devis</li>
-                      <li>Retrouver vos signalements envoyés depuis OMEGADMX</li>
+                      <li>Retrouver vos signalements envoyés depuis le logiciel OMEGADMX</li>
                       <li>Échanger directement avec l'équipe</li>
                     </ul>
                   </div>

@@ -21,10 +21,13 @@ const Footer = () => {
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="flex items-center gap-3 mb-4">
+              {/* ⚠ shrink-0 + object-contain : dans un conteneur flex, une image est COMPRESSÉE
+                horizontalement quand la place manque (flex-shrink vaut 1 par défaut). La hauteur
+                restant fixée par h-12, le logo apparaissait ÉTIRÉ sur téléphone. */}
               <img
                 src="/products/logo-omega-hq-transparent.webp"
                 alt="OMEGA"
-                className="h-12 w-auto"
+                className="h-12 w-auto shrink-0 object-contain"
               />
             </div>
             <p className="text-gray-400 mb-6 leading-relaxed">
