@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { COMPANY_INFO } from '../config/legalInfo';
 import {
   ArrowLeft,
   Music,
@@ -270,11 +271,11 @@ const SpectaclesPage = () => {
               Formulaire de Contact
             </Link>
             <a
-              href="mailto:sarl.omega@hotmail.fr"
+              href={`mailto:${COMPANY_INFO.email}`}
               className="border-2 border-white/30 text-white px-8 py-4 rounded-full font-semibold hover:bg-white/10 hover:border-white/50 transition-all duration-300 flex items-center justify-center gap-2"
             >
               <Mail size={20} />
-              sarl.omega@hotmail.fr
+              {COMPANY_INFO.email}
             </a>
             <a
               href="tel:+33681239931"
