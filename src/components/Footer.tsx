@@ -210,8 +210,18 @@ const Footer = () => {
 
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 mb-4 md:mb-0 flex items-center gap-2">
-              © 2005-2024 OMEGA. Créé avec{' '}
-              <Heart className="text-red-500 fill-current" size={16} /> depuis 2005
+              {/* Année de fin CALCULÉE : figée à 2024, la mention vieillissait toute seule
+                  et signalait un site à l'abandon — le genre de détail qu'un client
+                  professionnel remarque avant de commander. */}
+              © 2005-{new Date().getFullYear()} OMEGA. Créé avec{' '}
+              {/* ⚠ « depuis 2005 » contredisait les TROIS autres mentions du site
+                  (Hero, À propos, haut de ce pied de page) qui annoncent 1996. Le même
+                  écart avait déjà été corrigé sur la facture (cf. InvoicePDF). Les deux
+                  dates sont vraies mais ne disent pas la même chose : 1996 = début
+                  d'activité, 2005 = constitution de la SARL. C'est l'ANCIENNETÉ qu'on
+                  affiche ici, donc 1996 ; le © part de 2005, date de la personne morale
+                  qui détient les droits. */}
+              <Heart className="text-red-500 fill-current" size={16} /> depuis 1996
             </p>
             <button
               onClick={scrollToTop}

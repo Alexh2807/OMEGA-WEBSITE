@@ -166,7 +166,16 @@ const ContactPage = () => {
                 </div>
                 <div>
                   <div className="text-white font-semibold">Siège Social</div>
-                  <div className="text-gray-400">France</div>
+                  {/* L'adresse RÉELLE, prise dans legalInfo comme le téléphone et l'e-mail
+                      juste au-dessus. « France » seul n'apprenait rien à personne, et
+                      l'adresse du siège est une mention obligatoire pour une SARL. */}
+                  <div className="text-gray-400">
+                    {COMPANY_INFO.address.street}
+                    <br />
+                    {COMPANY_INFO.address.postalCode} {COMPANY_INFO.address.city}
+                    <br />
+                    {COMPANY_INFO.address.country}
+                  </div>
                 </div>
               </div>
             </div>
