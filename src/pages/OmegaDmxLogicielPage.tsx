@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Boxes,
+  Download,
   MonitorPlay,
   Move,
   Palette,
@@ -184,7 +185,7 @@ const ScreenFrame: React.FC<{
           transformStyle: 'preserve-3d',
         }}
       >
-        <div className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-tr from-blue-500/10 via-transparent to-purple-500/10" />
+        <div className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-tr from-white/5 via-transparent to-white/[0.03]" />
         <img src={src} alt={alt} className="block w-full h-auto object-cover" loading="lazy" />
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
       </div>
@@ -263,16 +264,26 @@ const OmegaDmxLogicielPage = () => {
             </span>
           </h1>
           <p className="mt-6 max-w-xl text-lg text-white/65 leading-relaxed">
-            Pages de lyres, éditeurs, masquage, connexion boîtier, sortie DMX, signalements —
-            le programme qui tourne sur votre ordinateur. Inclus avec le boîtier OMEGA DMX
+            Tout le show sur un seul écran : vous voyez le faisceau avant d’allumer la salle,
+            et le DMX part pendant que vous réglez. Inclus avec le boîtier OMEGA DMX
             Interface, sans abonnement.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
-            <Link
-              to="/omega-dmx-interface"
+            {/* Lien direct vers l'exécutable Windows le plus récent (fonction Netlify
+                download-omegadmx : redirige vers l'asset GitHub du jour, jamais vers une
+                page intermédiaire) — le clic déclenche le téléchargement du fichier. */}
+            <a
+              href="/telecharger/windows"
               className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black hover:bg-white/90 transition"
             >
-              <ShoppingCart size={18} />
+              <Download size={18} />
+              Télécharger pour Windows
+            </a>
+            <Link
+              to="/omega-dmx-interface"
+              className="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-sm font-semibold hover:bg-white/5 transition"
+            >
+              <ShoppingCart size={16} />
               Voir le boîtier OMEGA DMX Interface
             </Link>
             <a
@@ -283,6 +294,9 @@ const OmegaDmxLogicielPage = () => {
               <ArrowRight size={16} />
             </a>
           </div>
+          <p className="mt-4 text-xs text-white/40">
+            Windows 10 et 11 (64 bits) · installateur gratuit, sans abonnement
+          </p>
         </div>
       </section>
 
@@ -320,7 +334,7 @@ const OmegaDmxLogicielPage = () => {
 
       {/* ─── FEATURE CHAPTERS ─── */}
       <div id="features">
-        {FEATURES.map((f, i) => (
+        {FEATURES.map((f) => (
           <section
             key={f.id}
             id={f.id}
@@ -597,7 +611,7 @@ const OmegaDmxLogicielPage = () => {
         <div className="relative z-10 mx-auto max-w-6xl px-5">
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <Reveal className="order-2 lg:order-1">
-              <Sparkles className="text-blue-400 mb-4" size={28} />
+              <Sparkles className="text-white/70 mb-4" size={28} />
               <h2 className="text-4xl md:text-5xl font-semibold tracking-tight">
                 Logiciel inclus.
                 <span className="block text-white/40">Sans abonnement.</span>

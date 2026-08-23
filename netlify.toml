@@ -37,6 +37,14 @@
   to = "/index.html"
   status = 404
 
+# Téléchargement direct de l'installeur Windows — voir netlify/functions/download-omegadmx.mts.
+# status 200 (proxy) et non 301/302 : c'est la FONCTION qui répond par sa propre redirection
+# vers l'asset GitHub du jour, Netlify ne fait que faire suivre la requête vers elle.
+[[redirects]]
+  from = "/telecharger/windows"
+  to = "/.netlify/functions/download-omegadmx"
+  status = 200
+
 # SPA : toutes les autres routes sont servies par index.html (React Router gère le reste)
 [[redirects]]
   from = "/*"
