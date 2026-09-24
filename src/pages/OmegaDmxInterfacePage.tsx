@@ -1056,6 +1056,10 @@ const OmegaDmxInterfacePage = () => {
                 ['Abonnement', 'Aucun'],
                 ['Sauvegarde show', 'Interne au boîtier (sync continue)'],
                 ['Performance', 'Optimisé pour PC récents et anciens'],
+                // Garantie commerciale : 10 ans (et non plus « à vie ») depuis le 24/09/2026.
+                // Même texte que la notice papier (scripts/build-notice-produit.py, dépôt
+                // OmegaDMX) et que l'article 7 bis des CGV.
+                ['Garantie', '10 ans sur l’électronique interne · 2 ans sur les connecteurs et parties extérieures'],
                 ['Prix', `${fmt(mainPrice)} € ${mainLabel}`],
               ].map(([k, v]) => (
                 <div

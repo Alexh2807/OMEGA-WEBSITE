@@ -335,6 +335,55 @@ const TermsPage = () => {
                 </p>
               </div>
 
+              {/* Article 7 bis — garantie commerciale du boîtier (10 ans). ⚠ Même contenu
+                  que la notice papier livrée avec le boîtier (scripts/build-notice-produit.py
+                  du dépôt OmegaDMX), qui renvoie à ces CGV pour les modalités : les deux
+                  textes doivent rester identiques. */}
+              <div className="bg-white/5 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-white mb-3">
+                  Article 7 bis - Garantie commerciale du boîtier OMEGA DMX Interface
+                </h3>
+                <p className="text-sm leading-relaxed">
+                  <strong>Électronique interne — 10 ans.</strong> En plus des garanties légales
+                  (article 7), OMEGA garantit l'<strong>électronique interne</strong> du boîtier
+                  OMEGA DMX Interface — son fonctionnement électrique — contre tout{' '}
+                  <strong>défaut de fabrication</strong>, pièces et main-d'œuvre, pendant{' '}
+                  <strong>10 ans à compter de la date d'achat</strong>, au bénéfice de
+                  l'acheteur d'origine. Cette garantie est incluse dans le prix du boîtier, sans
+                  supplément. Garant : {COMPANY_INFO.name}, {COMPANY_INFO.address.street},{' '}
+                  {COMPANY_INFO.address.postalCode} {COMPANY_INFO.address.city}.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Parties extérieures — 2 ans.</strong> Les parties extérieures du
+                  boîtier — connecteurs DMX (XLR), prise USB-C, connecteur et antenne RP-SMA,
+                  coque — ne relèvent pas de la garantie de 10 ans. Elles sont garanties{' '}
+                  <strong>2 ans à compter de l'achat</strong> pour un fonctionnement normal
+                  (pour le consommateur, au titre de la garantie légale de conformité, qui
+                  couvre d'ailleurs l'ensemble du boîtier pendant ces 2 ans).
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Mise en œuvre :</strong> contacter OMEGA ({COMPANY_INFO.email},{' '}
+                  {COMPANY_INFO.phone} ou espace client) en indiquant le numéro de série (S/N)
+                  gravé sur le boîtier et le numéro de commande. OMEGA indique la marche à
+                  suivre ; selon le diagnostic, le boîtier est réparé ou remplacé.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Ne sont pas couverts</strong> — ils ne constituent ni un défaut de
+                  fabrication ni un défaut de conformité — les dommages dus à une cause
+                  extérieure ou à une mauvaise utilisation : casse, chute, choc, écrasement,
+                  connecteurs arrachés, antenne forcée ou perdue ; eau, liquides, humidité,
+                  condensation, usage en extérieur non protégé ; mauvais branchement,
+                  surtension, concentrateur USB défectueux ; ouverture du boîtier, modification
+                  ou installation d'un firmware non fourni par OMEGA ; câbles non fournis
+                  d'origine et usure normale ; usage détourné.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  Cette garantie commerciale ne limite en rien la garantie légale de
+                  conformité ni la garantie des vices cachés (article 7), dont le consommateur
+                  bénéficie en tout état de cause.
+                </p>
+              </div>
+
               {/* Article 8 */}
               <div className="bg-white/5 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-white mb-3">
