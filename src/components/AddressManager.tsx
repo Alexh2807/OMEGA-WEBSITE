@@ -305,13 +305,20 @@ const AddressManager: React.FC<AddressManagerProps> = ({
       return;
     }
 
+    /* Le libellé (« Domicile », « Bureau »…) est facultatif : vide, il reprend la
+       valeur par défaut de la colonne `name` (NOT NULL). */
+    const donnees = {
+      ...formData,
+      name: formData.name.trim() || 'Adresse principale',
+    };
+
     setEnregistrement(true);
     try {
       if (editingAddress) {
         // Mise à jour
         const { error } = await supabase
           .from('shipping_addresses')
-          .update(formData)
+          .update(donnees)
           .eq('id', editingAddress.id);
 
         if (error) {
@@ -325,7 +332,7 @@ const AddressManager: React.FC<AddressManagerProps> = ({
       } else {
         // Création
         const { error } = await supabase.from('shipping_addresses').insert({
-          ...formData,
+          ...donnees,
           user_id: user.id,
         });
 
@@ -592,29 +599,27 @@ const AddressManager: React.FC<AddressManagerProps> = ({
               </button>
             </div>
 
+            {/* ★ Chaque champ porte son jeton `autoComplete` et un `id` relié à son
+                intitulé. Sans eux, le remplissage automatique du navigateur devinait
+                d'après les intitulés — et se trompait : la 1re commande réelle
+                (24/09/2026) est arrivée avec « France » en ligne d'adresse, la rue en
+                complément et l'adresse entière dans « Nom de l'adresse », recopiés tels
+                quels sur la facture, qui est inaltérable. Ce libellé est désormais en
+                FIN de formulaire et facultatif : en tête, sous « Nom de l'adresse * »,
+                il attirait l'adresse elle-même. */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Nom de l'adresse *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={e =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-                  placeholder="Ex: Domicile, Bureau..."
-                />
-              </div>
-
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label
+                    htmlFor="adr-prenom"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
                     Prénom *
                   </label>
                   <input
+                    id="adr-prenom"
+                    name="given-name"
+                    autoComplete="given-name"
                     type="text"
                     required
                     value={formData.first_name}
@@ -626,10 +631,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label
+                    htmlFor="adr-nom"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
                     Nom *
                   </label>
                   <input
+                    id="adr-nom"
+                    name="family-name"
+                    autoComplete="family-name"
                     type="text"
                     required
                     value={formData.last_name}
@@ -649,10 +660,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     croyait acheter au nom de sa société, et repartait facturé avec TVA
                     sans qu'on lui ait rien demandé. On dit maintenant ce qu'il fait, et
                     où se décide l'achat au nom d'une société. */}
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label
+                  htmlFor="adr-societe"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
                   Société destinataire (optionnel)
                 </label>
                 <input
+                  id="adr-societe"
+                  name="organization"
+                  autoComplete="organization"
                   type="text"
                   value={formData.company}
                   onChange={e =>
@@ -669,10 +686,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label
+                  htmlFor="adr-ligne1"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
                   Adresse *
                 </label>
                 <input
+                  id="adr-ligne1"
+                  name="address-line1"
+                  autoComplete="address-line1"
                   type="text"
                   required
                   value={formData.address_line_1}
@@ -685,10 +708,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label
+                  htmlFor="adr-ligne2"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
                   Complément d'adresse (optionnel)
                 </label>
                 <input
+                  id="adr-ligne2"
+                  name="address-line2"
+                  autoComplete="address-line2"
                   type="text"
                   value={formData.address_line_2}
                   onChange={e =>
@@ -701,10 +730,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label
+                    htmlFor="adr-cp"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
                     Code postal *
                   </label>
                   <input
+                    id="adr-cp"
+                    name="postal-code"
+                    autoComplete="postal-code"
                     type="text"
                     required
                     value={formData.postal_code}
@@ -740,10 +775,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label
+                    htmlFor="adr-ville"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
                     Ville *
                   </label>
                   <input
+                    id="adr-ville"
+                    name="city"
+                    autoComplete="address-level2"
                     type="text"
                     required
                     value={formData.city}
@@ -758,10 +799,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label
+                    htmlFor="adr-pays"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
                     Pays *
                   </label>
                   <select
+                    id="adr-pays"
+                    name="country"
+                    autoComplete="country-name"
                     required
                     value={formData.country}
                     onChange={e =>
@@ -791,10 +838,16 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label
+                    htmlFor="adr-tel"
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                  >
                     Téléphone (optionnel)
                   </label>
                   <input
+                    id="adr-tel"
+                    name="tel"
+                    autoComplete="tel"
                     type="tel"
                     value={formData.phone}
                     onChange={e =>
@@ -804,6 +857,36 @@ const AddressManager: React.FC<AddressManagerProps> = ({
                     placeholder="Numéro de téléphone"
                   />
                 </div>
+              </div>
+
+              <div>
+                {/* Jeton inconnu plutôt que « off » : Chrome peut passer outre « off »
+                    sur un champ qu'il croit être une adresse, alors qu'il ne remplit pas
+                    un champ dont le jeton ne lui dit rien. Ni « nom » ni « adresse »
+                    dans l'intitulé, l'id ou le name : c'est sur ces mots qu'il
+                    devinait. */}
+                <label
+                  htmlFor="adr-libelle"
+                  className="block text-sm font-medium text-gray-300 mb-2"
+                >
+                  Libellé (optionnel)
+                </label>
+                <input
+                  id="adr-libelle"
+                  name="libelle"
+                  autoComplete="libelle-carnet"
+                  type="text"
+                  value={formData.name}
+                  onChange={e =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="w-full bg-white/5 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
+                  placeholder="Ex. : Domicile, Bureau, Salle des fêtes…"
+                />
+                <p className="text-gray-400 text-xs mt-2">
+                  Pour retrouver cette adresse dans votre liste. Laissé vide : « Adresse
+                  principale ».
+                </p>
               </div>
 
               <div className="flex items-center gap-3">
