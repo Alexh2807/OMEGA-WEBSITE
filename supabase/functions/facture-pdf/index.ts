@@ -677,14 +677,18 @@ Deno.serve(async (req) => {
     const empreinte = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))]
       .map((o) => o.toString(16).padStart(2, '0')).join('');
 
-    /* ★ CHEMIN UNIQUE PAR FACTURE : l'identifiant de la facture est dans le nom du fichier.
+    /* ★ CHEMIN UNIQUE PAR FACTURE : un dossier par identifiant de facture.
        Le numéro seul ne suffit pas. Vécu le 24/09/2026 : les PDF des factures de TEST
        d'août (2026/FACT0001.pdf … FACT0010.pdf) étaient restés dans le stockage après la
        remise à zéro de la numérotation ; la vraie FACT0001 a heurté l'ancien fichier,
        l'erreur « existe déjà » était ignorée, et le client a reçu la facture d'une AUTRE
        commande (licence à 249 € au lieu de son produit à 1 €), avec l'empreinte du
-       nouveau document enregistrée sur l'ancien fichier. */
-    const chemin = `${new Date(f.created_at).getFullYear()}/${f.invoice_number}_${f.id}.pdf`;
+       nouveau document enregistrée sur l'ancien fichier.
+       L'identifiant est dans le DOSSIER, pas dans le nom : le fichier garde le nom
+       « FACT0001.pdf », que le client voit en pièce jointe et en téléchargement.
+       (La toute première FACT0001 est archivée sous `2026/FACT0001_<id>.pdf` : le chemin
+       est lu en base, les deux formes coexistent sans rien casser.) */
+    const chemin = `${new Date(f.created_at).getFullYear()}/${f.id}/${f.invoice_number}.pdf`;
     const { error: eUp } = await admin.storage.from('factures').upload(chemin, octets, {
       contentType: 'application/pdf',
       upsert: false,   // ★ jamais d'écrasement : un original ne se réécrit pas
