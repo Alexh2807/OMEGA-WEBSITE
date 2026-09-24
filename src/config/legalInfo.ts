@@ -44,8 +44,13 @@ export const COMPANY_INFO = {
    communiquer les coordonnées (site, CGV, bons de commande). Le défaut est
    sanctionné par une amende administrative (art. L641-1 : jusqu'à 3 000 € pour une
    personne physique, 15 000 € pour une personne morale).
-   Adhésion à prévoir auprès d'un médiateur référencé par la CECMC, par exemple
-   Médicys (medicys.fr), CM2C (cm2c.fr) ou la FEVAD (mediateurfevad.fr).
+   Adhésion à prévoir auprès d'un médiateur référencé par la CECMC — liste officielle
+   sur economie.gouv.fr. Par exemple le CM2C (www.cm2c.net, conciliateurs de justice) :
+   48 € pour 3 ans jusqu'à 10 personnes, + 36 € par médiation à distance traitée
+   (tarifs relevés le 24/09/2026).
+   ⚠ PAS Medicys : son référencement a été RETIRÉ par la CECMC le 15/02/2021.
+   ⚠ Ne jamais mettre à la place la plateforme européenne de règlement en ligne des
+   litiges : ce n'était pas un médiateur, et elle est fermée depuis le 20/07/2025.
 
    Pour activer l'affichage : remplacer les chaînes vides par les valeurs réelles.
    Aucune autre modification n'est nécessaire — le pied de facture s'adapte seul.
