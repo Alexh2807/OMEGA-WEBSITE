@@ -408,8 +408,10 @@ const TermsPage = () => {
                         </a>
                       </>
                     )}
-                    . Le consommateur peut également utiliser la plateforme européenne de
-                    règlement en ligne des litiges.
+                    . Avant de saisir le médiateur, le consommateur doit avoir adressé une
+                    réclamation écrite à OMEGA (art. L. 612-2 du Code de la consommation).
+                    {/* ⚠ Pas de lien vers la plateforme européenne de règlement en ligne des
+                        litiges : elle a été fermée le 20/07/2025 (règlement UE 2024/3228). */}
                   </p>
                 )}
               </div>
