@@ -298,6 +298,16 @@ const TITRES: Record<string, { titre: string; sujet: string }> = {
   confirmed: { titre: 'Votre commande est confirmée', sujet: 'Votre commande OMEGA est confirmée' },
 };
 
+/** Retrait au dépôt : mêmes états, autres mots — rien n'y est expédié ni livré. */
+const ETATS_RETRAIT: Record<string, string> = {
+  shipped: 'prête à être retirée',
+  delivered: 'retirée',
+};
+const TITRES_RETRAIT: Record<string, { titre: string; sujet: string }> = {
+  shipped: { titre: 'Votre commande est prête', sujet: 'Votre commande OMEGA est prête à être retirée' },
+  delivered: { titre: 'Votre commande a été retirée', sujet: 'Votre commande OMEGA a été retirée' },
+};
+
 /** Liste « intitulé : valeur ». */
 const details = (lignes: [string, string][]) =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;">` +
@@ -508,6 +518,8 @@ type Message = {
      Present => le PDF part EN PIECE JOINTE. Remettre la facture est une obligation
      du vendeur ; un lien vers un site ne la remet pas, il la rend consultable. */
   pdf?: string | null;
+  /** Nom de la pièce jointe vu par le client (sinon : dernier segment du chemin). */
+  pdfNom?: string;
 } | null;
 
 const PIED_ADMIN =
@@ -558,6 +570,9 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
       return {
         destinataires: [destinataire],
         pdf: f.pdf_storage_path ?? null,
+        // Nom de la pièce jointe : le numéro, jamais le nom de stockage (qui peut porter
+        // l'identifiant interne de la facture).
+        pdfNom: `${f.invoice_number}.pdf`,
         sujet: `Votre ${mot} ${f.invoice_number} — OMEGA`,
         html: gabarit({
           titre: estAvoir ? 'Votre avoir est disponible' : 'Votre facture est disponible',
@@ -803,12 +818,16 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
       if (!adresse) return null;
 
       const etat = String(c.status ?? '');
-      const libelle = etatFr(etat);
+      /* ★ RETRAIT AU DÉPÔT. Le site promet « Vous êtes prévenu par e-mail dès que la
+         commande est prête » : c'est CE message, quand l'exploitant passe la commande
+         en « Expédiée ». Il annonçait « Votre commande est en route ». */
+      const retrait = c.shipping_carrier === 'retrait';
+      const libelle = (retrait && ETATS_RETRAIT[etat]) || etatFr(etat);
       // `suivi_ajoute` est posé par le trigger quand SEUL le lien de suivi a changé :
       // l'exploitant colle souvent le numéro de colis des heures après l'expédition, et
       // répéter « votre commande est expédiée » n'apprendrait rien de nouveau au client.
       const suiviSeul = data?.suivi_ajoute === true && data?.avant === data?.apres;
-      const entete = TITRES[etat] ?? {
+      const entete = (retrait && TITRES_RETRAIT[etat]) || TITRES[etat] || {
         titre: 'Votre commande avance',
         sujet: `Votre commande OMEGA est ${libelle}`,
       };
@@ -858,7 +877,7 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
             details([
               ['Montant', euros(c.total)],
               ...((c.shipping_method
-                ? [['Livraison', e(c.shipping_method)]]
+                ? [[retrait ? 'À retirer' : 'Livraison', e(c.shipping_method)]]
                 : []) as [string, string][]),
               ['État', e(libelle)],
             ]),
@@ -927,7 +946,8 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
         .from('orders')
         .select(
           'id, total, sub_total, tax, vat_rate, vat_mention, shipping_cost, ' +
-            'shipping_cost_ht, shipping_method, user_id, shipping_address'
+            'shipping_cost_ht, shipping_method, shipping_carrier, shipping_relay, ' +
+            'user_id, shipping_address'
         )
         .eq('id', data.id)
         .single();
@@ -1023,6 +1043,53 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
             .join('<br>')
         : null;
 
+      /* ★ OÙ VA LA COMMANDE — pas toujours à l'adresse du client.
+         Vécu le 24/09/2026 : une commande en RETRAIT AU DÉPÔT a reçu « Livraison :
+         offerte » et « Livraison à : <adresse du client> » — de quoi attendre un colis
+         qui ne viendra jamais. Même travers pour une licence seule (rien n'est expédié)
+         et pour un point relais (le colis n'ira pas au domicile). */
+      const retrait = c.shipping_carrier === 'retrait';
+      const dematerialise =
+        (articles.length > 0 &&
+          articles.every((a: any) => a?.products?.product_type === 'licence')) ||
+        /^Sans livraison/i.test(String(c.shipping_method ?? ''));
+      const relaisAck = c.shipping_relay as Record<string, string> | null;
+      const gris = (t: string) => `<span style="color:#8b8ba3;font-size:13px;">${t}</span>`;
+
+      const lignePort: [string, string][] = dematerialise
+        ? []
+        : retrait
+          ? [['Retrait au dépôt', 'gratuit']]
+          : Number(portHt) > 0
+            ? [[
+                `Livraison HT${c.shipping_method ? ` (${c.shipping_method})` : ''}`,
+                euros(portHt),
+              ]]
+            : [['Livraison', 'offerte']];
+
+      const destination = dematerialise
+        ? ''
+        : retrait
+          ? p(
+              `${gris('À retirer&nbsp;:')}<br>${e(c.shipping_method || 'Retrait au dépôt OMEGA')}<br>` +
+                gris('Vous êtes prévenu par e-mail dès que la commande est prête.')
+            )
+          : relaisAck && relaisAck.nom
+            ? p(
+                `${gris('Livraison en point relais&nbsp;:')}<br>` +
+                  [
+                    relaisAck.nom,
+                    relaisAck.adresse,
+                    [relaisAck.code_postal, relaisAck.ville].filter(Boolean).join(' '),
+                  ]
+                    .filter(Boolean)
+                    .map((l) => e(l))
+                    .join('<br>')
+              )
+            : livraison
+              ? p(`${gris('Livraison à&nbsp;:')}<br>${livraison}`)
+              : '';
+
       return {
         destinataires: [adresse],
         sujet: licences.length
@@ -1050,12 +1117,7 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
                 /* ⚠ L'INTITULÉ est échappé par `details()` lui-même (`e(k)`) : l'échapper
                    ici aussi produirait « &amp;amp; ». Seule la VALEUR doit arriver déjà
                    échappée. */
-                ...((Number(portHt) > 0
-                  ? [[
-                      `Livraison HT${c.shipping_method ? ` (${c.shipping_method})` : ''}`,
-                      euros(portHt),
-                    ]]
-                  : [['Livraison', 'offerte']]) as [string, string][]),
+                ...lignePort,
                 ['Total HT', euros(c.sub_total)],
                 [`TVA (${tauxTva.toLocaleString('fr-FR')} %)`, euros(c.tax)],
                 ['Total payé', euros(c.total)],
@@ -1066,9 +1128,7 @@ async function composer(event: string, data: Record<string, any>): Promise<Messa
             (c.vat_mention
               ? p(`<span style="color:#8b8ba3;font-size:13px;">${e(c.vat_mention)}</span>`)
               : '') +
-            (livraison
-              ? p(`<span style="color:#8b8ba3;font-size:13px;">Livraison à&nbsp;:</span><br>${livraison}`)
-              : ''),
+            destination,
           bouton: { libelle: 'Suivre ma commande', url: `${SITE}/commandes` },
           pied: 'Ce message confirme votre commande sur omegasud.fr. Conservez-le.',
         }),
@@ -1179,7 +1239,9 @@ Deno.serve(async (req) => {
       message.sujet,
       message.html,
       event,
-      message.pdf ? { chemin: message.pdf, nom: message.pdf.split('/').pop() || 'facture.pdf' } : null
+      message.pdf
+        ? { chemin: message.pdf, nom: message.pdfNom || message.pdf.split('/').pop() || 'facture.pdf' }
+        : null
     );
     return json({ event, ...bilan });
   } catch (err) {
