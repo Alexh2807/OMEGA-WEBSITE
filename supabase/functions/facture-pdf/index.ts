@@ -677,13 +677,34 @@ Deno.serve(async (req) => {
     const empreinte = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))]
       .map((o) => o.toString(16).padStart(2, '0')).join('');
 
-    const chemin = `${new Date(f.created_at).getFullYear()}/${f.invoice_number}.pdf`;
+    /* ★ CHEMIN UNIQUE PAR FACTURE : l'identifiant de la facture est dans le nom du fichier.
+       Le numéro seul ne suffit pas. Vécu le 24/09/2026 : les PDF des factures de TEST
+       d'août (2026/FACT0001.pdf … FACT0010.pdf) étaient restés dans le stockage après la
+       remise à zéro de la numérotation ; la vraie FACT0001 a heurté l'ancien fichier,
+       l'erreur « existe déjà » était ignorée, et le client a reçu la facture d'une AUTRE
+       commande (licence à 249 € au lieu de son produit à 1 €), avec l'empreinte du
+       nouveau document enregistrée sur l'ancien fichier. */
+    const chemin = `${new Date(f.created_at).getFullYear()}/${f.invoice_number}_${f.id}.pdf`;
     const { error: eUp } = await admin.storage.from('factures').upload(chemin, octets, {
       contentType: 'application/pdf',
       upsert: false,   // ★ jamais d'écrasement : un original ne se réécrit pas
     });
-    if (eUp && !/exists/i.test(eUp.message)) {
-      return json({ error: 'Archivage impossible : ' + eUp.message }, req, 500);
+    let empreinteArchivee = empreinte;
+    if (eUp) {
+      if (!/exists/i.test(eUp.message)) {
+        return json({ error: 'Archivage impossible : ' + eUp.message }, req, 500);
+      }
+      /* Le fichier de CETTE facture existe déjà (le chemin contient son identifiant) :
+         un appel précédent l'a archivé puis s'est interrompu avant d'écrire en base.
+         On garde l'original, et on enregistre SON empreinte — jamais celle du document
+         qu'on vient de refabriquer, qui n'est pas celui qui est stocké. */
+      const { data: existant, error: eDl } = await admin.storage.from('factures').download(chemin);
+      if (eDl || !existant) {
+        return json({ error: 'Archive existante illisible : ' + (eDl?.message ?? 'vide') }, req, 500);
+      }
+      const octetsArchives = new Uint8Array(await existant.arrayBuffer());
+      empreinteArchivee = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octetsArchives))]
+        .map((o) => o.toString(16).padStart(2, '0')).join('');
     }
 
     /* ⚠ L'ERREUR DE CETTE ÉCRITURE DOIT ÊTRE LUE.
@@ -695,7 +716,7 @@ Deno.serve(async (req) => {
        « pas encore éditée », alors qu'elle existait depuis le premier clic.
        Une écriture qu'on ne vérifie pas est une écriture qu'on ne fait pas. */
     const { error: eMaj } = await admin.from('invoices').update({
-      pdf_storage_path: chemin, pdf_sha256: empreinte, pdf_at: new Date().toISOString(),
+      pdf_storage_path: chemin, pdf_sha256: empreinteArchivee, pdf_at: new Date().toISOString(),
     }).eq('id', invoice_id);
     if (eMaj) {
       return json({
@@ -707,7 +728,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: lien } = await admin.storage.from('factures').createSignedUrl(chemin, 300);
-    return json({ url: lien?.signedUrl, archive: false, sha256: empreinte, chemin }, req);
+    return json({ url: lien?.signedUrl, archive: false, sha256: empreinteArchivee, chemin }, req);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, req, 500);
   }
