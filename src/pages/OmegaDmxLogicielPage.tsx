@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import OmegaDmxDuo from '../components/OmegaDmxDuo';
 import { SvgMidiConsole } from '../components/OmegaDmxSystemSvgs';
+import { dateFinOffre, useOffreLancement } from '../utils/offreLancement';
 
 /* ================================================================== */
 /*  OMEGADMX Logiciel — Product Experience + parallax                 */
@@ -235,6 +236,7 @@ const ParallaxImg: React.FC<{ src: string; alt: string; speed?: number; classNam
 };
 
 const OmegaDmxLogicielPage = () => {
+  const offre = useOffreLancement();
   return (
     <div className="min-h-screen bg-black text-white selection:bg-blue-500/30 overflow-x-hidden">
       {/* ─── HERO PARALLAX ─── */}
@@ -620,6 +622,12 @@ const OmegaDmxLogicielPage = () => {
                 Avec le boîtier OMEGA DMX Interface, le logiciel OMEGADMX est fourni. Licence
                 optionnelle pour les boîtiers d’autres marques.
               </p>
+              {offre && (
+                <p className="mt-4 max-w-md text-sm text-white/75">
+                  <span className="font-semibold text-white">Offre de lancement :</span> le boîtier à{' '}
+                  {offre.prixLancementTtc} € TTC jusqu'au {dateFinOffre(offre)}, puis {offre.prixApresTtc} € TTC.
+                </p>
+              )}
               <div className="mt-10 flex flex-wrap gap-4">
                 <Link
                   to="/omega-dmx-interface"

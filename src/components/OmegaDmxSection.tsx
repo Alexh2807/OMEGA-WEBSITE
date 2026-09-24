@@ -1,8 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Layers, Ban, Save, CircuitBoard } from 'lucide-react';
+import { formatEuros, usePrixTtcSku } from '../utils/prixProduit';
+import { dateFinOffre, useOffreLancement } from '../utils/offreLancement';
 
 const OmegaDmxSection = () => {
+  const prixTtc = usePrixTtcSku('OMGA-DMX-ITF', 479);
+  const offre = useOffreLancement();
   const points = [
     { icon: Layers, title: '2 univers DMX', description: '1024 canaux pilotés en simultané' },
     { icon: Ban, title: 'Sans abonnement', description: 'Vous achetez, vous gardez — logiciel inclus' },
@@ -74,7 +78,13 @@ const OmegaDmxSection = () => {
 
             {/* Prix + CTA */}
             <div className="pt-2">
-              <div className="text-4xl font-bold text-white mb-1">468€ TTC</div>
+              <div className="text-4xl font-bold text-white mb-1">{formatEuros(prixTtc)}€ TTC</div>
+              {offre && offre.sku === 'OMGA-DMX-ITF' && (
+                <div className="text-sm text-white/80 mb-1">
+                  <span className="font-semibold text-white">Prix de lancement</span> jusqu'au{' '}
+                  {dateFinOffre(offre)}, puis {offre.prixApresTtc}€ TTC
+                </div>
+              )}
               <div className="text-gray-400 text-sm mb-5">
                 Logiciel OMEGADMX inclus · sans abonnement
               </div>

@@ -770,12 +770,13 @@ describe('plancher colis métropole', () => {
     const petitEtCher: ShippingLine[] = [
       { shipping_class: 'small', weight_kg: 0.4, unit_price_ht: 600, quantity: 1 },
     ];
-    const offres = listerOffresLivraison(petitEtCher, FR('75001'), cfg);
+    const cfgF = avec({ franco: { metropole: 150, corse_iles: null, ue: null, outre_mer: null } });
+    const offres = listerOffresLivraison(petitEtCher, FR('75001'), cfgF);
     expect(parMode(offres, 'domicile')!.prix_ttc).toBe(0);
     expect(parMode(offres, 'domicile')!.prix_ht).toBe(0);
     expect(parMode(offres, 'relais')!.prix_ttc).toBe(0);
     expect(parMode(offres, 'domicile')!.motif).toContain('offerte');
-    expect(computeShipping(petitEtCher, FR('75001'), cfg).cost).toBe(0);
+    expect(computeShipping(petitEtCher, FR('75001'), cfgF).cost).toBe(0);
   });
 
   it('sous le seuil de franco, le plancher s’applique bien', () => {
@@ -801,6 +802,12 @@ describe('plancher colis métropole', () => {
    ═════════════════════════════════════════════════════════════════════════ */
 
 describe('franco de port', () => {
+  /* Le franco est DÉSACTIVÉ dans la configuration par défaut (décision commerciale :
+     le port dépend du poids et du volume, pas du montant du panier — cf. shipping.ts).
+     Ces tests portent sur le MÉCANISME, qui reste réglable par zone depuis l'admin :
+     ils se donnent donc un seuil explicite au lieu de dépendre d'un choix commercial
+     qui peut changer. */
+  const cfgF = avec({ franco: { metropole: 150, corse_iles: null, ue: null, outre_mer: null } });
   const cher: ShippingLine[] = [
     { shipping_class: 'small', weight_kg: 5, unit_price_ht: 400, quantity: 1 },
   ];
@@ -809,14 +816,16 @@ describe('franco de port', () => {
   ];
 
   it('seuil par zone', () => {
-    expect(seuilFranco('FR_METRO', cfg)).toBe(150);
-    expect(seuilFranco('FR_CORSE', cfg)).toBeNull();
-    expect(seuilFranco('EUROPE', cfg)).toBeNull();
-    expect(seuilFranco('OM1', cfg)).toBeNull();
+    expect(seuilFranco('FR_METRO', cfgF)).toBe(150);
+    expect(seuilFranco('FR_CORSE', cfgF)).toBeNull();
+    expect(seuilFranco('EUROPE', cfgF)).toBeNull();
+    expect(seuilFranco('OM1', cfgF)).toBeNull();
+    // …et par défaut, plus aucun franco nulle part.
+    expect(seuilFranco('FR_METRO', cfg)).toBeNull();
   });
 
   it('au-delà du seuil métropole, domicile et relais sont offerts', () => {
-    const offres = listerOffresLivraison(cher, FR('75001'), cfg);
+    const offres = listerOffresLivraison(cher, FR('75001'), cfgF);
     expect(parMode(offres, 'domicile')!.prix_ttc).toBe(0);
     expect(parMode(offres, 'relais')!.prix_ttc).toBe(0);
     // …mais pas l'express, exclu du franco par défaut.
@@ -866,7 +875,7 @@ describe('franco de port', () => {
   });
 
   it('le montant peut aussi être fourni par les options', () => {
-    const offres = listerOffresLivraison(colis(5), FR('75001'), cfg, { montant_ht: 500 });
+    const offres = listerOffresLivraison(colis(5), FR('75001'), cfgF, { montant_ht: 500 });
     expect(parMode(offres, 'domicile')!.prix_ttc).toBe(0);
   });
 });
@@ -1009,7 +1018,8 @@ describe('normalizeShippingConfig', () => {
     expect(c.parcel_over_price).toBe(99);
     expect(c.utiliser_bareme_personnalise).toBe(false);
     expect(c.supplements_palette.surcharge_carburant_pct).toBe(17.11);
-    expect(c.franco.metropole).toBe(150);
+    // Le défaut v3 n'a plus aucun franco : la gratuité passe par le retrait au dépôt.
+    expect(c.franco.metropole).toBeNull();
     expect(c.mode_par_defaut).toBe('domicile');
   });
 
@@ -1022,7 +1032,9 @@ describe('normalizeShippingConfig', () => {
     });
     expect(c.service_express).toBe('chrono18');
     expect(c.mode_par_defaut).toBe('domicile');
-    expect(c.franco.metropole).toBe(150);
+    // -5 est rejeté et retombe sur le défaut (aujourd'hui : aucun franco) ; 200 est
+    // valide et conservé. Le contraste entre les deux est ce qui prouve le filtrage.
+    expect(c.franco.metropole).toBeNull();
     expect(c.franco.ue).toBe(200);
     expect(c.franco_modes).toEqual(['domicile']);
   });

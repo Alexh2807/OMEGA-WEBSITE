@@ -76,6 +76,11 @@ interface CheckoutFormProps {
      privée). Sans lui, un paiement RÉUSSI s'afficherait en échec. */
   onSuccess: (paymentIntentId: string, quoteId: string, clientSecret: string) => void;
   onError: (error: string) => void;
+  /* Le panier contient une licence (contenu numérique) : le client doit demander
+     l'exécution immédiate et renoncer EXPRESSÉMENT à son droit de rétractation
+     (art. L221-28 13° du Code de la consommation), sans quoi il garderait 14 jours
+     pour se rétracter après avoir utilisé la licence. */
+  contientLicence?: boolean;
 }
 
 const CheckoutForm: React.FC<CheckoutFormProps> = ({
@@ -86,6 +91,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
   onQuote,
   onSuccess,
   onError,
+  contientLicence = false,
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -95,6 +101,12 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
   const [recap, setRecap] = useState<RecapitulatifDevis | null>(null);
   const [cardholderName, setCardholderName] = useState('');
   const [paymentError, setPaymentError] = useState('');
+  /* Acceptation des CGV : obligatoire avant tout paiement (art. L221-5 et L221-14 du
+     Code de la consommation — le client doit avoir pris connaissance des conditions
+     et reconnaître son obligation de payer). */
+  const [cgvAcceptees, setCgvAcceptees] = useState(false);
+  const [renonciationRetractation, setRenonciationRetractation] = useState(false);
+  const consentementsOk = cgvAcceptees && (!contientLicence || renonciationRetractation);
   const [isCreatingIntent, setIsCreatingIntent] = useState(false);
   const [cardErrors, setCardErrors] = useState({
     cardNumber: '',
@@ -201,6 +213,15 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
 
     if (!cardholderName.trim()) {
       setPaymentError('Veuillez saisir le nom du porteur de la carte');
+      return;
+    }
+
+    if (!consentementsOk) {
+      setPaymentError(
+        contientLicence && cgvAcceptees
+          ? "Cochez la case relative à la licence (accès immédiat et renonciation au droit de rétractation)."
+          : 'Veuillez accepter les conditions générales de vente.'
+      );
       return;
     }
 
@@ -456,9 +477,43 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
           Le panier en affichait déjà une (« Paiement sécurisé par Stripe ») et ce
           composant une seconde, deux lignes plus loin. */}
 
+      {/* Consentements — cases NON pré-cochées, comme l'exige la loi. */}
+      <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+        <label className="flex cursor-pointer items-start gap-3 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            checked={cgvAcceptees}
+            onChange={e => setCgvAcceptees(e.target.checked)}
+            className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-blue-500"
+          />
+          <span>
+            J'ai lu et j'accepte les{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline underline-offset-2">
+              conditions générales de vente
+            </a>
+            , et je reconnais que ma commande m'oblige à payer.
+          </span>
+        </label>
+        {contientLicence && (
+          <label className="flex cursor-pointer items-start gap-3 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={renonciationRetractation}
+              onChange={e => setRenonciationRetractation(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-blue-500"
+            />
+            <span>
+              Je demande l'accès immédiat à ma licence OMEGADMX et je reconnais perdre mon droit de
+              rétractation dès qu'elle est mise à ma disposition (art. L221-28 13° du Code de la
+              consommation).
+            </span>
+          </label>
+        )}
+      </div>
+
       <button
         type="submit"
-        disabled={!stripe || loading || !clientSecret || !cardholderName.trim()}
+        disabled={!stripe || loading || !clientSecret || !cardholderName.trim() || !consentementsOk}
         className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-lg font-semibold hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {loading ? (
@@ -497,6 +552,7 @@ interface StripeCheckoutProps {
      privée). Sans lui, un paiement RÉUSSI s'afficherait en échec. */
   onSuccess: (paymentIntentId: string, quoteId: string, clientSecret: string) => void;
   onError: (error: string) => void;
+  contientLicence?: boolean;
 }
 
 const StripeCheckout: React.FC<StripeCheckoutProps> = ({
@@ -507,6 +563,7 @@ const StripeCheckout: React.FC<StripeCheckoutProps> = ({
   onQuote,
   onSuccess,
   onError,
+  contientLicence,
 }) => {
   return (
     <Elements stripe={stripePromise}>
@@ -518,6 +575,7 @@ const StripeCheckout: React.FC<StripeCheckoutProps> = ({
         onQuote={onQuote}
         onSuccess={onSuccess}
         onError={onError}
+        contientLicence={contientLicence}
       />
     </Elements>
   );

@@ -96,6 +96,11 @@ const CheckoutPage = () => {
     const p = i.product as { product_type?: string } | undefined;
     return p?.product_type === 'licence';
   });
+  // Au moins une licence : renonciation expresse au droit de rétractation exigée.
+  const contientLicence = items.some(i => {
+    const p = i.product as { product_type?: string } | undefined;
+    return p?.product_type === 'licence';
+  });
 
   const lignesLivraison = items.map(i => {
     const p = i.product as { shipping_class?: string; weight_kg?: number | null; product_type?: string } | undefined;
@@ -309,6 +314,7 @@ const CheckoutPage = () => {
                   onQuote={setRecap}
                   onSuccess={paiementReussi}
                   onError={m => toast.error(m)}
+                  contientLicence={contientLicence}
                 />
               ) : (
                 <p className="text-gray-400 text-sm">

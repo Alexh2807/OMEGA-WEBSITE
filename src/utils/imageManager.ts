@@ -4,7 +4,7 @@
  * ⚠️ CE FICHIER EST GÉNÉRÉ AUTOMATIQUEMENT
  * Ne pas modifier manuellement - Exécutez: npm run scan-images
  *
- * Dernière mise à jour: 10/08/2026 16:20:04
+ * Dernière mise à jour: 24/09/2026 03:13:43
  */
 
 // Liste de toutes les images disponibles dans /public
@@ -79,6 +79,7 @@ export const productImages = [
   "/products/omega-box-side-ports.webp",
   "/products/omega-box-top-ports.webp",
   "/products/omega-dmx-interface.webp",
+  "/products/omega-dmx-license.webp",
   "/products/omega-dmx-px-hero-box.webp",
   "/products/omega-dmx-px-soft-color.webp",
   "/products/omega-dmx-px-soft-live.webp",

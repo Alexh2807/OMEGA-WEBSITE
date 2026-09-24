@@ -1,6 +1,12 @@
 ﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, Scale, ShieldCheck, Info } from 'lucide-react';
+import { COMPANY_INFO, MEDIATOR_INFO, MEDIATEUR_A_RENSEIGNER } from '../config/legalInfo';
+
+/* Version des CGV : une date FIXE, changée à chaque modification du texte. L'ancienne
+   affichait la date du jour (`new Date()`) : les CGV semblaient modifiées chaque jour,
+   et aucune version n'était opposable à une commande donnée. */
+const VERSION_CGV = '24 septembre 2026';
 
 const TermsPage = () => {
   return (
@@ -12,7 +18,7 @@ const TermsPage = () => {
             Conditions Générales de Vente & Mentions Légales
           </h1>
           <p className="text-gray-400 mb-8">
-            Dernière mise à jour : {new Date().toLocaleDateString('fr-FR')}
+            Dernière mise à jour : {VERSION_CGV}
           </p>
 
           {/* MENTIONS LÉGALES */}
@@ -82,8 +88,16 @@ const TermsPage = () => {
                   </p>
                   <p>
                     <span className="font-semibold text-blue-400">Contact :</span>{' '}
+                    <a href={`mailto:${COMPANY_INFO.email}`} className="text-blue-400 hover:underline">
+                      {COMPANY_INFO.email}
+                    </a>
+                    {' — '}
+                    <a href={COMPANY_INFO.phoneHref} className="text-blue-400 hover:underline">
+                      {COMPANY_INFO.phone}
+                    </a>
+                    {' — '}
                     <Link to="/contact" className="text-blue-400 hover:underline">
-                      Formulaire de contact
+                      formulaire de contact
                     </Link>
                   </p>
                 </div>
@@ -94,8 +108,10 @@ const TermsPage = () => {
                   Hébergement du site
                 </h3>
                 <p className="text-sm">
-                  Ce site est hébergé par Vercel Inc., 340 S Lemon Ave #4133, Walnut,
-                  CA 91789, USA.
+                  Ce site est hébergé par Netlify, Inc., 101 2nd Street, San Francisco,
+                  CA 94105, États-Unis. Les données des comptes et des commandes sont
+                  hébergées par Supabase, Inc. dans l'Union européenne (Francfort, Allemagne) ; les
+                  paiements sont traités par Stripe.
                 </p>
               </div>
             </div>
@@ -230,9 +246,73 @@ const TermsPage = () => {
                   Le remboursement sera effectué dans un délai de 14 jours suivant la
                   réception du retour.
                 </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  Le client peut notifier sa décision par tout moyen dénué d'ambiguïté, par
+                  exemple par e-mail à{' '}
+                  <a href={`mailto:${COMPANY_INFO.email}`} className="text-blue-400 hover:underline">
+                    {COMPANY_INFO.email}
+                  </a>{' '}
+                  ou par courrier au siège social, en utilisant s'il le souhaite le
+                  modèle ci-dessous (art. R. 221-1 du Code de la consommation) :
+                </p>
+                <p className="text-xs leading-relaxed mt-2 rounded border border-white/10 bg-black/30 p-3 italic">
+                  « À l'attention d'OMEGA, {COMPANY_INFO.address.street},{' '}
+                  {COMPANY_INFO.address.postalCode} {COMPANY_INFO.address.city},{' '}
+                  {COMPANY_INFO.email} : je vous notifie par la présente ma rétractation du
+                  contrat portant sur la vente du bien ci-dessous : [désignation], commandé
+                  le [date] / reçu le [date], numéro de commande [n°]. Nom du consommateur,
+                  adresse du consommateur, date [et signature en cas d'envoi papier]. »
+                </p>
                 <p className="text-sm leading-relaxed mt-2 text-blue-300">
-                  <strong>Exception :</strong> Le droit de rétractation ne s'applique pas
-                  aux professionnels ni aux produits personnalisés.
+                  <strong>Exceptions :</strong> le droit de rétractation ne s'applique pas
+                  aux professionnels, aux produits personnalisés, ni à la licence
+                  logicielle OMEGADMX (contenu numérique fourni sans support matériel) dès
+                  lors que le client a, lors de sa commande, expressément demandé l'accès
+                  immédiat à la licence et renoncé à son droit de rétractation (art. L.
+                  221-28, 13° du Code de la consommation). Cette demande et cette
+                  renonciation sont recueillies par une case à cocher distincte au moment
+                  du paiement.
+                </p>
+              </div>
+
+              {/* Article 6 bis — Licence logicielle */}
+              <div className="bg-white/5 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-white mb-3">
+                  Article 6 bis - Licence logicielle OMEGADMX
+                </h3>
+                <p className="text-sm leading-relaxed">
+                  Le logiciel OMEGADMX est gratuit lorsqu'il est utilisé seul (sans
+                  interface DMX) ou avec un boîtier OMEGA DMX Interface. La licence
+                  OMEGADMX vendue sur ce site n'est nécessaire que pour piloter une
+                  interface DMX d'une autre marque.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Nature du droit.</strong> La licence confère au client un droit
+                  d'utilisation personnel et non exclusif du logiciel, sans limitation de
+                  durée tant qu'elle n'est ni remboursée ni désactivée dans les cas prévus
+                  ci-dessous. Le logiciel reste la propriété exclusive d'OMEGA ; toute
+                  revente, cession, décompilation ou tentative de contournement du système
+                  de licence est interdite.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Activation et postes.</strong> La licence est rattachée au compte
+                  client et s'active depuis le logiciel. Elle peut être active sur{' '}
+                  <strong>deux ordinateurs</strong> ; le client libère lui-même un poste
+                  depuis son espace client. Une connexion internet est nécessaire pour
+                  l'activation, puis pour une vérification périodique (au moins une fois
+                  tous les 30 jours, avec une tolérance de 14 jours) : une coupure du réseau
+                  n'interrompt pas l'utilisation dans ces limites.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Limite.</strong> OMEGADMX respecte le nombre de canaux DMX
+                  débloqué sur l'interface du client et n'en ajoute aucun : une extension
+                  de canaux reste à acquérir auprès du fabricant de l'interface.
+                </p>
+                <p className="text-sm leading-relaxed mt-2">
+                  <strong>Désactivation.</strong> Une licence remboursée est désactivée.
+                  OMEGA peut suspendre ou désactiver une licence en cas d'utilisation
+                  frauduleuse ou contraire aux présentes conditions ; le client en est
+                  informé, avec le motif, dans le logiciel et par e-mail.
                 </p>
               </div>
 
@@ -312,9 +392,26 @@ const TermsPage = () => {
                   consommateur a le droit de recourir gratuitement à un médiateur de la
                   consommation en vue de la résolution amiable d'un litige.
                 </p>
-                <p className="text-sm leading-relaxed mt-2">
-                  Les coordonnées du médiateur compétent seront communiquées sur demande.
-                </p>
+                {MEDIATEUR_A_RENSEIGNER ? (
+                  <p className="text-sm leading-relaxed mt-2">
+                    Les coordonnées du médiateur compétent peuvent être obtenues auprès
+                    d'OMEGA à l'adresse {COMPANY_INFO.email}.
+                  </p>
+                ) : (
+                  <p className="text-sm leading-relaxed mt-2">
+                    Médiateur compétent : <strong>{MEDIATOR_INFO.name}</strong>
+                    {MEDIATOR_INFO.website && (
+                      <>
+                        {' '}—{' '}
+                        <a href={MEDIATOR_INFO.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                          {MEDIATOR_INFO.website}
+                        </a>
+                      </>
+                    )}
+                    . Le consommateur peut également utiliser la plateforme européenne de
+                    règlement en ligne des litiges.
+                  </p>
+                )}
               </div>
 
               {/* Article 12 */}

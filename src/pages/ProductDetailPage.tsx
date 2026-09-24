@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   ShoppingCart,
-  Star,
   Shield,
   Award,
   Heart,
@@ -22,9 +21,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import VitrineCTA from '../components/VitrineCTA';
 import toast from 'react-hot-toast';
-import ProductReviews from '../components/ProductReviews';
-import ReviewForm from '../components/ReviewForm';
 import { EURO } from '../utils/prix';
+import { dateFinOffre, prixApres, useOffreLancement } from '../utils/offreLancement';
 
 const ProductDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,7 +33,18 @@ const ProductDetailPage = () => {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const { addToCart } = useCart();
   const { user, affichagePrix } = useAuth();
-  const { vitrineMode } = useSiteSettings();
+  const offre = useOffreLancement();
+  const { vitrineMode, shippingConfig } = useSiteSettings();
+
+  /* Mention de livraison — LUE dans la configuration, jamais écrite en dur.
+     La page annonçait « Livraison gratuite — Partout en France », ce qui était faux deux
+     fois : le franco n'existe qu'à partir d'un montant, et il ne couvre QUE la métropole
+     (ni Corse et îles, ni outre-mer, ni UE). Écrire le seuil en dur ici recréerait le même
+     défaut au premier changement de tarif en admin, d'où la lecture de la config. */
+  const francoMetropole = shippingConfig.franco.metropole;
+  const mentionLivraison = francoMetropole
+    ? `Livraison offerte dès ${francoMetropole.toLocaleString('fr-FR')} € HT (France métropolitaine)`
+    : 'Frais de livraison calculés au panier';
 
   useEffect(() => {
     if (id) {
@@ -248,15 +257,6 @@ const ProductDetailPage = () => {
               <span className="bg-blue-400/20 text-blue-400 px-3 py-1 rounded-full text-sm font-medium">
                 {product.category?.name}
               </span>
-              <div className="flex items-center gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className="text-blue-400 fill-current"
-                    size={16}
-                  />
-                ))}
-              </div>
             </div>
 
             {/* Product Name */}
@@ -291,7 +291,13 @@ const ProductDetailPage = () => {
                 {getDisplayPrice(product).taxInfo && (
                   <div>{getDisplayPrice(product).taxInfo}</div>
                 )}
-                <div>Livraison gratuite</div>
+                {offre && product.sku === offre.sku && (
+                  <div className="mt-2 text-white/80">
+                    <span className="font-semibold text-white">Prix de lancement</span> jusqu'au{' '}
+                    {dateFinOffre(offre, true)}, puis {prixApres(offre, affichagePrix === 'ht')}
+                  </div>
+                )}
+                <div>{mentionLivraison}</div>
               </div>
             </div>
 
@@ -435,10 +441,12 @@ const ProductDetailPage = () => {
               </div>
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <Shield className="text-green-400 mb-2" size={24} />
-                <div className="text-white font-semibold">
-                  Livraison Gratuite
+                <div className="text-white font-semibold">Livraison suivie</div>
+                <div className="text-gray-400 text-sm">
+                  {francoMetropole
+                    ? `Offerte dès ${francoMetropole.toLocaleString('fr-FR')} € HT en métropole`
+                    : 'Frais calculés au panier'}
                 </div>
-                <div className="text-gray-400 text-sm">Partout en France</div>
               </div>
             </div>
 
@@ -470,14 +478,10 @@ const ProductDetailPage = () => {
           </div>
         </div>
 
-        {/* Reviews Section */}
-        <div className="container mx-auto px-6 pb-12 space-y-8">
-          <ProductReviews productId={product.id} />
-          <ReviewForm
-            productId={product.id}
-            onReviewSubmitted={() => window.location.reload()}
-          />
-        </div>
+        {/* AVIS CLIENTS RETIRÉS (24/09/2026) : la table `product_reviews` n'existe pas en
+            base (erreurs 404 à chaque fiche) et une note de 5 étoiles était affichée en
+            dur, sans aucun avis — ce qui présente une note inexistante comme réelle.
+            À réintroduire avec une vraie table d'avis et une modération. */}
       </div>
     </div>
   );

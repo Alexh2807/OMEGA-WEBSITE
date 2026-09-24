@@ -15,6 +15,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import CaptchaMaison from '../components/CaptchaMaison';
+import type { PreuveCaptcha } from '../utils/captcha';
 
 const loginSchema = yup.object({
   email: yup.string().email('Email invalide').required('Email requis'),
@@ -71,6 +73,17 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
   const [loading, setLoading] = useState(false);
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  /* ANTI-ROBOTS (inscription). Trois barrières, aucune ne gêne un humain :
+     • un champ piège invisible, que seuls les robots remplissent ;
+     • un délai minimal : personne ne remplit ce formulaire en moins de 3 s ;
+     • la case « Je ne suis pas un robot » : une preuve de calcul résolue en
+       arrière-plan, VÉRIFIÉE PAR LA BASE (hook `hook_filtre_inscription`, qui écarte
+       aussi les adresses jetables et les noms générés au hasard — migrations
+       20260924130000 et 20260924150000). */
+  const [piege, setPiege] = useState('');
+  const [ouvertLe] = useState(() => Date.now());
+  const [preuveCaptcha, setPreuveCaptcha] = useState<PreuveCaptcha | null>(null);
+  const [captchaTour, setCaptchaTour] = useState(0);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -192,6 +205,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
         }
       } else {
         // Inscription avec Supabase
+        if (piege.trim() !== '' || Date.now() - ouvertLe < 3000) {
+          // Robot probable : on répond comme un succès, sans rien créer ni envoyer.
+          setEmailSent(true);
+          return;
+        }
+        if (!preuveCaptcha) {
+          toast.error('Cochez la case « Je ne suis pas un robot » (la vérification prend une seconde).');
+          return;
+        }
         const fullName = `${data.firstName} ${data.lastName}`;
         const fullPhoneNumber = getFullPhoneNumber(
           data.countryCode,
@@ -202,11 +224,14 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
           data.email,
           data.password,
           fullName,
-          fullPhoneNumber
+          fullPhoneNumber,
+          preuveCaptcha
         );
 
         if (error) {
-          toast.error(traduireErreurAuth(error.message), { duration: 7000 });
+          // Une preuve ne sert qu'une fois : on en recalcule une.
+          setCaptchaTour(n => n + 1);
+          toast.error(traduireErreurAuth(error.message), { duration: 9000 });
         } else {
           setEmailSent(true);
           toast.success('Inscription réussie ! Vérifiez votre email.');
@@ -517,6 +542,27 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                     </p>
                   )}
                 </div>
+              )}
+
+              {mode === 'register' && (
+                <>
+                  {/* Champ piège : hors écran, ignoré des lecteurs d'écran et de
+                      l'autocomplétion — un humain ne le voit ni ne le remplit. */}
+                  <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+                    <label>
+                      Site web
+                      <input
+                        type="text"
+                        name="site_web"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={piege}
+                        onChange={e => setPiege(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <CaptchaMaison onPreuve={setPreuveCaptcha} renouveler={captchaTour} />
+                </>
               )}
 
               <button

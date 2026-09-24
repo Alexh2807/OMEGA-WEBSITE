@@ -4,7 +4,6 @@ import {
   ShoppingCart,
   Mail,
   Layers,
-  Wifi,
   Ban,
   Save,
   MonitorPlay,
@@ -15,22 +14,13 @@ import {
   Check,
   Antenna,
   Cable,
-  Boxes,
-  Palette,
-  Move,
-  LayoutGrid,
-  EyeOff,
   ArrowRight,
   X,
   Smartphone,
   Tablet,
-  Flame,
-  CloudFog,
-  Library,
   Gauge,
   Sparkles,
   Cpu,
-  Sliders,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Product } from '../types';
@@ -55,6 +45,7 @@ import {
 import { usePageCallouts } from '../components/callout-editor/usePageCallouts';
 import { PHOTO_IDS } from '../components/callout-editor/defaults';
 import { GalleryManager } from '../components/callout-editor/GalleryManager';
+import { dateFinOffre, prixApres, useOffreLancement } from '../utils/offreLancement';
 
 /* ================================================================== */
 /*  OMEGA DMX Interface — Product Experience                           */
@@ -78,10 +69,11 @@ const BOX = {
   softConn: '/products/omega-dmx-v2-connexion.webp',
 };
 
-/* Prix public du boîtier. ⚠ Doit rester ALIGNÉ sur la fiche produit en base
-   (SKU OMGA-DMX-ITF) : cette page affiche le prix, mais c'est la base qui facture. */
-const PRICE_HT = 390;
-const PRICE_TTC = PRICE_HT * 1.2;
+/* Prix de REPLI du boîtier, affiché seulement tant que la fiche produit (SKU
+   OMGA-DMX-ITF) n'est pas encore chargée. Le prix affiché vient de la BASE, comme
+   le prix encaissé : l'ancien prix codé en dur (390 € HT = 468 €) contredisait la
+   base (469 €) et le client payait 1 € de plus que le prix annoncé. */
+const PRICE_TTC_REPLI = 479;
 
 const Reveal: React.FC<{
   children: React.ReactNode;
@@ -207,6 +199,10 @@ const OmegaDmxInterfacePage = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [lightbox, gallery.length]);
 
+  const offre = useOffreLancement();
+  const offreBoitier = offre && offre.sku === 'OMGA-DMX-ITF' ? offre : null;
+  const PRICE_TTC = dbProduct?.price ?? PRICE_TTC_REPLI;
+  const PRICE_HT = dbProduct?.price_ht ?? Math.round((PRICE_TTC / 1.2) * 100) / 100;
   const isPro = affichagePrix === 'ht';
   const mainPrice = isPro ? PRICE_HT : PRICE_TTC;
   const mainLabel = isPro ? 'HT' : 'TTC';
@@ -349,6 +345,12 @@ const OmegaDmxInterfacePage = () => {
                 <span className="ml-2 text-lg font-normal text-white/45">{mainLabel}</span>
               </div>
               <div className="mt-1 text-sm text-white/40">soit {altPrice}</div>
+              {offreBoitier && (
+                <div className="mt-3 text-sm text-white/70">
+                  <span className="font-semibold text-white">Prix de lancement</span> jusqu'au{' '}
+                  {dateFinOffre(offreBoitier, true)}, puis {prixApres(offreBoitier, isPro)}
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap gap-3">
               <button
@@ -972,283 +974,62 @@ const OmegaDmxInterfacePage = () => {
         </div>
       </section>
 
-      {/* ─── TRANSITION : Que permet ce boîtier ─── */}
-      <section id="pourquoi" className="relative overflow-hidden border-t border-white/5 py-24 md:py-32">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.06)_0%,transparent_65%)]" />
-        </div>
-        <div className="relative z-10 mx-auto max-w-4xl px-5 text-center">
-          <Reveal>
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/40">
-              Que permet ce boîtier
-            </p>
-            <h2 className="mt-6 text-3xl font-semibold leading-tight tracking-tight md:text-5xl lg:text-6xl">
-              Conçu pour la rapidité
-              <span className="block text-white/40">et la stabilité sur le terrain.</span>
-            </h2>
-            <p className="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-white/60 md:text-lg">
-              Nous avons développé le boîtier OMEGA DMX Interface pour répondre à une exigence simple :
-              aller vite, tenir le choc, et ne jamais vous laisser tomber en conditions réelles —
-              salles, festivals, tournées, installations temporaires.
-            </p>
-            <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/55 md:text-lg">
-              C&apos;est pour cette raison que vous pouvez{' '}
-              <strong className="text-white">
-                oublier les logiciels de pilotage que vous connaissez jusqu&apos;à présent
-              </strong>{' '}
-              — et laisser place à{' '}
-              <strong className="text-white">OMEGADMX</strong> : le logiciel aux possibilités
-              infinies, très rapide, moderne, avec une automatisation qui simplifie les effets et
-              mouvements complexes sur l&apos;ensemble de votre parc.
-            </p>
-          </Reveal>
 
-          <Reveal delay={100}>
-            <div className="mx-auto mt-12 h-px w-24 bg-white/25" />
-            <p className="mx-auto mt-10 max-w-xl text-sm uppercase tracking-[0.2em] text-white/35">
-              Du boîtier au logiciel
-            </p>
-            <div className="mt-4 flex items-center justify-center gap-3 text-white/50">
-              <span className="text-sm">Boîtier OMEGA DMX Interface</span>
-              <ArrowRight size={16} className="text-white/30" />
-              <span className="text-sm font-semibold text-white">Logiciel OMEGADMX</span>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─── LOGICIEL OMEGADMX — lien fort ─── */}
+      {/* ─── LOGICIEL OMEGADMX — lien vers la page dédiée ─── */}
       <section id="logiciel" className="border-t border-white/5 bg-zinc-950/40 py-20 md:py-28">
         <div className="mx-auto max-w-7xl px-5">
-          <Reveal>
-            <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <Reveal>
               <div>
                 <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
                   <MonitorPlay size={14} />
                   Logiciel inclus
                 </div>
-                <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight md:text-5xl">
-                  OMEGADMX — possibilités infinies,
-                  <span className="block text-white/40">rapidité, modernité.</span>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
+                  Le boîtier est livré
+                  <span className="block text-white/40">avec le logiciel OMEGADMX.</span>
                 </h2>
-                <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/55 md:text-lg">
-                  Fourni avec le boîtier. <strong className="text-white">Sans abonnement.</strong>{' '}
-                  Pensé pour piloter lyres, spots, machines à fumée, flammes, CO₂ et effets
-                  spéciaux — avec des automatisations qui vous simplifient la vie sur les
-                  mouvements et effets les plus complexes.
+                <p className="mt-5 max-w-xl text-base leading-relaxed text-white/55 md:text-lg">
+                  La régie complète, du patch à la sortie XLR : lyres, spots, fumée, flammes
+                  et CO₂ pilotés depuis un seul écran, avec le boîtier détecté en USB-C ou en
+                  WiFi.
                 </p>
+                <ul className="mt-7 space-y-3">
+                  {[
+                    'Librairie de 11 500+ profils de machines, incluse',
+                    'Plateau 3D live : le faisceau à l’écran pendant que le DMX part',
+                    'Effets et mouvements générés (cercle, huit, wave, déphasage de groupe)',
+                    'Console MIDI configurée en quelques minutes, sans programmation',
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-3 text-sm text-white/65 md:text-base">
+                      <Check size={16} className="mt-0.5 shrink-0 text-white/70" />
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/omega-dmx-logiciel"
+                  className="mt-8 inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-semibold transition hover:border-white/50 hover:bg-white/5"
+                >
+                  Voir le logiciel OMEGADMX en détail
+                  <ArrowRight size={16} />
+                </Link>
               </div>
-              <Link
-                to="/omega-dmx-logiciel"
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-semibold transition hover:border-white/50 hover:bg-white/5"
-              >
-                Voir le logiciel OMEGADMX en détail
-                <ArrowRight size={16} />
-              </Link>
-            </div>
-          </Reveal>
+            </Reveal>
 
-          {/* Stats clés logiciel */}
-          <Reveal delay={40}>
-            <div className="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 md:grid-cols-4">
-              {[
-                { k: '11 500+', v: 'machines en librairie' },
-                { k: '1024', v: 'canaux pilotés' },
-                { k: '0 €', v: 'abonnement' },
-                { k: 'PC ancien', v: 'toujours fluide' },
-              ].map((s) => (
-                <div key={s.v} className="bg-black/85 px-4 py-6 text-center">
-                  <div className="text-2xl font-semibold tracking-tight md:text-3xl">{s.k}</div>
-                  <div className="mt-1 text-xs uppercase tracking-wider text-white/40">{s.v}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-
-          {/* Bandeau capture */}
-          <Reveal delay={60}>
-            <div className="relative mt-12">
+            <Reveal delay={60}>
               <EditableImage
                 src={BOX.softAfx}
                 alt="OMEGADMX — page machine avec plateau 3D"
                 cover
                 framed
-                className="max-h-[52vh] w-full"
-                aspectClass="max-h-[52vh] w-full"
-                imgClassName="max-h-[52vh] object-top"
+                aspectClass="aspect-[16/10]"
+                className="w-full"
+                imgClassName="object-top"
                 {...imageProps(PHOTO_IDS.softAfx)}
               />
-              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-t from-black via-transparent to-transparent" />
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 p-6 md:p-8">
-                <p className="text-sm text-white/70 md:text-base">
-                  Page machine, plateau 3D, contrôles live — connecté à votre boîtier en USB ou
-                  en WiFi.
-                </p>
-              </div>
-            </div>
-          </Reveal>
-
-          {/* Parc machines pris en charge */}
-          <Reveal delay={40}>
-            <h3 className="mt-16 text-center text-xl font-semibold tracking-tight md:text-2xl">
-              Tout votre parc — lumières & effets spéciaux
-            </h3>
-            <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-white/45 md:text-base">
-              Lyres, spots, fumée, flammes, CO₂… tout est pensé et pris en charge pour vous.
-            </p>
-            <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              {[
-                { icon: Move, t: 'Lyres' },
-                { icon: Zap, t: 'Spots' },
-                { icon: CloudFog, t: 'Fumée / hazer' },
-                { icon: Flame, t: 'Flammes' },
-                { icon: Sparkles, t: 'CO₂ & FX' },
-                { icon: Layers, t: 'Et bien plus' },
-              ].map((m) => (
-                <div
-                  key={m.t}
-                  className="rounded-xl border border-white/10 bg-black/40 px-3 py-5 text-center"
-                >
-                  <m.icon className="mx-auto text-white" size={22} strokeWidth={1.5} />
-                  <div className="mt-2 text-xs font-medium text-white/70">{m.t}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-
-          {/* Capacités liées au boîtier */}
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                icon: Library,
-                t: 'Librairie 11 500+ machines',
-                d: 'Plus de 11 500 profils proposés directement et gratuitement dans le logiciel — patch rapide, zéro abonnement librairie.',
-              },
-              {
-                icon: Sparkles,
-                t: 'Automatisations intelligentes',
-                d: 'Effets et mouvements complexes sur tout le parc : cercle, huit, wave, déphasages multi-lyres — sans tout programmer à la main.',
-              },
-              {
-                icon: Gauge,
-                t: 'Optimisé pour tous les PC',
-                d: 'Très optimisé pour tourner même sur des ordinateurs anciens — sans compromettre la qualité ni les graphismes du logiciel.',
-              },
-              {
-                icon: LayoutGrid,
-                t: 'Pages de lyres',
-                d: 'Une page par machine ou groupe. Scènes, presets et dimmer de page — le show structuré sur vos 1024 canaux.',
-              },
-              {
-                icon: Boxes,
-                t: 'Plateau 3D live',
-                d: 'Visualisez faisceaux et mouvements pendant que le boîtier envoie le DMX. Concevez avant d’allumer la salle.',
-              },
-              {
-                icon: Palette,
-                t: 'Couleur & gobos',
-                d: 'RGBW, roues, gobos, iris, strobe — mappés sur les canaux de vos projecteurs via le patch OMEGADMX.',
-              },
-              {
-                icon: Move,
-                t: 'FX mouvements',
-                d: 'Cercle, huit, swing, wave… générés dans le logiciel OMEGADMX, avec déphasage sur tout un groupe de machines.',
-              },
-              {
-                icon: Layers,
-                t: 'Moniteur 512 canaux',
-                d: 'Regardez en live ce que le boîtier envoie sur Univers 1 et 2 — debug régie sans deviner.',
-              },
-              {
-                icon: Wifi,
-                t: 'Connexion multi-appareils',
-                d: 'USB-C ou WiFi. PC, tablette, téléphone — détection auto du boîtier OMEGA DMX Interface.',
-              },
-              {
-                icon: EyeOff,
-                t: 'Blackout & dimmers',
-                d: 'Dimmer master, dimmer de page, blackout ciblé — la main sur l’intensité sans couper le boîtier.',
-              },
-              {
-                icon: Save,
-                t: 'Show dans le boîtier',
-                d: 'Sauvegarde continue dans le boîtier : le show est protégé même si le PC se coupe.',
-              },
-              {
-                icon: Sliders,
-                t: 'Console MIDI en quelques minutes',
-                d: 'Glissez une action sur un pad, choisissez sa couleur : votre surface de jeu est prête, sans notion de programmation.',
-              },
-              {
-                icon: Cpu,
-                t: 'Rapide & moderne',
-                d: 'Prise en main fluide, workflows terrain, stabilité au service de la régie — pensé pour l’exigence du live.',
-              },
-            ].map((f, i) => (
-              <Reveal key={f.t} delay={i * 30}>
-                <div className="h-full rounded-2xl border border-white/10 bg-black/40 p-5">
-                  <f.icon className="text-white" size={20} strokeWidth={1.5} />
-                  <div className="mt-3 text-sm font-semibold">{f.t}</div>
-                  <p className="mt-1.5 text-sm leading-relaxed text-white/45">{f.d}</p>
-                </div>
-              </Reveal>
-            ))}
+            </Reveal>
           </div>
-
-          {/* Mini galerie logiciel */}
-          <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              { src: BOX.softBeam, cap: 'Contrôle Beam', id: PHOTO_IDS.softBeam },
-              { src: BOX.softColor, cap: 'Mélange couleur', id: PHOTO_IDS.softColor },
-              { src: BOX.soft3d, cap: 'Effets 3D', id: PHOTO_IDS.soft3d },
-              { src: BOX.softDmx, cap: 'Sortie DMX', id: PHOTO_IDS.softDmx },
-            ].map((g, i) => (
-              <Reveal key={g.cap} delay={i * 50}>
-                <figure className="bg-transparent">
-                  <EditableImage
-                    src={g.src}
-                    alt={g.cap}
-                    cover
-                    framed
-                    aspectClass="aspect-video"
-                    className="w-full"
-                    imgClassName="object-top"
-                    {...imageProps(g.id)}
-                  />
-                  <figcaption className="mt-2 px-1 text-[11px] text-white/40">{g.cap}</figcaption>
-                </figure>
-              </Reveal>
-            ))}
-          </div>
-
-          <Reveal delay={80}>
-            <div className="mt-12 flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-black/50 px-6 py-10 text-center sm:flex-row sm:justify-between sm:text-left">
-              <div>
-                <div className="text-lg font-semibold">
-                  Oubliez l&apos;ancien monde. Passez à OMEGADMX.
-                </div>
-                <p className="mt-1 max-w-lg text-sm text-white/50">
-                  Boîtier OMEGA DMX Interface + logiciel OMEGADMX = régie complète. 2 univers, radio, sauvegarde, 11 500+
-                  machines, automatisations — une seule chaîne, du patch à la sortie XLR.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  to="/omega-dmx-logiciel"
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
-                >
-                  Présentation OMEGADMX
-                  <ArrowRight size={16} />
-                </Link>
-                <a
-                  href="#systemes"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
-                >
-                  Voir l&apos;architecture
-                </a>
-              </div>
-            </div>
-          </Reveal>
         </div>
       </section>
 

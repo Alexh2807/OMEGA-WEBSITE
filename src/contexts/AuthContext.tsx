@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import type { PreuveCaptcha } from '../utils/captcha';
 
 interface AuthContextType {
   user: User | null;
@@ -26,7 +27,8 @@ interface AuthContextType {
     email: string,
     password: string,
     fullName: string,
-    phone?: string
+    phone?: string,
+    preuveCaptcha?: PreuveCaptcha | null
   ) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
@@ -70,6 +72,18 @@ export function origineSite(): string {
 export function traduireErreurAuth(message?: string | null): string {
   const m = (message || '').toLowerCase();
 
+  /* Refus du filtre anti-robots côté serveur (hook `hook_filtre_inscription`). Il ne
+     vise que des noms manifestement générés au hasard ; un vrai client écarté par
+     erreur doit toujours pouvoir nous joindre. */
+  if (m.includes('inscription_refusee_controle')) {
+    return "Nous n'avons pas pu valider votre inscription automatiquement. Vérifiez votre prénom et votre nom, ou écrivez-nous à contact@omegasud.fr : nous créerons votre compte.";
+  }
+  if (m.includes('inscription_email_jetable')) {
+    return "Les adresses e-mail temporaires ne sont pas acceptées. Utilisez votre adresse habituelle : c'est elle qui recevra vos factures.";
+  }
+  if (m.includes('captcha')) {
+    return 'La vérification « Je ne suis pas un robot » a échoué ou a expiré. Cochez à nouveau la case, puis réessayez.';
+  }
   if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
     return 'Adresse e-mail ou mot de passe incorrect. Vérifiez votre saisie, ou utilisez « Mot de passe oublié ? ».';
   }
@@ -208,7 +222,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     email: string,
     password: string,
     fullName: string,
-    phone?: string
+    phone?: string,
+    preuveCaptcha?: PreuveCaptcha | null
   ) => {
     const [firstName, ...lastNameParts] = fullName.trim().split(' ');
     const lastName = lastNameParts.join(' ');
@@ -230,6 +245,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           first_name: firstName,
           last_name: lastName,
           phone: phone || null,
+          // Preuve du captcha maison, vérifiée puis retirée du compte par la base.
+          ...(preuveCaptcha ? { captcha: preuveCaptcha } : {}),
         },
         emailRedirectTo: `${origineSite()}/email-confirmation`,
       },

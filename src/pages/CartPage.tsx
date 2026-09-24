@@ -340,39 +340,10 @@ const CartPage = () => {
         console.error("Erreur critique lors de l'appel à get-charge-id:", e);
       }
 
-      /* Trace du paiement. Le montant est relu SUR LA COMMANDE (donc sur le devis
-         serveur), jamais recalculé ici : deux calculs, ce sont deux vérités.
-         Un échec n'interrompt pas le parcours — le client a payé et sa commande
-         existe ; il ne doit pas voir d'erreur pour un enregistrement annexe. */
-      if (!dejaCreee) {
-        const { data: cmd } = await supabase
-          .from('orders')
-          .select('total')
-          .eq('id', orderId)
-          .single();
-
-        const { error: paymentRecordError } = await supabase
-          .from('payment_records')
-          .insert({
-            invoice_id: null,
-            order_id: orderId,
-            amount: cmd?.total ?? null,
-            payment_date: new Date().toISOString(),
-            payment_method: 'carte',
-            status: 'succeeded',
-            reference: paymentIntentId,
-            stripe_charge_id: chargeId || null, // crucial pour les remboursements
-            created_by: user?.id ?? null,
-            notes: `Paiement pour la commande ${orderId}`,
-          });
-
-        if (paymentRecordError) {
-          console.error(
-            "Erreur lors de la création de l'enregistrement de paiement:",
-            paymentRecordError
-          );
-        }
-      }
+      /* La trace du paiement (`payment_records`) est écrite UNIQUEMENT côté serveur,
+         par confirmer-commande et stripe-webhook, protégés par l'index unique
+         `payment_records_pi_uniq`. L'insertion qui se trouvait ici était un troisième
+         chemin, sans protection contre les doublons : retirée le 24/09/2026. */
 
       // Les lignes de commande ont été créées par `confirmer_commande`, à partir du
       // devis : rien à insérer ici.

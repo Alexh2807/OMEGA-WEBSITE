@@ -286,10 +286,13 @@ Deno.serve(async (req: Request) => {
 /**
  * Écrit (une seule fois) la ligne `payment_records` du paiement.
  *
- * Idempotence par lecture préalable sur la référence du PaymentIntent : le webhook et
- * cet appel du navigateur arrivent tous les deux, souvent à la même seconde. `reference`
- * ne porte pas de contrainte d'unicité en base (elle servait aussi à des paiements
- * manuels), on ne peut donc pas s'appuyer sur un `upsert`.
+ * Idempotence en DEUX temps : lecture préalable sur la référence du PaymentIntent, puis
+ * index unique partiel `payment_records_pi_uniq` (références `pi_…` seulement : les
+ * paiements manuels n'y sont pas soumis). Le webhook et cet appel du navigateur arrivent
+ * souvent à la même seconde : sans l'index, les deux lectures ne trouvaient rien et les
+ * deux insertions passaient — un même paiement était compté 2 ou 3 fois.
+ * ⚠ `.limit(1)` et non `.maybeSingle()` : dès que deux lignes existaient, maybeSingle
+ * rendait une ERREUR (data = null), lue comme « absent » — et on insérait encore.
  */
 async function enregistrerPaiement(
   admin: ReturnType<typeof createClient>,
@@ -298,12 +301,12 @@ async function enregistrerPaiement(
   orderId: string,
   userId: string | null
 ): Promise<void> {
-  const { data: existant } = await admin
+  const { data: existants } = await admin
     .from('payment_records')
     .select('id')
     .eq('reference', pi.id)
-    .maybeSingle();
-  if (existant) return;
+    .limit(1);
+  if (existants && existants.length > 0) return;
 
   const charge = (pi.latest_charge ?? null) as Stripe.Charge | string | null;
   const chargeObj = charge && typeof charge === 'object' ? charge : null;
@@ -330,5 +333,6 @@ async function enregistrerPaiement(
     created_by: userId,
     notes: `Paiement Stripe de la commande ${orderId}`,
   });
-  if (error) console.error('confirmer-commande : payment_records refusé', error.message);
+  // 23505 = l'autre chemin (webhook) a écrit la même seconde : c'est le cas attendu.
+  if (error && error.code !== '23505') console.error('confirmer-commande : payment_records refusé', error.message);
 }

@@ -512,15 +512,17 @@ export const DEFAULT_SHIPPING_CONFIG: ShippingConfig = {
     surcharge_carburant_pct: 17.11,
     hors_gabarit_colissimo_ht: 6,
   },
-  /* Le franco est une décision COMMERCIALE, pas un tarif transporteur : le
-     référentiel ne fournit que des repères sectoriels (e-commerce B2B 65 € ·
-     négoce industriel 150 € · distribution technique 200 € · fabricant 800 €).
-     On retient le repère « négoce industriel » (150 € HT, marge brute 35 %)
-     pour la métropole, le seul qui corresponde à l'activité d'OMEGA. Aucun
-     repère n'existe pour la Corse, l'UE ou l'outre-mer où le port coûte 2 à
-     10 fois plus cher : le franco y est DÉSACTIVÉ par défaut plutôt qu'estimé
-     au doigt mouillé. À arbitrer en admin. */
-  franco: { metropole: 150, corse_iles: null, ue: null, outre_mer: null },
+  /* FRANCO DÉSACTIVÉ PARTOUT — décision du gérant (11/08/2026).
+     Le repère sectoriel « négoce industriel » (150 € HT) qui figurait ici ne tient pas
+     pour ce catalogue : il raisonne en pourcentage du panier alors que le port dépend du
+     POIDS et du VOLUME. Une commande à 1 000 € composée de matériel lourd part en palette
+     et peut coûter plusieurs centaines d'euros de transport — offerts, la vente devenait
+     déficitaire. Un seuil ne peut pas corriger ça, puisque le rapport entre le montant et
+     le coût de transport n'a rien de constant.
+     La gratuité est donc portée par le RETRAIT AU DÉPÔT (0 €, toujours proposé,
+     cf. offreRetrait) : là, elle ne coûte rien puisqu'il n'y a pas de transport.
+     Les frais de port sont calculés dans tous les autres cas. */
+  franco: { metropole: null, corse_iles: null, ue: null, outre_mer: null },
   franco_modes: ['domicile', 'relais'],
   // Décision commerciale du gérant (2026-08) : plus aucun colis métropole en
   // dessous de 12,99 € TTC. Voir le POURQUOI sur le champ de l'interface.

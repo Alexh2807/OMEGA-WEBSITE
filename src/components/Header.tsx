@@ -20,6 +20,7 @@ import { useCart } from '../contexts/CartContext';
 import { useSiteSettings } from '../contexts/SiteSettingsContext';
 import { COMPANY_INFO } from '../config/legalInfo';
 import { supabase } from '../lib/supabase';
+import OffreLancementBandeau from './OffreLancementBandeau';
 
 /**
  * La gamme OMEGA, regroupée sous un seul onglet.
@@ -151,6 +152,7 @@ const Header = () => {
         isScrolled ? 'bg-black/90 backdrop-blur-md' : 'bg-transparent'
       }`}
     >
+      <OffreLancementBandeau visible={!isScrolled} />
       <nav className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">

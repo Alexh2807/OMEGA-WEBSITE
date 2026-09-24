@@ -208,9 +208,11 @@ async function enregistrerPaiement(
   userId: string | null
 ): Promise<void> {
   try {
-    const { data: existant } = await admin
-      .from('payment_records').select('id').eq('reference', pi.id).maybeSingle();
-    if (existant) return;
+    // `.limit(1)` et non `.maybeSingle()` (erreur dès 2 lignes = « absent » = réinsertion),
+    // et l'index unique `payment_records_pi_uniq` tranche les courses (cf. confirmer-commande).
+    const { data: existants } = await admin
+      .from('payment_records').select('id').eq('reference', pi.id).limit(1);
+    if (existants && existants.length > 0) return;
 
     /* Une seule requête Stripe pour la charge ET sa transaction de solde : c'est de là
        que viennent la commission (compte 627) et le net réellement crédité (512). */
@@ -237,7 +239,8 @@ async function enregistrerPaiement(
       created_by: userId,
       notes: `Paiement Stripe de la commande ${orderId} (webhook)`,
     });
-    if (error) console.error('stripe-webhook : payment_records refusé', error.message);
+    // 23505 = confirmer-commande a écrit la même seconde : c'est le cas attendu.
+    if (error && error.code !== '23505') console.error('stripe-webhook : payment_records refusé', error.message);
   } catch (e) {
     // Une trace manquante se rattrape ; refuser la commande ne se rattrape pas.
     console.error('stripe-webhook : trace de paiement impossible', e);
