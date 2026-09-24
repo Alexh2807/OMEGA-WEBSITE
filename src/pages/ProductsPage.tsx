@@ -44,6 +44,13 @@ const ProductsPage = () => {
           category:categories(*)
         `
         )
+        /* Produits de TEST (référence « TEST-… ») : jamais listés dans la boutique. Un
+           produit déjà commandé ne peut plus être supprimé (order_items le référence,
+           pour l'historique et la comptabilité) : on le masque au lieu de le supprimer.
+           Il reste accessible par son lien direct /produit/<id>. `sku.is.null` : un
+           produit sans référence doit rester visible (un simple « not ilike »
+           l'écarterait, NULL ne satisfaisant aucune comparaison). */
+        .or('sku.is.null,sku.not.ilike.TEST-%')
         .order('created_at', { ascending: false });
 
       if (error) {
