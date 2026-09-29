@@ -45,6 +45,12 @@
   to = "/.netlify/functions/download-omegadmx"
   status = 200
 
+# Téléchargement direct de l'APK Android de la dernière version publiée.
+[[redirects]]
+  from = "/telecharger/android"
+  to = "/.netlify/functions/download-omegadmx-android"
+  status = 200
+
 # SPA : toutes les autres routes sont servies par index.html (React Router gère le reste)
 [[redirects]]
   from = "/*"

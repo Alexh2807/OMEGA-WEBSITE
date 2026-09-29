@@ -281,6 +281,13 @@ const OmegaDmxLogicielPage = () => {
               <Download size={18} />
               Télécharger pour Windows
             </a>
+            <a
+              href="/telecharger/android"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black hover:bg-white/90 transition"
+            >
+              <Download size={18} />
+              Télécharger pour Android
+            </a>
             <Link
               to="/omega-dmx-interface"
               className="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-sm font-semibold hover:bg-white/5 transition"
@@ -297,7 +304,7 @@ const OmegaDmxLogicielPage = () => {
             </a>
           </div>
           <p className="mt-4 text-xs text-white/40">
-            Windows 10 et 11 (64 bits) · installateur gratuit, sans abonnement
+            Windows 10 et 11 (64 bits) · Android 7.0 et plus (APK) · téléchargement gratuit, sans abonnement
           </p>
         </div>
       </section>
